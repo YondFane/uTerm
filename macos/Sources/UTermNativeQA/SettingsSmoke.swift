@@ -40,6 +40,7 @@ enum SettingsSmoke {
         NSApp.sendEvent(event)
     }
     private static func save(_ model: NativeSettingsModel) async throws {
+        try await TerminalSmoke.wait("Finish pending control saves before saving the retained draft") { !model.automaticSaving }
         for _ in 0..<3 {
             await model.save()
             if model.errorCode != "WRITER_BUSY" { return }
@@ -54,6 +55,31 @@ enum SettingsSmoke {
             queue += view.subviews
         }
         return nil
+    }
+    private static func checkSearch(_ settings: NativeSettingsWindow, snapshotFile: URL, report: inout [String: Any]) async throws {
+        let model = settings.model, before = try Data(contentsOf: snapshotFile)
+        let original = model.numbers["fontSize"]
+        model.numbers["fontSize"] = original == "19" ? "18" : "19"
+        let retained = model.numbers["fontSize"]
+        try await TerminalSmoke.wait("Render native settings search") { (view(settings.window, id: "native-settings-search") as? NSSearchField)?.isEnabled == true }
+        guard let field = view(settings.window, id: "native-settings-search") as? NSSearchField else { throw BridgeFailure(code: "SETTINGS_SEARCH", message: "Missing settings search field") }
+        settings.window.makeKeyAndOrderFront(nil); settings.window.makeFirstResponder(field)
+        guard let editor = field.currentEditor() as? NSTextView else { throw BridgeFailure(code: "SETTINGS_SEARCH", message: "Missing actual AppKit search editor") }
+        editor.insertText("JDK", replacementRange: NSRange(location: 0, length: 0))
+        try await TerminalSmoke.wait("Search filters categories through actual AppKit input") { model.query == "JDK" && view(settings.window, id: "native-settings-section-java") != nil && view(settings.window, id: "native-settings-section-appearance") == nil }
+        guard model.section == "general", model.numbers["fontSize"] == retained, model.dirty else { throw BridgeFailure(code: "SETTINGS_SEARCH_DRAFT", message: "Filtering navigation changed the selected section or draft") }
+        guard let java = view(settings.window, id: "native-settings-section-java") as? NSButton else { throw BridgeFailure(code: "SETTINGS_SEARCH", message: "Missing matching category") }
+        java.performClick(nil)
+        try await TerminalSmoke.wait("Matching category remains actionable") { model.section == "java" }
+        let name = "native-settings-search-jdk.png"
+        if let path = WorkspaceModel.argument("--settings-smoke-report") { try await TerminalSmoke.capture(window: settings.window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name)) }
+        try await TerminalSmoke.wait("Search field is ready after category loading") { field.isEnabled && !model.javaComponents.pending && !model.javaComponents.mutating }
+        settings.window.makeFirstResponder(field)
+        try key(settings.window, code: 53, characters: "\u{1b}")
+        try await TerminalSmoke.wait("Escape clears search while retaining the settings window") { model.query.isEmpty && settings.window.isVisible && view(settings.window, id: "native-settings-section-appearance") != nil }
+        guard model.numbers["fontSize"] == retained, try Data(contentsOf: snapshotFile) == before else { throw BridgeFailure(code: "SETTINGS_SEARCH_DRAFT", message: "Settings search changed a draft or saved data") }
+        model.numbers["fontSize"] = original; model.section = "general"; settings.window.makeFirstResponder(nil)
+        report["nativeSettingsSearchProof"] = ["actualAppKitInput": true, "filteredNavigation": true, "matchingCategoryClickable": true, "draftRetained": true, "escapeClearsWithoutClosing": true, "savedBytesUnchanged": true, "capture": name]
     }
     static func run(workspace: WorkspaceModel, open: () -> NativeSettingsWindow, report: inout [String: Any]) async throws {
         readRetries = 0; peerWriteRetries = 0
@@ -76,6 +102,7 @@ enum SettingsSmoke {
         }
         guard try Data(contentsOf: snapshotFile) == before, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_SECTION", message: "Navigating settings changed saved data") }
         report["nativeSettingsSidebarNavigationPreservesSavedData"] = true
+        try await checkSearch(current, snapshotFile: snapshotFile, report: &report)
         workspace.newWorkspace(owner: .settings)
         try await TerminalSmoke.wait("Attach workspace naming to the settings window") { current.window.attachedSheet != nil && workspace.nameDraftOwner == .settings }
         guard let nameSheet = current.window.attachedSheet else { throw BridgeFailure(code: "SETTINGS_QA_WORKSPACE", message: "Workspace naming sheet is missing") }
@@ -90,6 +117,9 @@ enum SettingsSmoke {
         model.numbers["fontSize"] = "17"
         try await save(model)
         guard model.error.isEmpty, !model.dirty, workspace.settings["fontSize"].number == 17 else { throw BridgeFailure(code: "SETTINGS_QA_SAVE", message: "Native settings did not save") }
+        try await verifyAutomaticSave(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
+        try await verifyLegacyExport(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
+        try await verifyDefaultAgent(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         let other = try await CoreBridge.open(root: root)
         do {
             model.numbers["fileFontSize"] = "19"
@@ -241,7 +271,7 @@ enum SettingsSmoke {
                 model.values["language"] = .string(language); model.values["appearance"] = .string(appearance); model.section = "appearance"
                 try await save(model)
                 guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_QA_APPEARANCE", message: "Could not save language and appearance") }
-                current.window.setContentSize(NSSize(width: width, height: 640))
+                current.window.setContentSize(NSSize(width: CGFloat(width), height: 640))
                 try await Task.sleep(for: .milliseconds(200))
                 try await TerminalSmoke.capture(window: current.window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
                 captures.append(name)
@@ -257,14 +287,178 @@ enum SettingsSmoke {
         current.window.orderOut(nil)
     }
 
+    private static func verifyLegacyExport(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Missing actual Core bridge") }
+        let before = try await readSnapshot(bridge), file = root.appendingPathComponent("snapshot-v1.json")
+        let bytes = try Data(contentsOf: file), original = model.numbers["fontSize"]
+        model.numbers["fontSize"] = "999"; model.section = "general"
+        try await TerminalSmoke.wait("Render actual compatibility export entry") { (view(settings.window, id: "native-settings-legacy-export") as? NSButton)?.isEnabled == true }
+        guard let button = view(settings.window, id: "native-settings-legacy-export") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Missing export control") }
+        button.performClick(nil)
+        try await TerminalSmoke.wait("Actual export entry opens its native save sheet") { settings.window.attachedSheet is NSSavePanel && model.busy }
+        guard let panel = settings.window.attachedSheet as? NSSavePanel else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "The actual export sheet is missing") }
+        settings.window.performClose(nil)
+        guard settings.window.isVisible else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Closing bypassed the pending export guard") }
+        if settings.window.attachedSheet === panel { panel.cancel(nil) }
+        try await TerminalSmoke.wait("Cancelling export restores settings without saving") { settings.window.attachedSheet == nil && !model.busy && settings.window.isVisible }
+        guard model.numbers["fontSize"] == "999", try Data(contentsOf: file) == bytes else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Cancelled export changed saved data or discarded a draft") }
+        let name = "native-settings-legacy-export.json", destination = evidence.appendingPathComponent(name)
+        guard await model.exportLegacy(to: destination) else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: model.error) }
+        let exportedBytes = try Data(contentsOf: destination), exported = try JSONDecoder().decode(JSONValue.self, from: exportedBytes)
+        guard let source = exported["values"]["uterm.desktop.settings.v1"].string,
+              try JSONDecoder().decode(JSONValue.self, from: Data(source.utf8)) == before.document.settings,
+              exported["revision"].string == before.revision, model.numbers["fontSize"] == "999",
+              try Data(contentsOf: file) == bytes else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Export changed the store or included an invalid settings draft") }
+        guard !(await model.exportLegacy(to: root)), model.errorCode == "LEGACY_EXPORT_FAILED",
+              model.numbers["fontSize"] == "999", try Data(contentsOf: file) == bytes,
+              try Data(contentsOf: destination) == exportedBytes else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Failed export changed data, the previous export or its draft") }
+        let capture = "native-settings-legacy-export-error.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        model.numbers["fontSize"] = original; await model.reload()
+        guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Explicit reload did not recover export feedback") }
+        report["nativeLegacyExportProof"] = ["actualSavePanelCancellation": true, "busyCloseGuard": true, "committedDataExported": true, "storeUnchanged": true, "draftRetained": true, "failedWriteRetainsPreviousExport": true, "capture": capture, "exportFile": name]
+    }
+
+    private static func verifyDefaultAgent(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Missing actual Core bridge") }
+        let before = try await readSnapshot(bridge), definitions = try await bridge.call("agent.catalog")["definitions"]
+        let ids = ["qa-settings-a", "qa-settings-b"]
+        let fixtures: [JSONValue] = ids.map { .object(["id": .string($0), "name": .string("Settings fixture " + $0), "program": .string("/usr/bin/true"), "arguments": .array([])]) }
+        _ = try await bridge.call("agent.definitions.save", params: .object(["definitions": .array(definitions.array + fixtures)]))
+        _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(before.revision), "patch": .object(["enabledAgents": .array(ids.map(JSONValue.string))])]))
+        await model.workspace.reload(); await model.reload(); model.section = "workspace"
+        let file = root.appendingPathComponent("snapshot-v1.json"), readonly = try Data(contentsOf: file)
+        try await TerminalSmoke.wait("Render enabled available Agents in the actual picker") { (view(settings.window, id: "native-settings-default-agent") as? NSPopUpButton)?.isEnabled == true }
+        guard let picker = view(settings.window, id: "native-settings-default-agent") as? NSPopUpButton,
+              picker.itemArray.compactMap({ $0.representedObject as? String }) == ids,
+              picker.selectedItem?.representedObject as? String == ids[0], !model.dirty,
+              picker.itemArray.allSatisfy({ $0.title.hasPrefix("Settings fixture ") }),
+              try Data(contentsOf: file) == readonly else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Agent filtering, names or read-only fallback differs from shared behavior") }
+        picker.selectItem(at: 1)
+        guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker) else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Actual Agent selection was not delivered") }
+        try await TerminalSmoke.wait("Save actual default Agent selection") { !model.automaticSaving && !model.busy }
+        let selected = try await readSnapshot(bridge)
+        guard model.error.isEmpty, selected.document.settings["defaultAgent"].string == ids[1] else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Actual Agent selection was not persisted") }
+        _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(selected.revision), "patch": .object(["enabledAgents": .array([])])]))
+        await model.workspace.reload(); await model.reload()
+        let disabledBytes = try Data(contentsOf: file)
+        try await TerminalSmoke.wait("Disable the picker when no available Agent is enabled") { !picker.isEnabled && picker.selectedItem?.representedObject as? String == "" }
+        guard !model.dirty, try Data(contentsOf: file) == disabledBytes, (try await readSnapshot(bridge)).document.settings["defaultAgent"].string == ids[1] else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Empty Agent rendering implicitly rewrote preferences") }
+        _ = picker.scrollToVisible(picker.bounds)
+        let capture = "native-settings-default-agent-disabled.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        let current = try await readSnapshot(bridge)
+        _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(["enabledAgents": before.document.settings["enabledAgents"], "defaultAgent": before.document.settings["defaultAgent"]])]))
+        _ = try await bridge.call("agent.definitions.save", params: .object(["definitions": definitions]))
+        await model.workspace.reload(); await model.reload()
+        report["nativeDefaultAgentPickerProof"] = ["actualCoreCatalog": true, "enabledAvailableOnly": true, "customNames": true, "displayFallbackDoesNotWrite": true, "actualPickerAutosaved": true, "disabledEmptyDoesNotWrite": true, "simulatedAgentPrograms": "/usr/bin/true; no real Agent account or login", "capture": capture]
+    }
+
+    private static func editField(_ settings: NativeSettingsWindow, key: String, text: String, enter: Bool = false) async throws {
+        let id = "native-settings-field-" + key
+        try await TerminalSmoke.wait("Render editable native settings field " + key) { (view(settings.window, id: id) as? NSTextField)?.isEnabled == true }
+        guard let field = view(settings.window, id: id) as? NSTextField else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "Settings field is missing") }
+        settings.window.makeKeyAndOrderFront(nil); settings.window.makeFirstResponder(field)
+        guard let editor = field.currentEditor() as? NSTextView else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "Actual AppKit field editor is missing") }
+        editor.insertText(text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        guard field.stringValue == text else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "AppKit did not deliver the input") }
+        if enter { try Self.key(settings.window, code: 36, characters: "\r") } else { settings.window.makeFirstResponder(nil) }
+        try await TerminalSmoke.wait("Complete native field commit") { !settings.model.automaticSaving && !settings.model.busy }
+    }
+
+    private static func verifyAutomaticSave(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model, peer = try await CoreBridge.open(root: root)
+        do {
+            let before = try await peer.snapshot()
+            model.section = "general"
+            try await editField(settings, key: "fileTabLimit", text: "0")
+            guard model.errorCode == "INVALID_SETTINGS", model.numbers["fileTabLimit"] == "0", (try await peer.snapshot()).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_INVALID", message: "Automatic save lost an invalid draft or wrote it") }
+            let limit = before.document.settings["fileTabLimit"].number == 7 ? 8 : 7
+            let scrollback = model.numbers["scrollback"], scrollbackDraft = model.numbers["scrollback"] == "4999" ? "4998" : "4999"
+            model.numbers["scrollback"] = scrollbackDraft
+            try await editField(settings, key: "fileTabLimit", text: String(limit), enter: true)
+            let entered = try await peer.snapshot()
+            guard model.error.isEmpty, entered.document.settings["fileTabLimit"].number == Double(limit),
+                  entered.document.settings["scrollback"] == before.document.settings["scrollback"], model.numbers["scrollback"] == scrollbackDraft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Return failed to save its field or saved an unrelated draft") }
+            model.numbers["scrollback"] = scrollback
+            let draft = before.document.settings["fontSize"].number == 18 ? "19" : "18"
+            let peerSize = before.document.settings["fontSize"].number == 20 ? 21.0 : 20.0
+            model.numbers["fontSize"] = draft
+            let snapshot = try await peer.snapshot()
+            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(snapshot.revision), "patch": .object(["fontSize": .number(peerSize)])]))
+            model.section = "appearance"
+            let id = "native-settings-font-interfaceFont"
+            try await TerminalSmoke.wait("Render the actual font picker for scoped automatic save") { (view(settings.window, id: id) as? NSPopUpButton)?.isEnabled == true }
+            guard let picker = view(settings.window, id: id) as? NSPopUpButton,
+                  let option = picker.itemArray.first(where: { ($0.representedObject as? String).map { $0 != model.values["interfaceFont"]?.string } == true }),
+                  let font = option.representedObject as? String else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Alternative font preset is missing") }
+            var attempts: [[String: Any]] = []
+            for attempt in 0..<3 {
+                try await TerminalSmoke.wait("Font control is ready for explicit selection") { picker.isEnabled }
+                guard let selected = picker.itemArray.first(where: { $0.representedObject as? String == font }) else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Selected font preset disappeared") }
+                picker.select(selected)
+                guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker) else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Actual font action was not delivered") }
+                try await TerminalSmoke.wait("Complete scoped font automatic save") { !model.automaticSaving && !model.busy }
+                let observed = try await peer.snapshot()
+                attempts.append(["attempt": attempt + 1, "errorCode": model.errorCode, "error": model.error,
+                    "expectedFont": font, "savedFont": observed.document.settings["interfaceFont"].string ?? "",
+                    "expectedPeerSize": peerSize, "savedPeerSize": observed.document.settings["fontSize"].number ?? -1,
+                    "expectedDraft": draft, "retainedDraft": model.numbers["fontSize"] ?? ""])
+                report["nativeSettingsAutomaticSaveAttempts"] = attempts
+                guard model.errorCode == "WRITER_BUSY", attempt < 2 else { break }
+                guard !model.error.isEmpty, model.values["interfaceFont"] == .string(font),
+                      observed.document.settings["interfaceFont"] == entered.document.settings["interfaceFont"],
+                      observed.document.settings["fontSize"].number == peerSize, model.numbers["fontSize"] == draft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_BUSY", message: "Writer contention lost the draft, changed committed data or hid its error") }
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent("native-settings-autosave-busy.png"))
+                // A failed mutation stays failed; QA explicitly selects the same control again, like a user retry.
+                // 失败的变更保持失败；QA 像用户重试一样，明确再次选择同一控件。
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            let saved = try await peer.snapshot()
+            guard model.error.isEmpty, saved.document.settings["interfaceFont"].string == font,
+                  saved.document.settings["fontSize"].number == peerSize, model.numbers["fontSize"] == draft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_SCOPE", message: "Scoped font save did not satisfy its error, committed-value and retained-draft checks; see nativeSettingsAutomaticSaveAttempts") }
+            try await save(model)
+            guard model.errorCode == "SETTINGS_CONFLICT", model.numbers["fontSize"] == draft,
+                  (try await peer.snapshot()).document.settings["fontSize"].number == peerSize else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_CONFLICT", message: "Saving another field silently rebased the conflicting draft") }
+            let capture = "native-settings-autosave-conflict.png"
+            try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+            guard let theme = model.catalog["interfaceThemes"].array.first(where: { $0["id"].string != model.values["interfaceTheme"]?.string }), let themeID = theme["id"].string else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Alternative shared interface theme is missing") }
+            let themeControl = "native-settings-theme-" + themeID
+            try await TerminalSmoke.wait("Render actual theme preview controls") { (view(settings.window, id: themeControl) as? NSButton)?.isEnabled == true }
+            guard let themeButton = view(settings.window, id: themeControl) as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Actual theme preview button is missing") }
+            themeButton.performClick(nil)
+            try await TerminalSmoke.wait("Save the clicked interface theme") { !model.automaticSaving && !model.busy }
+            let themed = try await peer.snapshot()
+            guard model.error.isEmpty, themed.document.settings["interfaceTheme"].string == themeID,
+                  ["darkTheme", "lightTheme", "customThemes", "fontSize", "fontFamily"].allSatisfy({ themed.document.settings[$0] == saved.document.settings[$0] }) else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Theme selection changed terminal preferences or failed to save") }
+            let oldSize = settings.window.contentView?.bounds.size ?? NSSize(width: 760, height: 620)
+            var themeCaptures: [String] = []
+            for width in [900, 640] {
+                settings.window.setContentSize(NSSize(width: CGFloat(width), height: 640))
+                try await Task.sleep(for: .milliseconds(200))
+                let name = "native-settings-theme-cards-\(width).png"
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(name)); themeCaptures.append(name)
+            }
+            settings.window.setContentSize(oldSize)
+            let current = try await peer.snapshot()
+            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(["fileTabLimit": before.document.settings["fileTabLimit"], "fontSize": before.document.settings["fontSize"], "interfaceFont": before.document.settings["interfaceFont"], "interfaceTheme": before.document.settings["interfaceTheme"]])]))
+            await model.workspace.reload(); await model.reload()
+            guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_RELOAD", message: "Explicit reload did not recover the saved preferences") }
+            report["nativeSettingsAutomaticSaveProof"] = ["actualFieldEditorBlur": true, "actualFieldEditorEnter": true, "enterRetainsUnrelatedDraft": true, "invalidDraftRetainedWithoutWrite": true, "correctedFieldSavedAutomatically": true, "actualFontPicker": true, "scopedWrite": true, "otherDraftRetained": true, "peerWriteConflictRetained": true, "actualThemePreviewSelection": true, "terminalThemeUnchanged": true, "explicitReloadRecovery": true, "capture": capture, "themeCaptures": themeCaptures]
+            await peer.close()
+        } catch { await peer.close(); throw error }
+    }
+
     private static func verifyFontPickers(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
         let model = settings.model
         guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Missing font preference bridge") }
-        let before = try await readSnapshot(bridge)
         let custom = "QA literal \"中文\", monospace"
         var selected: [String: JSONValue] = [:]
         var capture = ""
-        for (key, section) in [("interfaceFont", "appearance"), ("fontFamily", "terminal")] {
+        for (key, section) in [("interfaceFont", "appearance"), ("fontFamily", "appearance")] {
+            let before = try await readSnapshot(bridge)
             model.values[key] = .string(custom); model.section = section
             let identifier = "native-settings-font-" + key
             try await TerminalSmoke.wait("Render native custom font selection") { (view(settings.window, id: identifier) as? NSPopUpButton)?.selectedItem?.representedObject as? String == custom }
@@ -278,6 +472,8 @@ enum SettingsSmoke {
             }
             picker.select(option)
             guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker), model.values[key] == .string(font) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_ACTION", message: "Native font picker did not retain the shared preset value") }
+            try await TerminalSmoke.wait("Persist the actual font selection automatically") { !model.automaticSaving && !model.busy }
+            guard model.error.isEmpty, (try await readSnapshot(bridge)).document.settings[key].string == font else { throw BridgeFailure(code: "SETTINGS_QA_FONT_SAVE", message: "Selected font preset was not saved automatically") }
             selected[key] = .string(font)
         }
         try await save(model)

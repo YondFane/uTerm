@@ -1,5 +1,103 @@
 {
   "version": 1,
+  "sections": [
+    {
+      "id": "general",
+      "labels": {
+        "en": "General",
+        "zh-Hans": "通用"
+      },
+      "keywords": "language login startup fileTabLimit breakReminder breakInterval 语言 开机 登录 文件 标签 休息 提醒"
+    },
+    {
+      "id": "appearance",
+      "labels": {
+        "en": "Appearance",
+        "zh-Hans": "外观"
+      },
+      "keywords": "appearance interfaceTheme darkTheme lightTheme interfaceFont interfaceSize activeIconColor opacity blur windowFrameStyle fontFamily fontSize fontThicken lineHeight previewFont themes import export 外观 深色 浅色 界面 主题 字体 字号 透明 模糊 窗口 边框 文件 标签 导入 导出"
+    },
+    {
+      "id": "terminal",
+      "labels": {
+        "en": "Terminal",
+        "zh-Hans": "终端"
+      },
+      "keywords": "cursorStyle cursorBlink scrollback bell copyOnSelect rightClickPaste 终端 光标 闪烁 回滚 提示音 选择 复制 右键 粘贴"
+    },
+    {
+      "id": "workspace",
+      "labels": {
+        "en": "Workspace",
+        "zh-Hans": "工作区"
+      },
+      "keywords": "projectOrder recentLimit defaultShell defaultAgent SSH Redis database workspaces create rename remove projects sessions 项目 排序 默认 Shell Agent 侧栏 连接 最近 工作区 新建 重命名 删除 会话"
+    },
+    {
+      "id": "keyboard",
+      "labels": {
+        "en": "Keyboard shortcuts",
+        "zh-Hans": "快捷键"
+      },
+      "keywords": "keyboard shortcuts commands binding key 快捷键 键盘 命令 按键"
+    },
+    {
+      "id": "agents",
+      "labels": {
+        "en": "Agent",
+        "zh-Hans": "Agent"
+      },
+      "keywords": "agent notifications hooks shell skills CLI 通知 钩子 技能 命令行"
+    },
+    {
+      "id": "usage",
+      "labels": {
+        "en": "Usage",
+        "zh-Hans": "用量"
+      },
+      "keywords": "usage polling interval quota refresh 用量 配额 轮询 间隔 刷新"
+    },
+    {
+      "id": "control",
+      "labels": {
+        "en": "Local control",
+        "zh-Hans": "本地控制"
+      },
+      "keywords": "local control CLI token directory 本地 控制 令牌 目录"
+    },
+    {
+      "id": "database",
+      "labels": {
+        "en": "Database components",
+        "zh-Hans": "数据库组件"
+      },
+      "keywords": "database JDBC PostgreSQL MySQL SQLite driver component download import 数据库 驱动 组件 下载 导入"
+    },
+    {
+      "id": "maven",
+      "labels": {
+        "en": "Maven settings",
+        "zh-Hans": "Maven 设置"
+      },
+      "keywords": "Maven settings repository mirror proxy server profile local global project 仓库 镜像 代理 服务器 全局 项目"
+    },
+    {
+      "id": "java",
+      "labels": {
+        "en": "Java development tools",
+        "zh-Hans": "Java 开发环境"
+      },
+      "keywords": "Java JDK Maven tools managed install download import detect register remove cache 开发 环境 工具 托管 安装 下载 导入 检测 注册 删除 缓存"
+    },
+    {
+      "id": "updates",
+      "labels": {
+        "en": "Software update",
+        "zh-Hans": "软件更新"
+      },
+      "keywords": "software automaticUpdates update version release download install 软件 自动 更新 版本 下载 安装"
+    }
+  ],
   "settingsKeys": [
     "automaticUpdates",
     "fileTabLimit",

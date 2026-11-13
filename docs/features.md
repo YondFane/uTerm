@@ -48,12 +48,13 @@ GitHub sign-in requirement. First launch may require approval in **System Settin
 Security**. Version 0.2.6 has no updater: install an updater-enabled release manually once.
 
 In an updater-enabled build, **Settings → Software updates → Automatically check and download
-updates** enables Sparkle checks and signed downloads after **Save settings**. It is off by default.
-The app menu and settings also provide **Check for updates…**. Background downloads can install when
-the app quits; Sparkle asks before an immediate install/relaunch. Existing editor, transfer and
-database quit guards still apply. Turning the option off stops future automatic checks/downloads; an
-already prepared update can still install on quit. Update failures remain visible and can be retried
-manually. Update status text follows language changes immediately, including the no-update result.
+updates** saves the choice immediately and enables Sparkle checks and signed downloads. It is off by
+default. The app menu and settings also provide **Check for updates…**. Background downloads can
+install when the app quits; Sparkle asks before an immediate install/relaunch. Existing editor,
+transfer and database quit guards still apply. Turning the option off stops future automatic
+checks/downloads; an already prepared update can still install on quit. Update failures remain
+visible and can be retried manually. Update status text follows language changes immediately,
+including the no-update result.
 
 The personal client uses separate HTTPS `personal-stable-arm64.xml` and `personal-stable-x86_64.xml`
 feeds and Ed25519-signed ZIPs. The SDK verifies signatures before extraction; platform,
@@ -528,7 +529,7 @@ tab/window restoration, wrapping, embedded workbenches and complete settings sty
 alignment.
 
 The toolbar footer and app menu open complete settings. Save/reload/reset and unsaved drafts remain
-available when the settings window is hidden; Return saves an edited draft and Command-W hides it.
+available when the settings window is hidden; Return commits an edited field and Command-W hides it.
 The local CLI control switch remains an immediate service control in Local control.
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
@@ -722,12 +723,73 @@ SSH/PostgreSQL/Redis, Git and workspace panels, but its settings peer-conflict s
 Linux passes 26 evidence-policy checks plus shell/report syntax, formatting and documentation
 checks. The bounded-read and unchanged-peer protection still needs current-source Mac validation.
 
+Both settings windows provide **Search settings** above category navigation. Search matches category
+names and bilingual field keywords, including JDK registration, proxy settings and update
+preferences. Matching normalizes full-width characters, ignores case and requires every word to
+match. Filtering keeps the selected category and unsaved values; select a result to navigate. Escape
+clears a nonempty query without closing the window. Clearing search restores every category. The
+search index is shared with the Rust-delivered native catalog and never changes saved settings.
+
+Native settings use the same category labels as the shared catalog. File tab limit follows login in
+General; terminal fonts, weight, size and line height are in Appearance alongside interface and file
+fonts. Terminal contains cursor, blink, scrollback and copy behavior. The default Agent is in
+Workspace; Windows-only shell selection is not offered on macOS. Break interval is disabled while
+the reminder is off. Search aliases follow these actual field locations.
+
+Native switches, choices, fonts and shortcut changes save automatically. Numeric and highlight-color
+text fields save on Enter or blur, retaining incomplete input while typing. Each change writes only
+its own field; unrelated drafts retain their original conflict comparison point. Invalid values and
+conflicts remain visible without an automatic retry. Correct the field to retry, use **Reload** to
+discard drafts, or **Save settings** to retry the complete draft. Restore defaults and theme file
+selection also apply automatically. Appearance shows the shared six interface-theme previews with
+localized names, descriptions and a selected marker. Narrow settings use one column; clicking a card
+saves the interface theme while retaining terminal colors. Full settings styling still requires
+comparison.
+
+Native General includes **Export legacy-compatible data**, using the shared export format and a
+native save sheet. Cancel leaves the store and drafts unchanged. Export writes committed values,
+keeps pending drafts, and reports destination failures without replacing a prior export. The
+new-chat Agent picker lists only enabled, available commands with their custom names. A missing
+default uses the first enabled entry for display; an empty list is disabled. Rendering either
+fallback does not rewrite the stored default.
+
+Linux x86_64 / Node 26 passes 20 focused settings, search and Maven checks, type/production build,
+i18n and generated-contract checks. Native QA inserts text through the actual AppKit field editor,
+clicks the matching category, sends Escape and checks the retained numeric draft and unchanged
+snapshot bytes. It records `nativeSettingsSearchProof` and `native-settings-search-jdk.png` in the
+Mac artifact. Automatic-save QA uses actual AppKit field editing, invalid blur and corrected Enter
+input with an unrelated numeric draft, then an actual font selection with an unrelated draft and a
+concurrent Core writer. It checks invalid-input retention, correction, scoped persistence, the
+original conflict baseline and explicit reload recovery, recording
+`nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`. A macOS ARM64 run
+reported visible `WRITER_BUSY` during the font action; that run does not establish scoped-save
+acceptance. CI runs settings interactions before the heavy core suite and uploads an early
+`native-settings-<runner>-<head>-<attempt>` artifact, while retaining every later check and final
+failure gate. QA records every attempted font action's error, committed values and retained draft in
+`nativeSettingsAutomaticSaveAttempts`. On contention it first requires unchanged committed data and
+retained drafts, captures `native-settings-autosave-busy.png`, and explicitly reselects the same
+control at most twice. The application does not retry failed mutations automatically. The same check
+clicks a real theme-preview button, verifies terminal preferences are unchanged, and captures
+`native-settings-theme-cards-900.png` / `native-settings-theme-cards-640.png`. These new
+automatic-save operations and same-source screenshots remain pending macOS CI; the reordered fields
+and full settings styling still require actual Mac screenshots and comparison under #53.
+
+Native QA opens and cancels the actual save sheet, checks its close guard, exports committed data
+with an invalid draft, and rejects a directory destination while retaining the prior export. It
+records `nativeLegacyExportProof`, `native-settings-legacy-export.json` and
+`native-settings-legacy-export-error.png`. Agent selection uses the real Core catalog with two
+explicit `/usr/bin/true` program fixtures, not real Agent accounts; it verifies filtering, custom
+names, read-only fallback, actual selection/save and an unchanged disabled default. It records
+`nativeDefaultAgentPickerProof` and `native-settings-default-agent-disabled.png`. Both new checks
+still require current-source macOS execution.
+
 Interface and terminal font selectors share the ordinary client's preset catalog and localized
 labels. Existing custom font strings remain a selected custom entry until a preset is chosen; simply
 opening or switching categories does not replace them. Selection retains the exact fallback-family
 string, and the existing settings save/conflict rules apply. Native QA checks both actual AppKit
-selectors, custom draft retention, no implicit write and a save/read round trip; it also captures
-`native-settings-custom-font.png`. Current-source macOS execution is still required.
+selectors, custom draft retention, no write while rendering and an automatic save/read round trip;
+it also captures `native-settings-custom-font.png`. Current-source macOS execution is still
+required.
 
 The toolbar includes file opening, the command palette, pane zoom and a tools menu for files/search,
 Git/GitHub, Java/Python, SSH, database and Redis entry points. Commands retain their existing focus,
@@ -971,6 +1033,13 @@ check. The gate is released before draining and checking all 1,024 records. Thes
 terminal redraws, not an interactive Vim benchmark; query timings include row serialization, not
 table painting.
 
+Windows performance QA waits for the actual acknowledged parent `cmd` prompt before each command.
+The probe reads the cursor's logical line, including wrapped rows, rather than accepting a child
+output marker from earlier buffer text. It compares the existing `displayLocalPath` presentation of
+the directory, so extended Windows prefixes do not change the expected prompt. Readiness waits occur
+outside latency samples and before pausing the slow consumer; the workload, grid, deadlines and
+acceptance thresholds stay fixed.
+
 After the native build, run `python3 -B scripts/client-performance-database.py` (`python` on
 Windows). The wrapper owns one loopback PostgreSQL cluster across all sequential measurements,
 supplies private credentials to the client runners and invokes `scripts/run-client-performance.sh`.
@@ -1008,6 +1077,17 @@ acknowledgement, not physical keyboard/display latency. A ten-minute sample does
 multi-hour leak freedom.
 
 #### Measurement validation
+
+Head `22c1b57`, tested merge `902ffdef`, retains a third-redraw timeout in
+[Windows artifact13964937868](https://github.com/YondFane/uTerm/actions/runs/43262864971/artifacts/13964937868).
+Its original window shows an unexecuted command and previous `TUI_02` output. The first
+parent-prompt candidate `431c178`, tested merge `bdef6e59`, then rejects the initial prompt because
+QA context uses an extended drive path while `cmd` omits its prefix.
+[Artifact13965803472](https://github.com/YondFane/uTerm/actions/runs/43266511297/artifacts/13965803472)
+retains that report and inspected original. Reusing the existing path conversion fixes the extended
+drive comparison in regression tests. Thirty-eight Linux terminal/input/replay/renderer, file-path,
+performance-report and i18n checks, plus types, production build, format and documents, pass. Fresh
+Windows execution of the corrected readiness check remains required.
 
 At head `047ff1a7`, tested merge `885b4efb`, Windows completes the first real Tauri workload but
 fails temporary-profile deletion with `EPERM`.
@@ -1710,6 +1790,15 @@ application; scoped content can request its native dialog but cannot read or res
 repositories' recovery data.
 
 #### Git and editor concurrency validation
+
+Worktree creation QA waits for the actual Git action completion message before observing the durable
+workspace snapshot. Snapshot reads take the canonical store lock and must not introduce a competing
+QA read while the application saves its project tree. Creation errors still fail immediately, and
+the saved Worktree entry remains required; no Git writes are retried. Source `c0e05be4`, tested
+merge `7b181bc3`, retains a Windows partial-registration failure in
+[artifact13963248321](https://github.com/YondFane/uTerm/actions/runs/43258716782/artifacts/13963248321).
+Seven existing Linux Worktree/favorite recovery regressions, type checking, production build and
+document checks pass. The revised observation order requires fresh Windows and Mac execution.
 
 Git recovery QA prepares its two checkpoints with at most three explicit fixture writes each. A
 writer-busy failure permits another attempt only while the repository, favorite revision, source
@@ -5703,18 +5792,20 @@ requests or asks before discarding a form; cancellation cannot release an alread
 operation before its actual result. PR creation uses literal JSON input and never pushes a branch or
 creates a fork implicitly.
 
-The native QA app opens **Settings → All settings…** or **File → All settings…** for General,
-Appearance, Terminal, Files/Agents and Shortcuts. Changes remain drafts until **Save settings**.
-**Restore defaults** prepares a draft and still requires saving. Hiding/reopening retains the draft;
-quit refuses an active operation or asks about unsaved changes. Invalid numbers and reserved or
-duplicate shortcuts show an error without discarding input. Saving checks each changed field against
-the latest store, preserving unrelated peer changes and refusing conflicting overwrites.
+The native QA app opens **Settings → All settings…** or **File → All settings…** for the shared
+categories. Switches, choices, fonts, shortcuts, defaults and successful theme-file selections save
+their changed fields immediately. Numeric/color fields retain incomplete drafts while typing and
+commit on Enter or blur. Hiding/reopening retains pending drafts; quit refuses an active operation
+or asks about unsaved changes. Invalid numbers and reserved or duplicate shortcuts show an error
+without discarding input. Saving checks each changed field against the latest store, preserving
+unrelated peer changes and refusing conflicting overwrites. **Save settings** retries the retained
+complete draft; **Reload** discards it.
 
 Both clients parse Ghostty themes through Core `settings.theme.import`, retaining existing name/ID,
-UTF-16 length, six-digit color and palette-index rules. Parsing itself does not save settings. Tauri
-saves after a successful selection; native import adds a draft that requires **Save settings**. The
-native chooser reads at most 32 KB and requires UTF-8. Names remove only a final `.conf` or `.txt`,
-ignoring extension case; other extensions remain part of the name and identity.
+UTF-16 length, six-digit color and palette-index rules. Parsing itself does not save settings. Both
+clients save after a successful file selection. The native chooser reads at most 32 KB and requires
+UTF-8. Names remove only a final `.conf` or `.txt`, ignoring extension case; other extensions remain
+part of the name and identity.
 
 Native terminals and task logs apply bundled/custom palettes, cursor/selection colors, available
 font fallback/weight, line spacing, cursor shape/blink, scrollback and background opacity. Copy on
