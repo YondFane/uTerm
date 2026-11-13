@@ -336,6 +336,13 @@ generation 和终端视图。排序限于同一会话列表、Worktree 及置顶
 `personal-{phase}-project-workspace-move.png`；安装包要求与源码绑定的
 `nativeProjectMenuRevisionAndWorkspaceMove` 证据。代理模拟使用独立剪贴板和实际 NSTableView 回调，拒绝外部来源、伪造内容、取消拖动及过期 revision，再通过共享 Core 重排并恢复会话。物理指针拖动未执行；分组菜单是否实际执行单独记录。
 
+快照恢复仅清除来自快照读取的反馈。菜单或 Git 操作失败后，即使错误文字与先前读取错误相同，也继续显示；后台读取失败不能覆盖操作冲突。使用 Swift 6.1.2 在 Linux 隔离执行的四项 Foundation 测试通过；AppKit 执行仍须新源码的 Mac 运行。
+
+菜单及 Worktree QA 记录每次操作结果。仅在可见 `WRITER_BUSY` 且原 revision、完整工作区及设置均未变时，允许最多两次明确重新点击；菜单保留捕获的 revision，Worktree 操作还须再次通过真实确认框，并保留原目录及脏文件字节。脏目录删除必须返回 `GIT_ERROR`，不能把任意错误算作拒绝。应用不重放写入。源码
+`1eb5621f56fbfadc541449ae886ca6a723b4f878`／实际测试 merge
+`2da80460cd36c7d6813af65dd90fc31fa307b736`
+在 ARM 过期置顶等待及 Intel 干净 Worktree 删除等待处失败，两张原始窗口均显示写入忙碌反馈。[ARM 报告14044417035](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14044417035)及[Intel 报告14045730537](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14045730537)保留，未豁免这些失败；反馈与操作检查调整后仍须自己的当前源码 Mac 验证。
+
 原生交互审计要求工作台报告及其匹配的源码／merge、平台、架构、系统，全部菜单／移动／generation 检查，明确标注的拖动模拟及原始项目移动截图。真实应用退出／重开还会比对完整保存的分屏布局与准确会话／generation 映射，验证两块终端视图均可见且已回放，并在关闭会话前采集
 `native-reconnect-restored-layout.png`。缺失、失败、过期或平台不符的证据不能提升为通过。Linux 已通过十项交互证据策略测试、Swift 6.1.2 解析及 Shell／报告语法；新源码仍须真实 Mac 构建、操作与原图。人工交互保持豁免，未宣称执行。
 

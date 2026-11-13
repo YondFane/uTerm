@@ -19,7 +19,11 @@ final class WorkspaceModel: ObservableObject {
     private(set) var commandItems: [JSONValue] = []
     private var resolvedShortcuts: JSONValue = .null
     @Published private(set) var busy = false
-    @Published var error = ""
+    @Published private var feedback = WorkspaceFeedback()
+    var error: String {
+        get { feedback.message }
+        set { feedback.operation(newValue) }
+    }
     @Published private(set) var terminalError = ""
     @Published var settingsPresented = false
     @Published var editorRecoveryPresented = false
@@ -105,7 +109,6 @@ final class WorkspaceModel: ObservableObject {
     private var operation: Task<Bool, Never>?
     private let refreshCycle = WorkspaceRefreshCycle()
     private var loadEpoch = 0
-    private var snapshotReadError: String?
     private var shuttingDown = false
     private var helperReady = false
     private var needsReload = false
@@ -261,7 +264,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func reload(clearOperationError: Bool = false) async {
-        if clearOperationError { error = ""; snapshotReadError = nil }
+        if clearOperationError { error = "" }
         guard bridge != nil, !shuttingDown else { return }
         await refreshCycle.run { [weak self] in
             if let self { await self.readWorkspaceSnapshot() }
@@ -322,10 +325,9 @@ final class WorkspaceModel: ObservableObject {
             }
             // Background snapshots clear only their own read error, preserving the last failed operation.
             // 后台快照仅清除自身读取错误，保留最近操作的失败反馈。
-            if let snapshotReadError, error == snapshotReadError { error = "" }
-            snapshotReadError = nil
+            feedback.snapshotSucceeded()
         } catch {
-            if epoch == loadEpoch, bridge === self.bridge, !shuttingDown { snapshotReadError = error.localizedDescription; self.error = error.localizedDescription }
+            if epoch == loadEpoch, bridge === self.bridge, !shuttingDown { feedback.snapshotFailed(error.localizedDescription) }
         }
     }
 

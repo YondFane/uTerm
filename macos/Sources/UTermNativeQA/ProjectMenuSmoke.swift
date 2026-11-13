@@ -46,6 +46,29 @@ enum ProjectMenuSmoke {
                   let index = submenu.items.firstIndex(where: { ($0.representedObject as? [String: String])?["workspaceId"] == target && $0.isEnabled }) else { throw BridgeFailure(code: "PROJECT_MENU", message: "Move to workspace menu is missing") }
             return (submenu, index)
         }
+        @MainActor func dispatch(_ menu: NSMenu, index: Int, label: String, accepted: @escaping @MainActor () -> Bool) async throws {
+            let before = try await bridge.snapshot()
+            for attempt in 0..<3 {
+                model.error = ""
+                menu.performActionForItem(at: index)
+                do {
+                    try await TerminalSmoke.wait(label) { !model.busy && (!model.error.isEmpty || accepted()) }
+                } catch {
+                    report["nativeProjectMenuFailure"] = ["action": label, "attempt": attempt, "enabled": menu.item(at: index)?.isEnabled == true, "busy": model.busy, "error": model.error]
+                    throw error
+                }
+                let message = model.error
+                var attempts = report["nativeProjectMenuActionAttempts"] as? [[String: Any]] ?? []
+                attempts.append(["action": label, "attempt": attempt, "error": message])
+                report["nativeProjectMenuActionAttempts"] = attempts
+                if accepted() { return }
+                guard attempt < 2, message.hasPrefix("WRITER_BUSY:") else { throw BridgeFailure(code: "PROJECT_MENU", message: label + ": " + message) }
+                let unchanged = try await bridge.snapshot()
+                guard unchanged.revision == before.revision, unchanged.document.workspace == before.document.workspace, unchanged.document.settings == before.document.settings else { throw BridgeFailure(code: "PROJECT_MENU_RETRY", message: "Refusing to repeat a menu action after shared data changed") }
+                // Re-click the same captured revision only after a visible busy failure and unchanged data.
+                // 仅在可见忙碌错误且数据未变后，重新点击保留原 revision 的同一菜单。
+            }
+        }
         try await TerminalSmoke.wait("Render original project row before capturing menus") { (0..<table.numberOfRows).contains { table.view(atColumn: 0, row: $0, makeIfNecessary: true)?.identifier?.rawValue == "native-sidebar-row-p:" + projectID } }
         let stalePin = try projectMenu(), staleMove = try projectMenu()
         guard let pinIndex = stalePin.items.firstIndex(where: { $0.action.map(NSStringFromSelector) == "toggleProjectFlag:" && ($0.representedObject as? [String: String])?["key"] == "pinned" }) else { throw BridgeFailure(code: "PROJECT_MENU", message: "Pin project menu is missing") }
@@ -59,17 +82,14 @@ enum ProjectMenuSmoke {
             await peer.close()
         } catch { await peer.close(); throw error }
         await model.reload(); model.error = ""
-        stalePin.performActionForItem(at: pinIndex)
-        try await TerminalSmoke.wait("Reject a stale real project pin menu") { !model.busy && model.error.contains("CONFLICT") }
+        try await dispatch(stalePin, index: pinIndex, label: "Reject a stale real project pin menu") { model.error.hasPrefix("CONFLICT:") }
         guard model.projects.first(where: { $0["id"].string == projectID })?["pinned"].bool == pinned else { throw BridgeFailure(code: "PROJECT_MENU_STALE", message: "Stale pin menu changed current data") }
-        model.error = ""; oldMoveMenu.performActionForItem(at: oldMoveIndex)
-        try await TerminalSmoke.wait("Reject a stale real workspace-move menu") { !model.busy && model.error.contains("CONFLICT") }
+        try await dispatch(oldMoveMenu, index: oldMoveIndex, label: "Reject a stale real workspace-move menu") { model.error.hasPrefix("CONFLICT:") }
         guard model.workspace["projects"].array.first(where: { $0["id"].string == projectID })?["workspaceId"].string == workspaceID, model.settings["breakInterval"] == peerInterval else { throw BridgeFailure(code: "PROJECT_MENU_STALE", message: "Stale menu moved a project or lost a peer setting") }
         await model.reload(); model.error = ""
         let fresh = try projectMenu()
         let (move, index) = try moveItem(fresh, target: targetID)
-        move.performActionForItem(at: index)
-        try await TerminalSmoke.wait("Fresh actual menu moves the project and its sessions") { !model.busy && model.workspace["projects"].array.first(where: { $0["id"].string == projectID })?["workspaceId"].string == targetID }
+        try await dispatch(move, index: index, label: "Fresh actual menu moves the project and its sessions") { model.error.isEmpty && model.workspace["projects"].array.first(where: { $0["id"].string == projectID })?["workspaceId"].string == targetID }
         guard await model.mutate("workspace.switch", ["id": .string(targetID)]) else { throw BridgeFailure(code: "PROJECT_MENU", message: model.error) }
         await model.selectSession(originalSession)
         try await TerminalSmoke.wait("Moved project retains native terminal views") { ids.allSatisfy { model.terminals[$0]?.generation == generations[$0] && model.terminals[$0].map { ObjectIdentifier($0.view) } == views[$0] } }
@@ -80,8 +100,7 @@ enum ProjectMenuSmoke {
         try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent(screenshot))
         let back = try projectMenu()
         let (returnMenu, returnIndex) = try moveItem(back, target: workspaceID)
-        returnMenu.performActionForItem(at: returnIndex)
-        try await TerminalSmoke.wait("Move the project back through its fresh menu") { !model.busy && model.workspace["projects"].array.first(where: { $0["id"].string == projectID })?["workspaceId"].string == workspaceID }
+        try await dispatch(returnMenu, index: returnIndex, label: "Move the project back through its fresh menu") { model.error.isEmpty && model.workspace["projects"].array.first(where: { $0["id"].string == projectID })?["workspaceId"].string == workspaceID }
         guard await model.mutate("workspace.switch", ["id": .string(workspaceID)]) else { throw BridgeFailure(code: "PROJECT_MENU", message: model.error) }
         await model.selectSession(originalSession)
         if groupedThroughMenu {

@@ -659,6 +659,22 @@ and actual NSTableView callbacks to reject foreign sources, forged payloads, can
 stale revisions, then reorder and restore sessions through shared Core. Physical pointer dragging
 has not been executed; grouping-menu execution is recorded separately.
 
+Snapshot recovery clears only feedback originating from a snapshot read. A failed menu or Git
+operation remains visible even when its error text is identical to the earlier read error;
+background read failures cannot replace an operation conflict. Four isolated Foundation tests pass
+with Swift 6.1.2 on Linux; AppKit execution still requires the new source's Mac run.
+
+Menu and Worktree QA records each action result. Only a visible `WRITER_BUSY` with the exact
+original revision, workspace and settings unchanged permits at most two explicit re-clicks; menus
+retain their captured revision, and Worktree actions require another real confirmation and the
+original directory/dirty bytes. Dirty deletion must report `GIT_ERROR`, not merely any error.
+Application writes are not replayed. Source `1eb5621f56fbfadc541449ae886ca6a723b4f878` / tested merge
+`2da80460cd36c7d6813af65dd90fc31fa307b736` failed the ARM stale-pin wait and Intel clean-Worktree
+wait, with writer-busy feedback in both original windows. The [ARM report14044417035](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14044417035)
+and [Intel report14045730537](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14045730537)
+are retained; these failures are not waived. The revised feedback and action checks await their
+own current-source Mac validation.
+
 The native interaction audit requires the workspace report, its matching source/merge, platform,
 architecture and system, all menu/move/generation checks, the labelled drag simulation and the
 original project-move screenshot. Real application exit/relaunch also compares the complete saved
