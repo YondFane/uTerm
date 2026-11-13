@@ -145,7 +145,7 @@ final class NativeSettingsModel: ObservableObject {
         guard let bridge else { errorCode = "CLOSED"; error = localized("The settings client is closed. Reopen settings.", "设置客户端已关闭，请重新打开设置。"); return false }
         do {
             await workspace.flushWorkspaceOperations()
-            let exported = try await bridge.call("legacy.export")
+            let exported = try await bridge.legacyExport()
             try await Task.detached(priority: .utility) {
                 let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                 try encoder.encode(exported).write(to: destination, options: .atomic)

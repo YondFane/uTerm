@@ -76,10 +76,44 @@ final class CoreBridgeTests: XCTestCase {
             XCTFail("A mutation must report busy without replaying itself")
         } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "WRITER_BUSY") }
         let read = Task { try await core.snapshot() }
+        let export = Task { try await core.legacyExport() }
         try await Task.sleep(for: .milliseconds(40))
         XCTAssertEqual(uterm_test_flock(descriptor, LOCK_UN), 0)
         let value = try await read.value
         XCTAssertEqual(value.revision, initial["revision"].string)
+        let exported = try await export.value
+        XCTAssertEqual(exported["revision"], initial["revision"])
+        let settings = try XCTUnwrap(exported["values"]["uterm.desktop.settings.v1"].string)
+        XCTAssertEqual(try JSONDecoder().decode(JSONValue.self, from: Data(settings.utf8)), defaults["settings"])
+        let unchanged = try await core.snapshot()
+        XCTAssertEqual(unchanged.revision, initial["revision"].string)
+        await core.close()
+    }
+
+    func testLegacyExportContentionIsBoundedAndCancellationDoesNotWrite() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("shared-state-v1")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        let core = try await CoreBridge.open(root: root)
+        let defaults = try await core.call("state.defaults")
+        _ = try await core.call("migration.import", params: .object(["workspace": defaults["workspace"], "settings": defaults["settings"], "legacy": .object([:])]))
+        let file = root.appendingPathComponent("snapshot-v1.json"), before = try Data(contentsOf: file)
+        let descriptor = Darwin.open(root.appendingPathComponent("writer.lock").path, O_RDWR)
+        guard descriptor >= 0 else { XCTFail("Could not open the actual canonical writer lock"); return }
+        defer { _ = uterm_test_flock(descriptor, LOCK_UN); _ = Darwin.close(descriptor) }
+        XCTAssertEqual(uterm_test_flock(descriptor, LOCK_EX | LOCK_NB), 0)
+        do {
+            _ = try await core.legacyExport()
+            XCTFail("A retained writer must exhaust the bounded read attempts")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "WRITER_BUSY") }
+        let cancelled = Task { try await core.legacyExport() }
+        try await Task.sleep(for: .milliseconds(20)); cancelled.cancel()
+        do { _ = try await cancelled.value; XCTFail("A cancelled export must stop") }
+        catch is CancellationError { }
+        XCTAssertEqual(try Data(contentsOf: file), before)
+        XCTAssertEqual(uterm_test_flock(descriptor, LOCK_UN), 0)
+        let exported = try await core.legacyExport()
+        XCTAssertNotNil(exported["revision"].string)
+        XCTAssertEqual(try Data(contentsOf: file), before)
         await core.close()
     }
 
