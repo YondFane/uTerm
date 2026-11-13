@@ -532,6 +532,15 @@ ARM64 运行在字体操作中显示了
 `native-settings-theme-cards-900.png`／`native-settings-theme-cards-640.png`。新增自动保存操作及同源码截图仍待 macOS
 CI；调整后的字段与完整设置样式仍需实际 Mac 截图并在 #53 对照。
 
+主题 QA 等待已挂载且启用的预览控件，完成字段编辑，并在等待保存结束前确认主题草稿已改变。
+`nativeSettingsThemeSaveAttempts`
+记录每次操作的错误、草稿、已保存主题及终端偏好对照。仅在显示 `WRITER_BUSY`
+且已保存数据未变时，才允许最多两次明确重新点击，并保留失败截图；应用不重放写入，最终保存值仍严格核对。Intel 源码
+`8ec7eaf1bcb6896aa6613e6545f956f8c3eb326c`／实际测试 merge
+`e83d1b9dd11ce787d38aa131c7517c671b148849`
+在缺少这些诊断时未通过主题断言，原因尚未确认，[原始失败14016411976](https://github.com/YondFane/uTerm/actions/runs/43373657320/artifacts/14016411976)保留。Linux Swift
+6.1.2 语法、格式及文档检查通过；新增控件检查仍须自己的真实 Mac 运行。
+
 兼容导出的 Core 读取仅在 `WRITER_BUSY`
 时有限重读，最多 20 次、每次间隔 10 毫秒；目标文件仍仅写入一次，不自动重放设置写入。实际文件锁测试覆盖短暂争用恢复、持续争用退出、取消及原始快照字节不变，须由 macOS
 CI 执行。当前 ARM64 `1336ba7`／`733e066`
