@@ -650,20 +650,23 @@ and peer settings; reopen the menu to act on fresh data. Disclosure controls ret
 immediate behavior.
 
 Native QA holds actual pin/move menus across a second Core client's write, requires conflict
-rejection, then moves grouped real terminals to another workspace and back through fresh menus. It
-checks the same PTY generations and native views, and reopens the saved snapshot to verify the split
-layout. Originals are `native-project-workspace-move.png` and
-`personal-{phase}-project-workspace-move.png`; source-bound
-`nativeProjectMenuRevisionAndWorkspaceMove` proof is required for personal packages. Linux x86_64
-passes five session checks, twelve persistence checks (one explicit I/O check ignored) and eighteen
-package-evidence policies. A native delegate simulation uses an owned pasteboard and the actual
-table callbacks to reject foreign sources, forged payloads, cancelled drags and stale revisions,
-then reorder and restore sessions through shared Core. Its report explicitly labels the input as
-simulated; physical pointer dragging has not been executed. The new menu, simulated drop and
-screenshot scenarios remain pending Mac CI. Manual interaction is waived for this task; the
-automated checks remain required. The first ARM compile of the delegate simulation identified an
-inherited NSObject file-promise method that needs `override`; the corrected declaration still
-requires a fresh Mac build and execution.
+rejection, then moves grouped real terminals to another workspace and back through fresh menus.
+It checks the same PTY generations and native views, and reopens the saved snapshot to verify the
+split layout. Originals are `native-project-workspace-move.png` and
+`personal-{phase}-project-workspace-move.png`; packages require source-bound
+`nativeProjectMenuRevisionAndWorkspaceMove` proof. A delegate simulation uses an owned pasteboard
+and actual NSTableView callbacks to reject foreign sources, forged payloads, cancelled drags and
+stale revisions, then reorder and restore sessions through shared Core. Physical pointer dragging
+has not been executed; grouping-menu execution is recorded separately.
+
+The native interaction audit requires the workspace report, its matching source/merge, platform,
+architecture and system, all menu/move/generation checks, the labelled drag simulation and the
+original project-move screenshot. Real application exit/relaunch also compares the complete saved
+split layout and exact session/generation map, verifies both terminal views are visible and replayed,
+and captures `native-reconnect-restored-layout.png` before closing either session. Missing, failed,
+stale or cross-platform evidence cannot promote the capability to accepted. Linux passes ten
+interaction-evidence policy tests, Swift 6.1.2 parsing and shell/report syntax; the new source still
+requires actual Mac build, operations and originals. Manual interaction remains waived, not executed.
 
 [Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
 checks for drag/group operations, layout persistence, content tabs and workbench integration. Both
@@ -849,14 +852,26 @@ the cause is not established. Its
 is retained. Linux Swift 6.1.2 syntax, formatting and documentation checks pass; the new control
 checks still require their own actual Mac run.
 
+The automatic-save QA fixture now uses the same bounded read helper for every peer snapshot,
+including restoration after theme screenshots. Setup and restoration writes use the existing
+original-revision guard: retry only `WRITER_BUSY` while the full saved workspace and settings are
+unchanged. Application actions and conflict assertions remain explicit. The report retains the
+current fixture stage and read/write retry counts even on failure. Intel source
+`676c9ce3e0f06f3a08ba8bb7d9fb4e0adc81508d` / tested merge
+`fe9fa9d6d1e97ddd57da344fc613b9d5e705ff89` saved the theme and captured both sizes, then failed
+with `WRITER_BUSY` during the following fixture restoration; its precise read/write operation
+was not recorded. The [failure report and originals14024845956](https://github.com/YondFane/uTerm/actions/runs/43394240939/artifacts/14024845956)
+are retained. The revised fixture still requires a current-source actual Mac run.
+
 The Core read for compatibility export retries only `WRITER_BUSY`, at most 20 attempts with 10 ms
 between attempts. The destination is still written once, and settings mutations are not replayed
 automatically. Actual file-lock tests cover short-contention recovery, exhaustion, cancellation and
-unchanged snapshot bytes; they require macOS CI. The ARM64 `1336ba7` / `733e066` export check fails
-with a generic message, so its underlying cause is not established. Failure reports now include the
-error code, destination and busy state; current-source macOS results remain pending. Linux x86_64
-passes 18 relevant Core persistence, Git-favorite and PDF tests; the existing unprivileged
-filesystem test is skipped in this root session.
+unchanged snapshot bytes. Source `9c16e467edcc17f911a9b4600f30c534ad420293` / tested merge
+`499a6e26847421ca008e9418565ea5d591a10379` passes both actual Mac Native suites and 65 Swift tests
+per architecture, including the OS-lock export cases. The [ARM report](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14035540650)
+and [Intel report](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14038396877)
+retain `nativeLegacyExportProof` and the actual failure/draft-retention window. This validates that
+recorded source; revised menu/relaunch evidence still requires its own current-source Mac run.
 
 Native QA opens and cancels the actual save sheet, checks its close guard, exports committed data
 with an invalid draft, and rejects a directory destination while retaining the prior export. It

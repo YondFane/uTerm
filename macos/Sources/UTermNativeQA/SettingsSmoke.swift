@@ -377,23 +377,25 @@ enum SettingsSmoke {
     private static func verifyAutomaticSave(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
         let model = settings.model, peer = try await CoreBridge.open(root: root)
         do {
-            let before = try await peer.snapshot()
+            report["nativeSettingsAutomaticSaveStage"] = "baseline"
+            let before = try await readSnapshot(peer)
             model.section = "general"
             try await editField(settings, key: "fileTabLimit", text: "0")
-            guard model.errorCode == "INVALID_SETTINGS", model.numbers["fileTabLimit"] == "0", (try await peer.snapshot()).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_INVALID", message: "Automatic save lost an invalid draft or wrote it") }
+            guard model.errorCode == "INVALID_SETTINGS", model.numbers["fileTabLimit"] == "0", (try await readSnapshot(peer)).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_INVALID", message: "Automatic save lost an invalid draft or wrote it") }
             let limit = before.document.settings["fileTabLimit"].number == 7 ? 8 : 7
             let scrollback = model.numbers["scrollback"], scrollbackDraft = model.numbers["scrollback"] == "4999" ? "4998" : "4999"
             model.numbers["scrollback"] = scrollbackDraft
             try await editField(settings, key: "fileTabLimit", text: String(limit), enter: true)
-            let entered = try await peer.snapshot()
+            let entered = try await readSnapshot(peer)
             guard model.error.isEmpty, entered.document.settings["fileTabLimit"].number == Double(limit),
                   entered.document.settings["scrollback"] == before.document.settings["scrollback"], model.numbers["scrollback"] == scrollbackDraft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Return failed to save its field or saved an unrelated draft") }
             model.numbers["scrollback"] = scrollback
             let draft = before.document.settings["fontSize"].number == 18 ? "19" : "18"
             let peerSize = before.document.settings["fontSize"].number == 20 ? 21.0 : 20.0
             model.numbers["fontSize"] = draft
-            let snapshot = try await peer.snapshot()
-            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(snapshot.revision), "patch": .object(["fontSize": .number(peerSize)])]))
+            report["nativeSettingsAutomaticSaveStage"] = "prepare-peer-conflict"
+            let snapshot = try await readSnapshot(peer)
+            try await patchPeer(peer, baseline: snapshot, patch: .object(["fontSize": .number(peerSize)]))
             model.section = "appearance"
             let id = "native-settings-font-interfaceFont"
             try await TerminalSmoke.wait("Render the actual font picker for scoped automatic save") { (view(settings.window, id: id) as? NSPopUpButton)?.isEnabled == true }
@@ -407,7 +409,7 @@ enum SettingsSmoke {
                 picker.select(selected)
                 guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker) else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Actual font action was not delivered") }
                 try await TerminalSmoke.wait("Complete scoped font automatic save") { !model.automaticSaving && !model.busy }
-                let observed = try await peer.snapshot()
+                let observed = try await readSnapshot(peer)
                 attempts.append(["attempt": attempt + 1, "errorCode": model.errorCode, "error": model.error,
                     "expectedFont": font, "savedFont": observed.document.settings["interfaceFont"].string ?? "",
                     "expectedPeerSize": peerSize, "savedPeerSize": observed.document.settings["fontSize"].number ?? -1,
@@ -422,12 +424,12 @@ enum SettingsSmoke {
                 // 失败的变更保持失败；QA 像用户重试一样，明确再次选择同一控件。
                 try await Task.sleep(for: .milliseconds(100))
             }
-            let saved = try await peer.snapshot()
+            let saved = try await readSnapshot(peer)
             guard model.error.isEmpty, saved.document.settings["interfaceFont"].string == font,
                   saved.document.settings["fontSize"].number == peerSize, model.numbers["fontSize"] == draft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_SCOPE", message: "Scoped font save did not satisfy its error, committed-value and retained-draft checks; see nativeSettingsAutomaticSaveAttempts") }
             try await save(model)
             guard model.errorCode == "SETTINGS_CONFLICT", model.numbers["fontSize"] == draft,
-                  (try await peer.snapshot()).document.settings["fontSize"].number == peerSize else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_CONFLICT", message: "Saving another field silently rebased the conflicting draft") }
+                  (try await readSnapshot(peer)).document.settings["fontSize"].number == peerSize else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_CONFLICT", message: "Saving another field silently rebased the conflicting draft") }
             let capture = "native-settings-autosave-conflict.png"
             try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
             guard let theme = model.catalog["interfaceThemes"].array.first(where: { $0["id"].string != model.values["interfaceTheme"]?.string }), let themeID = theme["id"].string else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Alternative shared interface theme is missing") }
@@ -479,6 +481,7 @@ enum SettingsSmoke {
             }
             guard model.error.isEmpty, themed.document.settings["interfaceTheme"].string == themeID,
                   terminalKeys.allSatisfy({ themed.document.settings[$0] == saved.document.settings[$0] }) else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Theme selection changed terminal preferences or failed to save; see nativeSettingsThemeSaveAttempts") }
+            report["nativeSettingsAutomaticSaveStage"] = "theme-captures"
             let oldSize = settings.window.contentView?.bounds.size ?? NSSize(width: 760, height: 620)
             var themeCaptures: [String] = []
             for width in [900, 640] {
@@ -488,13 +491,21 @@ enum SettingsSmoke {
                 try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(name)); themeCaptures.append(name)
             }
             settings.window.setContentSize(oldSize)
-            let current = try await peer.snapshot()
-            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(["fileTabLimit": before.document.settings["fileTabLimit"], "fontSize": before.document.settings["fontSize"], "interfaceFont": before.document.settings["interfaceFont"], "interfaceTheme": before.document.settings["interfaceTheme"]])]))
+            report["nativeSettingsAutomaticSaveStage"] = "restore-fixture-read"
+            let current = try await readSnapshot(peer)
+            report["nativeSettingsAutomaticSaveStage"] = "restore-fixture-write"
+            try await patchPeer(peer, baseline: current, patch: .object(["fileTabLimit": before.document.settings["fileTabLimit"], "fontSize": before.document.settings["fontSize"], "interfaceFont": before.document.settings["interfaceFont"], "interfaceTheme": before.document.settings["interfaceTheme"]]))
+            report["nativeSettingsAutomaticSaveStage"] = "restore-ui-reload"
             await model.workspace.reload(); await model.reload()
             guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_RELOAD", message: "Explicit reload did not recover the saved preferences") }
             report["nativeSettingsAutomaticSaveProof"] = ["actualFieldEditorBlur": true, "actualFieldEditorEnter": true, "enterRetainsUnrelatedDraft": true, "invalidDraftRetainedWithoutWrite": true, "correctedFieldSavedAutomatically": true, "actualFontPicker": true, "scopedWrite": true, "otherDraftRetained": true, "peerWriteConflictRetained": true, "actualThemePreviewSelection": true, "terminalThemeUnchanged": true, "explicitReloadRecovery": true, "capture": capture, "themeCaptures": themeCaptures]
+            report["nativeSettingsAutomaticSaveStage"] = "completed"
             await peer.close()
-        } catch { await peer.close(); throw error }
+        } catch {
+            report["settingsQAReadOnlyRetryCount"] = readRetries
+            report["settingsQAPeerWriteRetryCount"] = peerWriteRetries
+            await peer.close(); throw error
+        }
     }
 
     private static func verifyFontPickers(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {

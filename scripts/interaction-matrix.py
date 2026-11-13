@@ -29,8 +29,51 @@ def capability(detail, implementation="implemented", automatic="passed", native=
             "manualAcceptance": "waived by user; not represented as executed", "detail": detail}
 
 
+def project_layout_evidence(directory, report, head, tested):
+    verify_source(report, head, tested)
+    assert report.get("passed") is True and report.get("platform") == "macOS", "Unaccepted native workspace report"
+    proof = report.get("nativeProjectMenuRevisionAndWorkspaceMove", {})
+    assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested, "Stale project-menu proof"
+    assert proof.get("platform") == "macOS", "Wrong project-menu platform"
+    assert proof.get("architecture") == report.get("architecture") in ("arm64", "x86_64"), "Different project-menu architecture"
+    assert proof.get("system") == report.get("system") and proof.get("system"), "Different project-menu system"
+    for key in ["passed", "actualMenuActions", "stalePinRejected", "staleMoveRejected", "peerSettingRetained", "terminalGenerationsAndViewsRetained", "splitLayoutRetainedInReopenedSnapshot", "movedAndReturned"]:
+        assert proof.get(key) is True, "Unverified project-menu behavior: " + key
+    assert type(proof.get("groupMenuExecuted")) is bool, "Missing actual grouping execution status"
+    assert proof.get("physicalDragExecuted") is False, "Delegate simulation must not claim physical dragging"
+    drag = proof.get("dragSimulation", {})
+    for key in ["passed", "actualNSTableViewCallbacks", "ownedPasteboard", "foreignSourceRejected", "forgedPayloadRejected", "cancelledDragRejected", "staleRevisionRejected", "freshDropAndReverseVerified"]:
+        assert drag.get(key) is True, "Unverified delegate simulation: " + key
+    assert proof.get("screenshot") == "native-project-workspace-move.png", "Missing original project-move scene"
+    return image_evidence(directory, [proof["screenshot"]])
+
+
+def restored_session_evidence(directory, live, reopened):
+    assert live.get("splitSessionCount") == 2 and reopened.get("restoredTerminalViewsVisible") is True, "Reopened native split views were not verified"
+    assert reopened.get("replayed") is True, "Reopened PTY replay is missing"
+    layout = live.get("persistedSplitLayout")
+    assert isinstance(layout, dict) and layout.get("kind") == "split", "Missing original split layout"
+    assert reopened.get("restoredSplitLayout") == layout, "Native relaunch changed the persisted layout"
+    identities = []
+    for report in (live, reopened):
+        sessions = report.get("sessions", [])
+        assert isinstance(sessions, list) and len(sessions) == 2, "Missing two exact retained sessions"
+        values = {}
+        for session in sessions:
+            assert isinstance(session, dict), "Invalid retained session"
+            key, generation = session.get("id"), session.get("generation")
+            assert isinstance(key, str) and key and isinstance(generation, str) and generation, "Missing actual session identity/generation"
+            assert key not in values, "Duplicate retained session"
+            values[key] = generation
+        identities.append(values)
+    assert identities[0] == identities[1], "Native relaunch replaced session IDs or generations"
+    captures = reopened.get("captures")
+    assert captures == ["native-reconnect-restored-layout.png"], "Missing actual reopened-layout scene"
+    return image_evidence(directory, captures)
+
+
 def native_matrix(directory, head, tested):
-    names = ["terminal-live", "terminal-reconnect", "settings-native", "inspector-native", "github-native", "editor-live", "agent-native"]
+    names = ["terminal-live", "terminal-reconnect", "settings-native", "inspector-native", "github-native", "editor-live", "agent-native", "workspace-panels-native"]
     reports = {name: json.loads((directory / (name + ".json")).read_text(encoding="utf-8")) for name in names}
     captures = []
     for name, report in reports.items():
@@ -49,9 +92,13 @@ def native_matrix(directory, head, tested):
     assert live["realVim"]["passed"] and live["realVim"]["nativeClipboardPaste"]
     assert live["fullScreenEnteredAndExited"] and live["viewIdentityRetained"]
     assert reports["terminal-reconnect"]["explicitCloseStoppedProcesses"] and reports["terminal-reconnect"]["idleHostShutdown"]
+    captures.extend(restored_session_evidence(directory, live, reports["terminal-reconnect"]))
     assert reports["inspector-native"]["closeFocusedToolsRetainsPTYAndReturnsFocus"]
     assert reports["settings-native"]["nativeFileTabLimitConflictRetainsDraftAndExplicitCloseAllowsRetry"]
     assert reports["github-native"]["nativeGithubHideReopenAndQuitCancelRetainDraft"]
+    workspace = reports["workspace-panels-native"]
+    assert workspace.get("architecture") == live["architecture"] and workspace.get("system") == live["system"], "Workspace proof belongs to another native platform"
+    captures.extend(project_layout_evidence(directory, workspace, head, tested))
     return {
         "platform": "macOS", "architecture": live["architecture"], "system": live["system"],
         "reports": [name + ".json" for name in names], "captures": sorted(set(captures)),
@@ -65,7 +112,7 @@ def native_matrix(directory, head, tested):
             "composition": capability("simulated NSTextInputClient marked-text sequence; real terminal and PTY", automatic="passed labelled simulation", native="actual terminal/PTY; physical IME not executed"),
             "sleepWake": capability("simulated OS notifications; real retained PTY output", automatic="passed labelled simulation", native="physical sleep not executed"),
             "displayChangeAndWindowMovement": capability("simulated display notification and actual programmatic window movement", automatic="passed labelled simulation", native="physical multiple monitors not executed"),
-            "sessionTabDragAndPersistentLayout": capability("original implementation gaps remain in #17/#13", implementation="incomplete", automatic="not executed", native="not executed", build="not applicable to missing implementation"),
+            "sessionTabDragAndPersistentLayout": capability("actual revision-checked menus, move/return, exact layout/session generations and visible split panes after real application relaunch; owned-pasteboard NSTableView callbacks exercise rejection and reorder/restore", automatic="passed actual menu/relaunch/layout actions and labelled delegate simulation", native="actual menus/reopened application/window/Core; physical dragging not executed"),
         },
         "stableCutoverAccepted": False,
     }
