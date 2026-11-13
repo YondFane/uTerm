@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # uTerm feature guide

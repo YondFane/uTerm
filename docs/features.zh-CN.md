@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # uTerm 功能说明
