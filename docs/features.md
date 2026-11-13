@@ -385,7 +385,19 @@ Source `3a621c1441d9882c8a92c74fff9696560aa451bc` / tested merge
 `ec5e9fbe11094cbaa28679feda1b043c4ec6fc59` still fails Java's paused anchor after docking/remount;
 the
 [actual report14054981144](https://github.com/YondFane/uTerm/actions/runs/43454656732/artifacts/14054981144)
-is retained. The revised readiness and diagnostics require their own actual Mac run.
+is retained. At source `5b166d511ed56be719012a3a9bb7894de91878d8` / tested merge
+`e18cb7dc08a2dbefb5b11cef2506752823dc772b`, actual Java/Python suites pass on both
+[ARM](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14059446877) and
+[Intel](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14061505895).
+
+The reviewed `personal-initial-run-form-java-zh-Hans-light-640.png` in
+[Personal artifact 14059049858](https://github.com/YondFane/uTerm/actions/runs/43464826845/artifacts/14059049858)
+at that source shows a partly clipped Save button despite valid button-size metrics. Form QA now
+ends field editing, scrolls the actual control fully into view before actions and again before
+capture, and records its visible width/height through the actual clipping ancestors. Package and
+pair validators reject partial clipping, missing measurements and nonfinite values. The 84 Linux
+evidence policies pass, including clipped-control rejection; the corrected actual capture still
+requires fresh Mac execution.
 
 The
 [ARM performance build artifact](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)
@@ -1143,7 +1155,13 @@ and
 retain the failures. The collector now waits for the attached, visible tab control itself to be
 enabled after the local read, records control/model readiness and requires the delivered action to
 select the requested Agent before checking its new result. It does not retry the selection or relax
-draft/result retention. This correction and subsequent overlay checks require fresh Mac execution.
+draft/result retention. Intel source `5b166d511ed56be719012a3a9bb7894de91878d8` / tested merge
+`e18cb7dc08a2dbefb5b11cef2506752823dc772b` passes the complete settings suite:
+[artifact 14061810238](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14061810238)
+records an enabled, delivered Kimi action, both retained results/draft, and all five actual
+overlay-close/reopen/focus checks. Its `native-settings-workspace-overlay.png` was reviewed. ARM
+stops earlier at the Return check described below; the new Return and capture corrections still
+require their own Mac runs.
 
 The native command page searches saved Agent names, identifiers and executable paths, with **All
 Agents**, **Available** and **Enabled** filters. Filtering keeps the selected command and its draft;
@@ -1258,15 +1276,29 @@ Mac artifact. Automatic-save QA uses actual AppKit field editing, invalid blur a
 input with an unrelated numeric draft, then an actual font selection with an unrelated draft and a
 concurrent Core writer. It checks invalid-input retention, correction, scoped persistence, the
 original conflict baseline and explicit reload recovery, recording
-`nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`. A macOS ARM64 run
-reported visible `WRITER_BUSY` during the font action; that run does not establish scoped-save
-acceptance. CI runs settings interactions before the heavy core suite and uploads an early
+`nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`.
+
+ARM source `5b166d511ed56be719012a3a9bb7894de91878d8` / tested merge
+`e18cb7dc08a2dbefb5b11cef2506752823dc772b` fails the Return assertion;
+[artifact 14059825905](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14059825905)
+retains the actual busy-error window and report. It does not establish automatic-save or subsequent
+Agent/overlay acceptance.
+
+Return QA now records every attempt in `nativeSettingsAutomaticEnterAttempts`. Only `WRITER_BUSY`
+with a visible model error, unchanged revision, complete workspace/settings and both retained
+numeric drafts permits at most two additional explicit Return actions; busy screenshots are
+retained. Success must match the complete original settings with only the intended field changed.
+This correction needs fresh Mac execution.
+
+CI runs settings interactions before the heavy core suite and uploads an early
 `native-settings-<runner>-<head>-<attempt>` artifact, while retaining every later check and final
 failure gate. QA records every attempted font action's error, committed values and retained draft in
 `nativeSettingsAutomaticSaveAttempts`. On contention it first requires unchanged committed data and
 retained drafts, captures `native-settings-autosave-busy.png`, and explicitly reselects the same
-control at most twice. The application does not retry failed mutations automatically. The same check
-clicks a real theme-preview button, verifies terminal preferences are unchanged, and captures
+control at most twice.
+
+The application does not retry failed mutations automatically. The same check clicks a real
+theme-preview button, verifies terminal preferences are unchanged, and captures
 `native-settings-theme-cards-900.png` / `native-settings-theme-cards-640.png`. These new
 automatic-save operations and same-source screenshots remain pending macOS CI; the reordered fields
 and full settings styling still require actual Mac screenshots and comparison under #53.

@@ -48,8 +48,9 @@ def validate_native_run_forms(report, fixture, head, tested, phase):
         assert all(row.get(key) == report.get(key) for key in ['platform', 'architecture', 'system']), 'Wrong run-form platform'
         name = f"personal-{phase}-run-form-{row['kind']}-{row['language']}-{row['appearance']}-{row['width']}.png"
         assert row.get('screenshot') == name and name in report.get('captures', []), 'Missing actual run-form original'
-        assert all(finite(row.get(key)) for key in ['panelWidth', 'saveWidth', 'saveHeight', 'saveRightInset']), 'Missing actual run-form geometry'
+        assert all(finite(row.get(key)) for key in ['panelWidth', 'saveWidth', 'saveHeight', 'saveRightInset', 'saveVisibleWidth', 'saveVisibleHeight']), 'Missing actual run-form geometry'
         assert 0 < row['panelWidth'] <= row['width'] and 0 < row['saveWidth'] < 200 and abs(row['saveHeight'] - 28) < 1 and 0 <= row['saveRightInset'] <= 40, 'Stretched or misplaced Save configuration'
+        assert abs(row['saveVisibleWidth'] - row['saveWidth']) <= 0.5 and abs(row['saveVisibleHeight'] - row['saveHeight']) <= 0.5, 'Clipped Save configuration at capture'
         columns = 2 if row['width'] <= 900 else 3
         full_interpreter = row['kind'] == 'python' and row['width'] <= 850
         assert type(row.get('columnCount')) is int and row['columnCount'] == columns and row.get('interpreterFullRow') is full_interpreter, 'Wrong responsive run-form policy'

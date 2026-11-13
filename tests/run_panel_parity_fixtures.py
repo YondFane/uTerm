@@ -31,7 +31,7 @@ def policy_forms(fixture, phase, head, tested, system):
             rows.append(dict(item, kind=kind, passed=True, actualAdvancedToggle=True, actualTextEditorInput=True, invalidArgumentRetainedWithoutWrite=True, literalArgumentsSaved=True, validArgumentTextRetained=True, temporaryEnvironmentRetainedWithoutPersistence=True,
                              fixtureArguments=fixture["runFormInput"]["arguments"], fixtureEnvironment=fixture["runFormInput"]["environment"], savedArguments=fixture["runFormInput"]["argumentValues"], actualSaveButtonAndFeedback=True,
                              compactRightAlignedSave=True, actualConfigurationCollapseAndRestore=True,
-                             canonicalStateAndSessionRetained=True, panelWidth=300, saveWidth=100, saveHeight=28, saveRightInset=12,
+                             canonicalStateAndSessionRetained=True, panelWidth=300, saveWidth=100, saveHeight=28, saveRightInset=12, saveVisibleWidth=100, saveVisibleHeight=28,
                              fieldFrames=fields, columnCount=columns, interpreterFullRow=full_interpreter,
                              formGridFrame=dict(left=12, top=20, width=276, height=180), backingScale=1,
                              sourceHeadSHA=head, testedMergeSHA=tested, platform='macOS', architecture='arm64', system=system,

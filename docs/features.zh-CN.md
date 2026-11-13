@@ -220,7 +220,14 @@ CI；Linux 不能验收原生窗口。
 任务日志 QA 在暂停前及收到后续输出后，等待实际重挂载窗口、终端尺寸和输出 ACK 稳定 250ms；保留准确锚点及跟随状态检查，记录前后视口、首行、帧数及回放重置。源码
 `3a621c1441d9882c8a92c74fff9696560aa451bc`／实际测试 merge
 `ec5e9fbe11094cbaa28679feda1b043c4ec6fc59`
-在停靠／重挂载后的 Java 暂停锚点处仍失败，[实际报告14054981144](https://github.com/YondFane/uTerm/actions/runs/43454656732/artifacts/14054981144)保留。调整后的就绪检查与诊断仍须自己的真实 Mac 运行。
+在停靠／重挂载后的 Java 暂停锚点处仍失败，[实际报告14054981144](https://github.com/YondFane/uTerm/actions/runs/43454656732/artifacts/14054981144)保留。源码
+`5b166d511ed56be719012a3a9bb7894de91878d8`／实际测试 merge
+`e18cb7dc08a2dbefb5b11cef2506752823dc772b`
+的真实 Java／Python 套件在[ARM](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14059446877)与[Intel](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14061505895)均通过。
+
+该源码的[Personal 产物14059049858](https://github.com/YondFane/uTerm/actions/runs/43464826845/artifacts/14059049858)中，已查看的
+`personal-initial-run-form-java-zh-Hans-light-640.png`
+显示保存按钮部分被裁剪，但原按钮尺寸度量有效。表单 QA 现在结束字段编辑，在动作前将实际控件完整滚入可见区域，并在截图前再次核对，记录真实裁剪祖先内的可见宽／高。安装包与配对校验拒绝部分裁剪、缺失度量及非有限值。84 项 Linux 证据策略通过，包含裁剪控件拒绝；修正后的实际截图仍须新的 Mac 执行。
 
 源码 `f3e5ba8`、实际测试 merge `3f9e9a7`
 的[ARM 性能构建产物](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)记录 AppKit 编译失败：表单复用了文件内私有的测量视图。候选将共用视图改为模块内可见。该失败构建没有可验收的新表单截图，仍须修正后的 Mac 编译和运行检查。 源码
@@ -527,7 +534,11 @@ Linux 的 21 项共享工作区及渲染回归通过。新增 macOS 检查在终
 
 源码 `b0539f19c329a6d6a8ba4a9151788ce1ae06a125`／实际测试 merge
 `50cd3ea615382f90a61523180d4e3b840e247e32`
-在两个 Mac 架构的用量 Agent 切换处超时。已查看的 Intel 原图仍选中 Claude；[Intel 产物14056188657](https://github.com/YondFane/uTerm/actions/runs/43459108237/artifacts/14056188657)和[ARM 产物14057117665](https://github.com/YondFane/uTerm/actions/runs/43459108237/artifacts/14057117665)保留失败。采集器现在等待本地读取后已挂载、可见的标签控件本身启用，记录控件／模型就绪状态，并要求发出的动作先选中目标 Agent，再检查其新结果。不重试选择，也不放宽草稿及结果保留要求。此修正和后续覆盖面板检查仍须新的 Mac 执行。
+在两个 Mac 架构的用量 Agent 切换处超时。已查看的 Intel 原图仍选中 Claude；[Intel 产物14056188657](https://github.com/YondFane/uTerm/actions/runs/43459108237/artifacts/14056188657)和[ARM 产物14057117665](https://github.com/YondFane/uTerm/actions/runs/43459108237/artifacts/14057117665)保留失败。采集器现在等待本地读取后已挂载、可见的标签控件本身启用，记录控件／模型就绪状态，并要求发出的动作先选中目标 Agent，再检查其新结果。不重试选择，也不放宽草稿及结果保留要求。Intel 源码
+`5b166d511ed56be719012a3a9bb7894de91878d8`／实际测试 merge
+`e18cb7dc08a2dbefb5b11cef2506752823dc772b`
+通过完整设置套件：[产物14061810238](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14061810238)记录已启用并送达的 Kimi 动作、两份结果／草稿保留及五项真实覆盖面板关闭／重开／焦点检查，已查看其
+`native-settings-workspace-overlay.png`。ARM 在下述回车检查更早停止；新增回车和截图修正仍须自己的 Mac 运行。
 
 原生命令页按已保存的 Agent 名称、标识及程序路径搜索，提供**全部 Agent**、**可用**和**已启用**筛选。筛选保留当前命令及草稿，空结果不选择其他 Agent。Escape 优先清除非空搜索，再关闭设置。不可用的 Agent 已启用时仍可停用，但不能新启用；启用操作保留点击时的 Agent 标识。
 
@@ -569,13 +580,21 @@ Linux x86_64／Node
 26 的 20 项设置、搜索及 Maven 专项检查，以及类型／生产构建、i18n 和生成契约检查通过。原生 QA 通过实际 AppKit 字段编辑器输入、点击匹配分类、发送 Escape，检查数值草稿保留且快照字节未变；Mac 产物记录
 `nativeSettingsSearchProof` 和
 `native-settings-search-jdk.png`。自动保存 QA 使用真实 AppKit 字段编辑、无效值失去焦点及保留无关数值草稿时修正后回车，再在无关草稿与另一个 Core 写入者同时存在时操作真实字体选择器，检查无效输入保留、修正、字段独立持久化、原始冲突基点及明确重读恢复，记录
-`nativeSettingsAutomaticSaveProof` 和 `native-settings-autosave-conflict.png`。一次 macOS
-ARM64 运行在字体操作中显示了
-`WRITER_BUSY`，该次运行不能证明限定字段保存验收通过。CI 在较慢的核心套件之前运行设置交互，提前上传
-`native-settings-<runner>-<head>-<attempt>` 产物，仍保留全部后续检查和最终失败门禁。QA 在
-`nativeSettingsAutomaticSaveAttempts`
+`nativeSettingsAutomaticSaveProof` 和 `native-settings-autosave-conflict.png`。
+
+ARM 源码 `5b166d511ed56be719012a3a9bb7894de91878d8`／实际测试 merge
+`e18cb7dc08a2dbefb5b11cef2506752823dc772b`
+在回车断言失败；[产物14059825905](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14059825905)保留真实忙碌错误窗口与报告，不能验收自动保存或后续 Agent／覆盖面板。
+
+回车 QA 现在在 `nativeSettingsAutomaticEnterAttempts` 中记录每次尝试。仅在错误码为 `WRITER_BUSY`
+且模型显示错误、原 revision、完整工作区／设置和两份数字草稿均未变时，才允许最多两次额外的实际回车，并保留忙碌截图。成功后必须匹配仅目标字段改变的完整原设置，此修正须新的 Mac 执行。
+
+CI 在较慢的核心套件之前运行设置交互，提前上传 `native-settings-<runner>-<head>-<attempt>`
+产物，仍保留全部后续检查和最终失败门禁。QA 在 `nativeSettingsAutomaticSaveAttempts`
 中记录每次字体操作的错误、已保存值与保留草稿。遇到锁争用时先核对已保存数据未变且草稿仍在，采集
-`native-settings-autosave-busy.png`，再明确重新选择同一控件，最多重选两次。应用不会自动重试失败的变更。同一检查点击真实主题预览按钮、核对终端偏好未变，并采集
+`native-settings-autosave-busy.png`，再明确重新选择同一控件，最多重选两次。
+
+应用不会自动重试失败的变更。同一检查点击真实主题预览按钮、核对终端偏好未变，并采集
 `native-settings-theme-cards-900.png`／`native-settings-theme-cards-640.png`。新增自动保存操作及同源码截图仍待 macOS
 CI；调整后的字段与完整设置样式仍需实际 Mac 截图并在 #53 对照。
 

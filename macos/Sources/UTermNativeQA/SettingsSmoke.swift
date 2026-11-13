@@ -815,10 +815,29 @@ enum SettingsSmoke {
             let limit = before.document.settings["fileTabLimit"].number == 7 ? 8 : 7
             let scrollback = model.numbers["scrollback"], scrollbackDraft = model.numbers["scrollback"] == "4999" ? "4998" : "4999"
             model.numbers["scrollback"] = scrollbackDraft
-            try await editField(settings, key: "fileTabLimit", text: String(limit), enter: true)
-            let entered = try await readSnapshot(peer)
-            guard model.error.isEmpty, entered.document.settings["fileTabLimit"].number == Double(limit),
-                  entered.document.settings["scrollback"] == before.document.settings["scrollback"], model.numbers["scrollback"] == scrollbackDraft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Return failed to save its field or saved an unrelated draft") }
+            report["nativeSettingsAutomaticSaveStage"] = "enter-field-save"
+            var entered = before, enterAttempts: [[String: Any]] = []
+            for attempt in 1...3 {
+                let baseline = try await readSnapshot(peer)
+                try await editField(settings, key: "fileTabLimit", text: String(limit), enter: true)
+                entered = try await readSnapshot(peer)
+                let unchanged = entered.revision == baseline.revision && entered.document.workspace == baseline.document.workspace && entered.document.settings == baseline.document.settings
+                var entry: [String: Any] = ["attempt": attempt, "error": model.error, "errorCode": model.errorCode]
+                entry["expectedLimit"] = limit; entry["savedLimit"] = entered.document.settings["fileTabLimit"].number ?? -1
+                entry["retainedLimit"] = model.numbers["fileTabLimit"] ?? ""; entry["retainedScrollback"] = model.numbers["scrollback"] ?? ""
+                entry["expectedScrollbackDraft"] = scrollbackDraft; entry["savedScrollback"] = entered.document.settings["scrollback"].number ?? -1
+                entry["baselineRevision"] = baseline.revision; entry["observedRevision"] = entered.revision; entry["storeUnchanged"] = unchanged
+                enterAttempts.append(entry); report["nativeSettingsAutomaticEnterAttempts"] = enterAttempts
+                guard model.errorCode == "WRITER_BUSY", attempt < 3 else { break }
+                guard !model.error.isEmpty, unchanged, model.numbers["fileTabLimit"] == String(limit), model.numbers["scrollback"] == scrollbackDraft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Busy Return save lost a draft, hid its error or changed the original store") }
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent("native-settings-enter-busy-\(attempt).png"))
+                // Repeat actual Return only after proving a rejected write retained the complete original store and drafts.
+                // 仅在确认拒写保留完整原存储和草稿后，才明确再次执行实际回车动作。
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            guard case .object(var expectedEntered) = before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Original settings are missing") }
+            expectedEntered["fileTabLimit"] = .number(Double(limit))
+            guard model.error.isEmpty, entered.document.settings == .object(expectedEntered), model.numbers["scrollback"] == scrollbackDraft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Return failed to save only its field or lost an unrelated draft; see nativeSettingsAutomaticEnterAttempts") }
             model.numbers["scrollback"] = scrollback
             let draft = before.document.settings["fontSize"].number == 18 ? "19" : "18"
             let peerSize = before.document.settings["fontSize"].number == 20 ? 21.0 : 20.0

@@ -12,13 +12,29 @@ enum RunPanelFormSmoke {
         let before = try await readSnapshot(), selected = model.selectedID, generation = model.selectedTerminal?.generation
         let java = (panel.controller as? JavaWindow)?.model, python = (panel.controller as? PythonWindow)?.model
         func view(_ suffix: String) -> NSView? { TerminalSmoke.descendants(root).first { $0.identifier?.rawValue == "native-" + kind + "-" + suffix } }
+        func visibleBounds(_ control: NSView) -> NSRect {
+            var visible = control.visibleRect.intersection(control.convert(root.bounds, from: root)), ancestor = control.superview
+            while let parent = ancestor {
+                // Nonclipping SwiftUI layout hosts do not limit the visible control to their own bounds.
+                // 不裁剪内容的 SwiftUI 布局宿主不会用自身边界限制可见控件。
+                if parent is NSClipView || parent.layer?.masksToBounds == true { visible = visible.intersection(control.convert(parent.bounds, from: parent)) }
+                ancestor = parent.superview
+            }
+            return visible.isNull ? .zero : visible
+        }
+        func fullyVisible(_ control: NSView) -> Bool {
+            let visible = visibleBounds(control)
+            return control.bounds.width > 0 && control.bounds.height > 0 && visible.width >= control.bounds.width - 0.5 && visible.height >= control.bounds.height - 0.5
+        }
         func button(_ suffix: String) async throws -> NSButton {
             try await TerminalSmoke.wait("Attach and enable the actual run form action: " + suffix) {
                 guard let control = view(suffix) as? NSButton else { return false }
                 return control.isEnabled && control.window === window && !control.isHiddenOrHasHiddenAncestor
             }
             guard let control = view(suffix) as? NSButton, control.isEnabled, control.window === window else { throw BridgeFailure(code: "RUN_FORM_QA", message: "Missing attached, enabled run form control: " + suffix) }
+            window.makeFirstResponder(nil)
             _ = control.scrollToVisible(control.bounds)
+            try await TerminalSmoke.wait("Reveal the complete actual run form action: " + suffix) { fullyVisible(control) }
             return control
         }
         guard let bridge = java?.bridge ?? python?.bridge, let directory = java?.directory ?? python?.directory,
@@ -134,6 +150,9 @@ enum RunPanelFormSmoke {
             throw BridgeFailure(code: "RUN_FORM_QA", message: "Actual save changed literal arguments or persisted temporary environment")
         }
         let name = "personal-\(phase)-run-form-\(kind)-\(language)-\(appearance)-\(Int(width)).png"
+        let capturedSave = try await button("save-configuration")
+        let capturedSaveRect = capturedSave.convert(capturedSave.bounds, to: panel.view), capturedVisible = visibleBounds(capturedSave)
+        guard abs(capturedSaveRect.width - saveRect.width) < 0.5, abs(capturedSaveRect.height - saveRect.height) < 0.5 else { throw BridgeFailure(code: "RUN_FORM_QA", message: "Save configuration changed its measured size before capture") }
         try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent(name)); captures.append(name)
         try await enter("arguments", originalArguments); try await enter("environment", originalEnvironment)
         if java != nil { try await enter("vm-arguments", originalVM) }
@@ -153,6 +172,7 @@ enum RunPanelFormSmoke {
             "passed": true, "actualAdvancedToggle": true, "actualTextEditorInput": true, "invalidArgumentRetainedWithoutWrite": true, "literalArgumentsSaved": true, "validArgumentTextRetained": true, "temporaryEnvironmentRetainedWithoutPersistence": true, "fixtureArguments": literal, "fixtureEnvironment": environment, "savedArguments": input["argumentValues"].array.compactMap(\.string), "actualSaveButtonAndFeedback": true, "compactRightAlignedSave": true,
             "actualConfigurationCollapseAndRestore": true, "canonicalStateAndSessionRetained": true, "fieldFrames": frames, "columnCount": columns, "interpreterFullRow": fullInterpreter,
             "panelWidth": Double(panel.view.bounds.width), "saveWidth": Double(saveRect.width), "saveHeight": Double(saveRect.height), "saveRightInset": Double(inset), "screenshot": name,
+            "saveVisibleWidth": Double(capturedVisible.width), "saveVisibleHeight": Double(capturedVisible.height),
             "formGridFrame": gridFrame, "backingScale": backingScale,
             "input": "Actual attached AppKit field/text editors and NSButton actions; no physical pointer claim"]
         for key in ["sourceHeadSHA", "testedMergeSHA", "platform", "architecture", "system"] { proof[key] = report[key] }

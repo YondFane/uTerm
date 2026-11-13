@@ -51,6 +51,7 @@ class PersonalPackageTests(unittest.TestCase):
         fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
         report = self.workspace_evidence("initial")
         for key, value in [("saveWidth", 300), ("saveHeight", 80), ("saveRightInset", 100), ("saveRightInset", -1), ("panelWidth", True), ("saveHeight", float("nan")),
+                           ("saveVisibleHeight", 10), ("saveVisibleWidth", 30), ("saveVisibleHeight", float("nan")), ("saveVisibleHeight", True),
                            ("fieldFrames", []), ("fieldFrames", [dict(id=name, left=12, top=20, width=84, height=40) for name in ["module", "mode", "version"]])]:
             wrong = copy.deepcopy(report); wrong["runPanelFormProof"][0][key] = value
             with self.subTest(key=key, value=value), self.assertRaises(AssertionError):

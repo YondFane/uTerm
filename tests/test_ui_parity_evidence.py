@@ -201,6 +201,14 @@ class ParityEvidenceTests(unittest.TestCase):
             self.assertEqual((self.root / 'comparison' / proof['screenshot']).read_bytes(), original)
             self.assertEqual(proof['SHA256'], hashlib.sha256(original).hexdigest())
 
+    def test_run_forms_reject_clipped_native_save_even_with_valid_button_size(self):
+        baseline = copy.deepcopy(self.n)
+        for key, value in [('saveVisibleHeight', 10), ('saveVisibleWidth', 30), ('saveVisibleHeight', float('nan'))]:
+            self.n = copy.deepcopy(baseline)
+            self.n['runPanelFormProof'][0][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): self.run_compare()
+        self.n = baseline
+
     def test_run_forms_require_both_originals_and_matching_actual_literal_operations(self):
         baseline = copy.deepcopy(self.t)
         form = next(row for row in self.t['scenes'] if row['scenario'].startswith('run-form-'))
