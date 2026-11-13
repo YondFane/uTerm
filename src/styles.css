@@ -4693,6 +4693,11 @@ textarea:focus-visible {
   gap: 6px;
   padding: 4px 8px 8px;
 }
+.ssh-sidebar-tools > button {
+  min-height: 28px;
+  line-height: max(18px, 1.4em);
+  white-space: normal;
+}
 .ssh-quick-dialog {
   width: min(540px, calc(100vw - 32px));
 }
@@ -4707,6 +4712,7 @@ textarea:focus-visible {
   line-height: 1.6;
 }
 .ssh-sidebar-tools input {
+  height: 36px;
   width: 100%;
   min-width: 0;
 }

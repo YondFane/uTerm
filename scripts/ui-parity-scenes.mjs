@@ -115,7 +115,13 @@ export function assertParityOperations(scenes, fixture) {
     assert.equal(checks.fixtureArguments, fixture.runFormInput.arguments);
     assert.equal(checks.fixtureEnvironment, fixture.runFormInput.environment);
     assert.deepEqual(checks.savedArguments, fixture.runFormInput.argumentValues);
-    for (const key of ["saveWidth", "saveHeight", "saveRightInset"])
+    for (const key of [
+      "saveWidth",
+      "saveHeight",
+      "saveRightInset",
+      "saveVisibleWidth",
+      "saveVisibleHeight",
+    ])
       assert.ok(Number.isFinite(checks[key]));
     assert.ok(
       checks.saveWidth > 0 &&
@@ -123,7 +129,9 @@ export function assertParityOperations(scenes, fixture) {
         checks.saveHeight > 0 &&
         checks.saveHeight <= 30 &&
         checks.saveRightInset >= 0 &&
-        checks.saveRightInset <= 40,
+        checks.saveRightInset <= 40 &&
+        Math.abs(checks.saveVisibleWidth - checks.saveWidth) <= 0.5 &&
+        Math.abs(checks.saveVisibleHeight - checks.saveHeight) <= 0.5,
     );
   }
   const runCleanup = scenes.filter((scene) => scene.scenario === "run-panels-complete");

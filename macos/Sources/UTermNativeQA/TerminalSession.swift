@@ -63,6 +63,10 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private(set) var qaLastAcknowledgedSequence = "0"
     private(set) var qaLastAckUptime: TimeInterval = 0
     private(set) var qaReplayResets = 0
+    var qaHostGrid: [String: Int] {
+        guard let (columns, rows) = hostSize else { return [:] }
+        return ["columns": columns, "rows": rows]
+    }
 
     init(entry: CoreSessionEntry, bridge: CoreBridge, taskGeneration: String? = nil) {
         self.entry = entry

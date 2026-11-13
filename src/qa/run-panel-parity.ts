@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { translate } from "../lib/i18n";
 import { terminalPerformanceSnapshot } from "../lib/terminal-performance-qa";
+import { visibleControlBounds } from "./visible-bounds";
 
 type Scene = { language: "en" | "zh-Hans"; appearance: string; width: number; height: number };
 type Fixture = {
@@ -202,12 +203,26 @@ export async function runPanelParity(
           revision: string;
           project: { arguments: string[]; vm_arguments?: string[]; environment?: unknown };
         }>(kind + "_configuration", { directory });
+      const reveal = async (control: HTMLButtonElement) => {
+        control.focus({ preventScroll: true });
+        control.scrollIntoView({ block: "nearest", inline: "nearest" });
+        await until(() => {
+          const rect = control.getBoundingClientRect(),
+            visible = visibleControlBounds(control);
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            Math.abs(visible.width - rect.width) <= 0.5 &&
+            Math.abs(visible.height - rect.height) <= 0.5
+          );
+        }, "complete Save configuration inside actual clipping viewports");
+      };
       const save = async (invalid = false) => {
         const control = [...advanced.querySelectorAll("button")].find(
           (button) => button.textContent === translate(scene.language, "保存配置"),
         );
         assert(control && !control.disabled, "Missing actual enabled Save configuration");
-        control.scrollIntoView({ block: "nearest" });
+        await reveal(control);
         control.click();
         await new Promise((resolve) => setTimeout(resolve, 0));
         await until(
@@ -250,6 +265,15 @@ export async function runPanelParity(
         env.value === fixture.runFormInput.environment && !("environment" in saved.project),
         "Temporary environment was persisted or discarded",
       );
+      await reveal(saveButton);
+      assert(
+        args.value === fixture.runFormInput.arguments &&
+          env.value === fixture.runFormInput.environment &&
+          (!vm || vm.value === fixture.runFormInput.vmArguments),
+        "Ending form editing changed retained literal input",
+      );
+      await unchanged();
+      const visible = visibleControlBounds(saveButton);
       const rect = saveButton.getBoundingClientRect(),
         formRect = panel.getBoundingClientRect();
       assert(
@@ -259,7 +283,9 @@ export async function runPanelParity(
           rect.top >= formRect.top &&
           rect.bottom <= formRect.bottom &&
           formRect.right - rect.right >= 0 &&
-          formRect.right - rect.right <= 40,
+          formRect.right - rect.right <= 40 &&
+          Math.abs(visible.width - rect.width) <= 0.5 &&
+          Math.abs(visible.height - rect.height) <= 0.5,
         "Save configuration is stretched or not right aligned",
       );
       await unchanged();
@@ -282,6 +308,8 @@ export async function runPanelParity(
         saveWidth: rect.width,
         saveHeight: rect.height,
         saveRightInset: formRect.right - rect.right,
+        saveVisibleWidth: visible.width,
+        saveVisibleHeight: visible.height,
       });
       await input(args, original.arguments);
       await input(env, original.environment);

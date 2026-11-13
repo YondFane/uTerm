@@ -276,9 +276,10 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
             assert actual.get(key) == proof[key], 'Different actual run-form data: ' + key
         for key in ['passed', 'actualAdvancedToggle', 'actualTextEditorInput', 'invalidArgumentRetainedWithoutWrite', 'literalArgumentsSaved', 'validArgumentTextRetained', 'temporaryEnvironmentRetainedWithoutPersistence', 'actualSaveButtonAndFeedback', 'compactRightAlignedSave', 'canonicalStateAndSessionRetained']:
             assert actual.get(key) is True, 'Unverified ordinary run-form action: ' + key
-        for key in ['saveWidth', 'saveHeight', 'saveRightInset']:
+        for key in ['saveWidth', 'saveHeight', 'saveRightInset', 'saveVisibleWidth', 'saveVisibleHeight']:
             assert type(actual.get(key)) in [int, float] and math.isfinite(actual[key]), 'Invalid ordinary Save geometry'
         assert 0 < actual['saveWidth'] < 200 and 0 < actual['saveHeight'] <= 30 and 0 <= actual['saveRightInset'] <= 40, 'Stretched ordinary Save button'
+        assert abs(actual['saveVisibleWidth'] - actual['saveWidth']) <= 0.5 and abs(actual['saveVisibleHeight'] - actual['saveHeight']) <= 0.5, 'Clipped ordinary Save button'
         expected = 'ui-parity-' + name + '.png'
         assert ordinary['screenshot'] == expected, 'Substituted ordinary run-form original'
         _, digest = image(native_path.parent, proof['screenshot'], minimum_height=proof['height'])

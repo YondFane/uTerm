@@ -392,12 +392,25 @@ is retained. At source `5b166d511ed56be719012a3a9bb7894de91878d8` / tested merge
 
 The reviewed `personal-initial-run-form-java-zh-Hans-light-640.png` in
 [Personal artifact 14059049858](https://github.com/YondFane/uTerm/actions/runs/43464826845/artifacts/14059049858)
-at that source shows a partly clipped Save button despite valid button-size metrics. Form QA now
-ends field editing, scrolls the actual control fully into view before actions and again before
-capture, and records its visible width/height through the actual clipping ancestors. Package and
-pair validators reject partial clipping, missing measurements and nonfinite values. The 84 Linux
-evidence policies pass, including clipped-control rejection; the corrected actual capture still
-requires fresh Mac execution.
+at that source shows a partly clipped Save button despite valid button-size metrics. At source
+`310ffbd33ed2b615a0b42191010cabed18ac481d` / tested merge
+`ae2187c3ef0938e0041c4902b43d7d8621460933`, the reviewed native Java button is fully visible in
+[paired artifact 14064655571](https://github.com/YondFane/uTerm/actions/runs/43471895657/artifacts/14064655571),
+while the ordinary Java button in the same 640px scene is still clipped. Both collectors now finish
+editing, focus/reveal the actual action before clicking and capturing, and record visible
+width/height through clipping ancestors. Package, Node and pair validators reject partial clipping,
+missing measurements and nonfinite values. Linux passes 84 evidence policies, 16 focused Node checks
+including scroll-axis/border/transform/window clipping, and four existing sidebar regressions. The
+ordinary capture correction still needs fresh Mac execution.
+
+An earlier native workspace original did not display its output marker; the reviewed 310ffbd wide
+original does. No parser loss was reproduced in the isolated model. Native workspace capture now
+requires the marker inside the current renderer viewport and equal received/rendered/ACK counts,
+with the actual grid and frame state stable for 250ms. Reports include visible text, host grid and
+failure diagnostics; no output is cleared or viewport forced to manufacture a match. Three
+exact-copy SwiftTerm parser tests pass on Linux Swift6.1.2 at the locked dependency revision,
+including Unicode preservation across repeated resizes and host-sized reset replay. These model
+tests do not replace new Mac window validation.
 
 The
 [ARM performance build artifact](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)
@@ -3379,6 +3392,11 @@ replace acceptance. Issue #36 records source-specific acceptance separately from
 status.
 
 ### Quick connections and host search
+
+The sidebar action wraps long titles instead of truncating them. Both clients use a 28px minimum
+action height, matching line spacing and a 36px search field. Native row heights follow the actual
+title width when the window or language changes, retaining the search editor and the existing button
+action. This layout correction still requires fresh paired Mac originals.
 
 Choose **Quick SSH connection** in the SSH sidebar and enter a Host alias, `user@host:port` or
 `ssh://user@host:port`. IPv6 addresses with a port use brackets, such as `user@[::1]:2222`. A plain

@@ -212,7 +212,7 @@ class ParityEvidenceTests(unittest.TestCase):
     def test_run_forms_require_both_originals_and_matching_actual_literal_operations(self):
         baseline = copy.deepcopy(self.t)
         form = next(row for row in self.t['scenes'] if row['scenario'].startswith('run-form-'))
-        for key, value in [('actualTextEditorInput', False), ('invalidArgumentRetainedWithoutWrite', False), ('literalArgumentsSaved', False), ('validArgumentTextRetained', False), ('temporaryEnvironmentRetainedWithoutPersistence', False), ('fixtureArguments', 'changed'), ('savedArguments', []), ('saveHeight', 80)]:
+        for key, value in [('actualTextEditorInput', False), ('invalidArgumentRetainedWithoutWrite', False), ('literalArgumentsSaved', False), ('validArgumentTextRetained', False), ('temporaryEnvironmentRetainedWithoutPersistence', False), ('fixtureArguments', 'changed'), ('savedArguments', []), ('saveHeight', 80), ('saveVisibleHeight', 10), ('saveVisibleWidth', 30), ('saveVisibleHeight', float('nan'))]:
             self.t = copy.deepcopy(baseline)
             next(row for row in self.t['scenes'] if row['scenario'] == form['scenario'])['checks'][key] = value
             with self.subTest(key=key), self.assertRaises(AssertionError): self.run_compare()

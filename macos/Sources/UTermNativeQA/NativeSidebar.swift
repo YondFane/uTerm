@@ -3,6 +3,19 @@ import SwiftUI
 import UTermBridge
 
 @MainActor
+private final class ResponsiveSidebarTable: NSTableView {
+    override func setFrameSize(_ size: NSSize) {
+        let changed = bounds.width != size.width
+        super.setFrameSize(size)
+        guard changed, size.width > 0 else { return }
+        Task { @MainActor [weak self] in
+            guard let self, self.bounds.width == size.width, self.numberOfRows > 0 else { return }
+            self.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<self.numberOfRows))
+        }
+    }
+}
+
+@MainActor
 private final class SidebarSessionCloseButton: NSButton {
     var sessionID = ""
     var hoverFill = NSColor.controlBackgroundColor
@@ -127,7 +140,7 @@ struct NativeSidebar: NSViewRepresentable {
         scroll.drawsBackground = false
         scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.automaticallyAdjustsContentInsets = false
-        let table = NSTableView()
+        let table = ResponsiveSidebarTable()
         table.identifier = NSUserInterfaceItemIdentifier("native-sidebar")
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
         table.addTableColumn(column)
@@ -295,6 +308,7 @@ struct NativeSidebar: NSViewRepresentable {
                         return row.key != "ssh-filter" && !inserted.contains(index) && previous.first(where: { $0.key == row.key }) != row
                     })
                     table.reloadData(forRowIndexes: changed, columnIndexes: IndexSet(integer: 0))
+                    if let quick = rows.firstIndex(where: { $0.key == "ssh-quick" }), changed.contains(quick) { table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: quick)) }
                 } else { table.reloadData() }
                 // Reloading filtered rows must retain only an already-focused search editor.
                 // 重载筛选行时，仅恢复原本已获得焦点的搜索编辑器。
@@ -330,9 +344,23 @@ struct NativeSidebar: NSViewRepresentable {
         }
         func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
             guard rows.indices.contains(row) else { return tableView.rowHeight }
-            if rows[row].key == "ssh-filter" { return max(tableView.rowHeight, 44) }
+            if rows[row].key == "ssh-filter" { return 50 }
+            if rows[row].key == "ssh-quick" {
+                let width = max(1, (tableView.tableColumns.first?.width ?? tableView.bounds.width) - 16)
+                let title = quickSSHTitle(rows[row].name, settings: model?.settings ?? .null)
+                let height = title.boundingRect(with: NSSize(width: width, height: CGFloat.greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading]).height
+                return max(28, ceil(height)) + 4
+            }
             guard rows[row].sectionID != nil else { return tableView.rowHeight }
             return CGFloat(CoreChrome.sidebarSectionHeight + (row == 0 ? 0 : CoreChrome.sidebarSectionGap))
+        }
+        private func quickSSHTitle(_ name: String, settings: JSONValue) -> NSAttributedString {
+            let font = NativePreferences.semiboldFont(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center; paragraph.lineBreakMode = .byWordWrapping
+            paragraph.minimumLineHeight = max(18, font.pointSize * 1.4); paragraph.maximumLineHeight = paragraph.minimumLineHeight
+            let palette = NativePreferences.interfacePalette(settings, catalog: model?.settingsCatalog ?? .null)
+            return NSAttributedString(string: name, attributes: [.font: font, .paragraphStyle: paragraph, .foregroundColor: NativePreferences.color(palette["text"], fallback: .labelColor)])
         }
         func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
             let view = SidebarRowView()
@@ -563,10 +591,12 @@ struct NativeSidebar: NSViewRepresentable {
                 let control: NSView
                 if item.key == "ssh-quick" {
                     let button = NSButton(title: item.name, target: self, action: #selector(quickSSH(_:)))
-                    button.isBordered = false; button.alignment = .left
+                    button.isBordered = false; button.alignment = .center
+                    button.cell?.wraps = true; button.cell?.usesSingleLineMode = false; button.cell?.lineBreakMode = .byWordWrapping
                     button.contentTintColor = NativePreferences.color(palette["text"], fallback: .labelColor)
                     button.identifier = NSUserInterfaceItemIdentifier("native-ssh-quick")
                     button.font = NativePreferences.semiboldFont(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
+                    button.attributedTitle = quickSSHTitle(item.name, settings: settings)
                     button.isEnabled = model?.busy == false
                     control = button
                 } else {
@@ -582,7 +612,7 @@ struct NativeSidebar: NSViewRepresentable {
                     control = sshSearch
                 }
                 control.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(control)
-                NSLayoutConstraint.activate([control.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8), control.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8), control.centerYAnchor.constraint(equalTo: cell.centerYAnchor), control.heightAnchor.constraint(equalToConstant: item.key == "ssh-filter" ? 36 : 26)])
+                NSLayoutConstraint.activate([control.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8), control.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8), control.topAnchor.constraint(equalTo: cell.topAnchor, constant: item.key == "ssh-filter" ? 6 : 4), control.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: item.key == "ssh-filter" ? -8 : 0)])
                 return cell
             }
             if let section = item.sectionID {

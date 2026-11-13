@@ -125,6 +125,8 @@ const formEvidence = fixture.runPanelScenes.flatMap((scene) =>
       saveWidth: 100,
       saveHeight: 28,
       saveRightInset: 12,
+      saveVisibleWidth: 100,
+      saveVisibleHeight: 28,
     },
   })),
 );
@@ -484,11 +486,22 @@ test("run forms reject unexecuted edits, changed literals and missing or duplica
     "fixtureEnvironment",
     "savedArguments",
     "saveHeight",
+    "saveVisibleWidth",
+    "saveVisibleHeight",
   ]) {
     const rows = structuredClone(formEvidence);
     rows[0].checks[key] = null;
     assert.throws(() => verify(rows), key);
   }
   assert.throws(() => verify(formEvidence.slice(1)));
+  for (const patch of [
+    { saveVisibleHeight: 10 },
+    { saveVisibleWidth: 30 },
+    { saveVisibleHeight: NaN },
+  ]) {
+    const rows = structuredClone(formEvidence);
+    Object.assign(rows[0].checks, patch);
+    assert.throws(() => verify(rows));
+  }
   assert.throws(() => verify([...formEvidence, formEvidence[0]]));
 });
