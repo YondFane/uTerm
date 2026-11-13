@@ -78,6 +78,8 @@ final class WorkspaceModel: ObservableObject {
     var openDatabaseProfileRequested: ((String, String) -> Void)?
     var openRedisProfileRequested: ((String, String) -> Void)?
     lazy var branchPicker = NativeBranchPickerModel(self)
+    lazy var projectRuns = NativeProjectRunsModel(self)
+    var revealProjectRunRequested: ((String, JSONValue) -> Void)?
     var openAgentsRequested: (() -> Void)?
     var openSettingsRequested: (() -> Void)?
     var openFileRequested: (() -> Void)?
@@ -88,6 +90,7 @@ final class WorkspaceModel: ObservableObject {
     private var databaseHostCache: DatabaseHost?
     var openGitRequested: (() -> Void)?
     var openGitHubRequested: (() -> Void)?
+    var makeGitTools: ((URL, String) async throws -> ContentWindow)?
     var makeGitHubTools: ((URL, String) async throws -> ContentWindow)?
     var openInspectorFile: ((String, String, Int) async throws -> Void)?
     var makeFileTools: ((URL, String) async throws -> ContentWindow)?
@@ -100,6 +103,7 @@ final class WorkspaceModel: ObservableObject {
     private var frames: Task<Void, Never>?
     private var failures: Task<Void, Never>?
     private var operation: Task<Bool, Never>?
+    private let refreshCycle = WorkspaceRefreshCycle()
     private var loadEpoch = 0
     private var snapshotReadError: String?
     private var shuttingDown = false
@@ -108,6 +112,12 @@ final class WorkspaceModel: ObservableObject {
     lazy var agentNotifications = AgentNotifications(workspace: self)
     lazy var documents: NativeWorkspaceDocuments = {
         let value = NativeWorkspaceDocuments()
+        value.selectionChanged = { [weak self] in guard let self else { return }; self.panels.showTerminal(in: self.inspectorContextKey) }
+        value.terminalFocusRequested = { [weak self] in self?.focusRevision += 1 }
+        return value
+    }()
+    lazy var panels: NativeWorkspacePanels = {
+        let value = NativeWorkspacePanels()
         value.terminalFocusRequested = { [weak self] in self?.focusRevision += 1 }
         return value
     }()
@@ -252,23 +262,33 @@ final class WorkspaceModel: ObservableObject {
 
     func reload(clearOperationError: Bool = false) async {
         if clearOperationError { error = ""; snapshotReadError = nil }
+        guard bridge != nil, !shuttingDown else { return }
+        await refreshCycle.run { [weak self] in
+            if let self { await self.readWorkspaceSnapshot() }
+        }
+    }
+
+    private func readWorkspaceSnapshot() async {
         guard let bridge, !shuttingDown else { return }
         loadEpoch += 1
         let epoch = loadEpoch
         do {
             if settingsCatalog == .null { settingsCatalog = try await bridge.call("settings.catalog") }
             let state = try await bridge.viewSnapshot()
-            guard epoch == loadEpoch else { return }
+            guard epoch == loadEpoch, bridge === self.bridge, !shuttingDown else { return }
+            let settings = state.snapshot.document.settings
+            var refreshedCommands: [JSONValue]?
+            if commandItems.isEmpty || resolvedShortcuts != settings["shortcuts"] {
+                refreshedCommands = try await bridge.call("settings.commands", params: .object(["settings": settings, "platform": .string("macos")])).array
+            }
+            guard epoch == loadEpoch, bridge === self.bridge, !shuttingDown else { return }
+            // Publish the snapshot and its commands together, before notifying menu observers.
+            // 同时发布快照及其命令，再通知菜单观察者。
+            self.state = state
+            if let refreshedCommands { commandItems = refreshedCommands; resolvedShortcuts = settings["shortcuts"] }
             let language = state.snapshot.document.settings["language"].string ?? "system"
             if NativeLocale.preference != language { NativeLocale.preference = language; languageChanged?() }
-            self.state = state
-            if commandItems.isEmpty || resolvedShortcuts != settings["shortcuts"] {
-                let items = try await bridge.call("settings.commands", params: .object(["settings": settings, "platform": .string("macos")])).array
-                guard epoch == loadEpoch else { return }
-                commandItems = items
-                resolvedShortcuts = settings["shortcuts"]
-                commandsChanged?()
-            }
+            if refreshedCommands != nil { commandsChanged?() }
             appearanceChanged?(settings["appearance"].string ?? "system")
             updates.apply(settings)
             breakSchedule.configure(enabled: settings["breakReminder"].bool == true, minutes: settings["breakInterval"].number ?? 60, now: ProcessInfo.processInfo.systemUptime)
@@ -285,6 +305,7 @@ final class WorkspaceModel: ObservableObject {
             agentNotifications.retain(existing)
             for (id, terminal) in terminals where !existing.contains(id) {
                 _ = try await bridge.call("terminal.action", params: .object(["attachment": .string(terminal.attachment), "action": .string("detach")]))
+                guard bridge === self.bridge, !shuttingDown else { return }
             }
             terminals = terminals.filter { existing.contains($0.key) }
             for entry in state.sessions {
@@ -304,7 +325,7 @@ final class WorkspaceModel: ObservableObject {
             if let snapshotReadError, error == snapshotReadError { error = "" }
             snapshotReadError = nil
         } catch {
-            if epoch == loadEpoch { snapshotReadError = error.localizedDescription; self.error = error.localizedDescription }
+            if epoch == loadEpoch, bridge === self.bridge, !shuttingDown { snapshotReadError = error.localizedDescription; self.error = error.localizedDescription }
         }
     }
 
@@ -385,7 +406,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func selectSession(_ id: String, focus: Bool = true) async {
-        if focus { documents.showTerminal(in: inspectorContextKey) }
+        if focus { documents.showTerminal(in: inspectorContextKey); panels.showTerminal(in: inspectorContextKey) }
         if selectedID == id { if focus { focusRevision += 1 }; return }
         if let operation { _ = await operation.value }
         if await mutate("session.select", ["id": .string(id)]), focus { focusRevision += 1 }
@@ -437,12 +458,12 @@ final class WorkspaceModel: ObservableObject {
         if agent == nil, let selected = sessionEntries.first(where: { $0.sessionID == selectedID }), let connection = selected.session["ssh"]["connection_id"].string {
             values["sshConnectionId"] = .string(connection)
             values["workspaceId"] = .string(selected.workspaceId)
-            if await mutate("ssh.session.create", values) { focusRevision += 1 }
+            if await mutate("ssh.session.create", values) { documents.showTerminal(in: inspectorContextKey); panels.showTerminal(in: inspectorContextKey); focusRevision += 1 }
             else { let failure = error; await reload(); error = failure }
             return
         }
         if let agent { values["agent"] = .string(agent); values["projectId"] = .null }
-        if await mutate("session.create", values) { focusRevision += 1 }
+        if await mutate("session.create", values) { documents.showTerminal(in: inspectorContextKey); panels.showTerminal(in: inspectorContextKey); focusRevision += 1 }
     }
     func newDefaultAgent() async {
         if await mutate("session.createChat", ["id": .string(UUID().uuidString)]) { focusRevision += 1 }

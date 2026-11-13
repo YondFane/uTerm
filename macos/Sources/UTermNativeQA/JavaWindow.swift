@@ -42,7 +42,8 @@ final class JavaRunModel: ObservableObject {
         self.directory = directory; self.bridge = bridge; self.settings = settings
     }
     func applySettings(_ value: JSONValue, catalog: JSONValue) {
-        settings = value; terminal?.apply(settings: value, catalog: catalog)
+        if settings != value { objectWillChange.send(); settings = value }
+        terminal?.apply(settings: value, catalog: catalog)
     }
     func start() async {
         frames = Task { @MainActor [weak self, bridge] in
@@ -456,8 +457,9 @@ private struct JavaLogCanvas: NSViewRepresentable {
 }
 
 @MainActor
-final class JavaWindow: NSWindowController, NSWindowDelegate {
+final class JavaWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePanelContent {
     let model: JavaRunModel
+    private(set) var workspacePanelView: NSView?
     var didClose: (() -> Void)?
     private var closing = false
     init(model: JavaRunModel) {
@@ -468,7 +470,8 @@ final class JavaWindow: NSWindowController, NSWindowDelegate {
         window.minSize = NSSize(width: 640, height: 560); window.delegate = self
         let appearance = model.settings["appearance"].string
         window.appearance = appearance == "light" ? NSAppearance(named: .aqua) : appearance == "dark" ? NSAppearance(named: .darkAqua) : nil
-        window.contentView = NSHostingView(rootView: JavaRunView(model: model, reload: { [weak self] in self?.reloadSaved() }))
+        workspacePanelView = NSHostingView(rootView: JavaRunView(model: model, reload: { [weak self] in self?.reloadSaved() }))
+        window.contentView = workspacePanelView
         window.center()
     }
     required init?(coder: NSCoder) { fatalError("Use programmatic construction") }

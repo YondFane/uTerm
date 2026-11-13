@@ -879,9 +879,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn opencode_legacy_listener_stays_authenticated_and_uses_project_directory() {
-        let (root, program, directory) = opencode_fixture(
+        let (root, program, actual_directory) = opencode_fixture(
             "pwd > help-directory; printf '%s\\n' '  --hostname  address' '  --port  number' >&2",
         );
+        let directory = root.path().join("project alias with spaces");
+        std::os::unix::fs::symlink(&actual_directory, &directory).unwrap();
         let arguments = vec![
             "--continue".into(),
             "--session".into(),
@@ -895,11 +897,12 @@ mod tests {
             root.path(),
         )
         .unwrap();
+        let reported_directory = std::fs::read_to_string(directory.join("help-directory")).unwrap();
+        // Shells may report physical paths, including macOS /private/var instead of /var.
+        // Shell 可能输出实际路径，例如在 macOS 上以 /private/var 代替 /var。
         assert_eq!(
-            std::fs::read_to_string(directory.join("help-directory"))
-                .unwrap()
-                .trim(),
-            directory.to_str().unwrap()
+            std::fs::canonicalize(reported_directory.trim()).unwrap(),
+            directory.canonicalize().unwrap()
         );
         assert!(launch.arguments.ends_with(&arguments));
         assert_eq!(

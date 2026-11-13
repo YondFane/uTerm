@@ -1,9 +1,16 @@
 import { useState } from "react";
+import { NativeInspectorActions } from "./components/NativeInspectorActions";
 import { GitPanel } from "./components/GitPanel";
 import { contentInvoke } from "./lib/content-host";
 import { localizeMessage, tx } from "./lib/i18n";
 
-export function NativeGit({ directory }: { directory: string }) {
+export function NativeGit({
+  directory,
+  embedded = false,
+}: {
+  directory: string;
+  embedded?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [target, setTarget] = useState<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,20 +31,31 @@ export function NativeGit({ directory }: { directory: string }) {
           directory={directory}
           resizeHandle={null}
           headerActions={
-            <>
-              <strong>Git</strong>
-              <span className="native-git-directory" title={directory}>
-                {directory}
-              </span>
-              <button
-                disabled={busy}
-                onClick={() =>
-                  void contentInvoke("editor_exit").catch((reason) => setError(String(reason)))
-                }
-              >
-                {tx("关闭")}
-              </button>
-            </>
+            embedded ? (
+              <NativeInspectorActions
+                active="git"
+                command={(kind) => {
+                  void contentInvoke("git_toolbar", { kind })
+                    .then(() => setError(""))
+                    .catch((reason) => setError(String(reason)));
+                }}
+              />
+            ) : (
+              <>
+                <strong>Git</strong>
+                <span className="native-git-directory" title={directory}>
+                  {directory}
+                </span>
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void contentInvoke("editor_exit").catch((reason) => setError(String(reason)))
+                  }
+                >
+                  {tx("关闭")}
+                </button>
+              </>
+            )
           }
           expanded={expanded}
           onExpandedChange={setExpanded}

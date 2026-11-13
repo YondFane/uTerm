@@ -37,6 +37,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-agent-') as directory:
     assert data['bundleIdentifier'] == 'sh.uterm.desktop.qa.native'
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert len(data['captures']) == 2
+    assert len(data['agentCaptureGeometry']) == 2
+    for geometry, name in zip(data['agentCaptureGeometry'], data['captures']):
+        assert geometry['screenshot'] == name
+        assert geometry['minimumVerticalClearance'] == 64 and geometry['actualVerticalClearance'] >= 63.5
     for name in data['captures']:
         assert (evidence / name).stat().st_size > 1000, name
     dirty = bool(subprocess.check_output(['git', 'status', '--porcelain']))

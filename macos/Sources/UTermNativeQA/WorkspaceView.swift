@@ -83,7 +83,7 @@ struct WorkspaceView: View {
                                         Button(localized("Recovery copies", "恢复副本")) { model.recover() }
                                     }.padding(8)
                                 }
-                                NativeWorkspaceDocumentSurface(model: model, documents: model.documents).frame(maxWidth: .infinity, maxHeight: .infinity)
+                                NativeWorkspaceDocumentSurface(model: model, documents: model.documents, panels: model.panels).frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
                             .frame(minWidth: CGFloat(CoreChrome.mainMinimumWidth), maxWidth: .infinity)
                         }

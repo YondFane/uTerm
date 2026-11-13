@@ -1,3 +1,4 @@
+import { settingsSections, matchesSettingsSection } from "../lib/settings-search";
 import { DatabaseComponents } from "./DatabaseComponents";
 import { MavenSettings } from "./MavenSettings";
 import { JavaComponents } from "./JavaComponents";
@@ -56,20 +57,7 @@ interface ControlStatus {
   endpoint: string;
   port: number;
 }
-const tabs = [
-  "通用",
-  "外观",
-  "终端",
-  "工作区",
-  "快捷键",
-  "Agent",
-  "用量",
-  "本地控制",
-  "数据库组件",
-  "Maven 设置",
-  "Java 开发环境",
-  "软件更新",
-] as const;
+const tabs = settingsSections.map((section) => section.label);
 export function SettingsPanel({
   runtime,
   close,
@@ -106,6 +94,7 @@ export function SettingsPanel({
     null,
   );
   const [workspaceDelete, setWorkspaceDelete] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [tab, setTab] = useState<(typeof tabs)[number]>("通用");
   const showingDownloadProgress = ["downloading", "ready"].includes(updates.phase);
   const downloadProgressMax =
@@ -228,19 +217,38 @@ export function SettingsPanel({
       </header>
       <div className="settings-layout" inert={updates.phase === "installing"}>
         <nav aria-label={t("设置")}>
-          {tabs.map((name) => (
-            <button
-              key={name}
-              aria-pressed={tab === name}
-              disabled={mavenBusy}
-              onClick={() => {
-                setTab(name);
-                setRecording(null);
-              }}
-            >
-              {t(name)}
-            </button>
-          ))}
+          <input
+            type="search"
+            aria-label={tx("搜索设置")}
+            placeholder={tx("搜索设置")}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && search) {
+                event.preventDefault();
+                event.stopPropagation();
+                setSearch("");
+              }
+            }}
+          />
+          {settingsSections
+            .filter((section) => matchesSettingsSection(section, search, t(section.label)))
+            .map(({ label: name }) => (
+              <button
+                key={name}
+                aria-pressed={tab === name}
+                disabled={mavenBusy}
+                onClick={() => {
+                  setTab(name);
+                  setRecording(null);
+                }}
+              >
+                {t(name)}
+              </button>
+            ))}
+          {!settingsSections.some((section) =>
+            matchesSettingsSection(section, search, t(section.label)),
+          ) && <p role="status">{tx("没有匹配的条目。")}</p>}
         </nav>
         <section className="settings-content">
           <h3>{t(tab)}</h3>

@@ -12,7 +12,9 @@ on:
       - scripts/macos-native-build.sh
       - scripts/macos-personal-*
       - scripts/macos_disk_image.py
+      - scripts/macos_qa_http.py
       - scripts/macos-qa-display.swift
+      - scripts/macos-qa-capture-probe.swift
       - scripts/macos-updates-smoke.py
       - scripts/personal-updates.mjs
       - tests/test_macos_personal.py
@@ -96,6 +98,23 @@ jobs:
         run: |
           swift scripts/macos-qa-display.swift | tee macos/.build/personal-packages/display.json
           swift scripts/macos-qa-display.swift --verify-only | tee macos/.build/personal-packages/display-verified.json
+      - name: Probe capture infrastructure before personal compilation
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          mkdir -p macos/.build/personal-packages/capture-probe
+          {
+            swiftc -parse-as-library macos/Sources/UTermBridge/WindowCaptureAlpha.swift macos/Sources/UTermBridge/WindowCaptureSystemPointer.swift scripts/macos-qa-capture-probe.swift -o "$RUNNER_TEMP/uterm-capture-probe"
+            UTERM_QA_TESTED_SHA="$(git rev-parse HEAD)" "$RUNNER_TEMP/uterm-capture-probe" "$PWD/macos/.build/personal-packages/capture-probe"
+          } 2>&1 | tee macos/.build/personal-packages/capture-probe/compile-and-run.log
+      - name: Preserve personal capture infrastructure diagnostics
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-capture-probe-${{ matrix.os }}-${{ env.PR_HEAD_SHA }}-${{ github.run_attempt }}
+          path: macos/.build/personal-packages/capture-probe/
+          if-no-files-found: warn
       - name: Restore personal Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:

@@ -5,7 +5,7 @@ import WebKit
 
 @MainActor
 final class NativeInspectorModel: ObservableObject {
-    enum Mode: String, CaseIterable { case files, search, quick, github }
+    enum Mode: String, CaseIterable { case files, search, quick, github, git }
     private weak var workspace: WorkspaceModel?
     @Published var mode: Mode = .files {
         didSet { if mode != oldValue && mode != .github { (content?.workbenchHost as? FilesHost)?.modeChanged() } }
@@ -28,7 +28,7 @@ final class NativeInspectorModel: ObservableObject {
     private var context = ""
     init(workspace: WorkspaceModel) { self.workspace = workspace }
     func show(_ mode: Mode) {
-        if (mode == .github) != (content?.workbenchHost?.kind == "github") { content = nil }
+        if (mode == .github) != (content?.workbenchHost?.kind == "github") || (mode == .git) != (content?.gitMode == true) { content = nil }
         self.mode = mode; request += 1
         if mode != .github { (content?.workbenchHost as? FilesHost)?.modeChanged() }
     }
@@ -37,6 +37,11 @@ final class NativeInspectorModel: ObservableObject {
         generation += 1; busy = false; error = ""; errorCode = ""
         context = scope; directory = content.directory.path
         mode = .github; self.content = content
+    }
+    func presentGit(_ content: ContentWindow, scope: String) {
+        guard let workspace, workspace.inspectorContextKey == scope else { return }
+        generation += 1; busy = false; error = ""; errorCode = ""; context = scope; directory = content.directory.path
+        mode = .git; self.content = content
     }
     func invalidate() { generation += 1; busy = false }
     func reload() async {
@@ -55,6 +60,15 @@ final class NativeInspectorModel: ObservableObject {
                 return
             }
             if directory != root { directory = root; path = ""; rows = []; selected = -1; content = nil }
+            if mode == .git {
+                guard let make = workspace.makeGitTools else { throw BridgeFailure(code: "CLOSED", message: "Git tools are unavailable") }
+                if content?.gitMode != true {
+                    let next = try await make(URL(fileURLWithPath: root), context)
+                    guard request == generation, context == workspace.inspectorContextKey, mode == .git, !Task.isCancelled else { return }
+                    content = next
+                }
+                return
+            }
             if mode == .github {
                 guard let make = workspace.makeGitHubTools else { throw BridgeFailure(code: "CLOSED", message: "GitHub tools are unavailable") }
                 if content?.workbenchHost?.kind != "github" {
@@ -135,7 +149,7 @@ struct NativeInspectorView: View {
     var body: some View {
         Group {
             if let content = model.content {
-                if content.workbenchHost?.kind == "github" {
+                if content.workbenchHost?.kind == "github" || content.gitMode {
                     NativeEmbeddedDocument(content: content).id(ObjectIdentifier(content))
                 } else { FileToolsSurface(content: content) }
             } else {
