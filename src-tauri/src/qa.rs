@@ -475,9 +475,30 @@ pub async fn qa_scene(app: tauri::AppHandle, name: String, value: Value) -> Resu
             tempfile::NamedTempFile::new_in(&root).map_err(|error| error.to_string())?;
         serde_json::to_writer(temporary.as_file_mut(), &heartbeat)
             .map_err(|error| error.to_string())?;
-        temporary
-            .persist(root.join("performance-phase.json"))
-            .map_err(|error| error.to_string())?;
+        let destination = root.join("performance-phase.json");
+        let mut staged = Some(temporary);
+        let attempts = crate::qa_phase::replace_phase(|| {
+            match staged
+                .take()
+                .expect("Prepared QA heartbeat")
+                .persist(&destination)
+            {
+                Ok(_) => Ok(()),
+                Err(error) => {
+                    staged = Some(error.file);
+                    Err(error.error)
+                }
+            }
+        })
+        .map_err(|error| {
+            format!(
+                "Could not replace isolated performance heartbeat {}: {error}",
+                destination.display()
+            )
+        })?;
+        if attempts > 1 {
+            eprintln!("QA heartbeat replacement recovered after {attempts} attempts");
+        }
         return Ok(());
     }
     let bytes = serde_json::to_vec_pretty(

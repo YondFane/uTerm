@@ -18,6 +18,8 @@ mod projects;
 mod python;
 #[cfg(feature = "qa")]
 mod qa;
+#[cfg(feature = "qa")]
+mod qa_phase;
 mod redis;
 mod sessions;
 mod shared_core;
