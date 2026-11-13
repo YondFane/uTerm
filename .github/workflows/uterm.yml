@@ -221,8 +221,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run_id=$(python3 -B scripts/ui-parity-evidence.py find-native-run "$GITHUB_REPOSITORY" "$SOURCE_HEAD" "uTerm-Personal-ARM64-$SOURCE_HEAD")
-          echo "run=$run_id" >> "$GITHUB_OUTPUT"
+          python3 -B scripts/ui-parity-evidence.py find-native-run "$GITHUB_REPOSITORY" "$SOURCE_HEAD" "uTerm-Personal-ARM64-$SOURCE_HEAD" --with-artifact > "$RUNNER_TEMP/personal-evidence.json"
+          python3 - "$RUNNER_TEMP/personal-evidence.json" >> "$GITHUB_OUTPUT" <<'PY'
+          import json, sys
+          with open(sys.argv[1]) as file:
+              evidence = json.load(file)
+          print(f'run={evidence["run"]}')
+          print(f'artifact={evidence["artifact"]}')
+          PY
       - uses: actions/download-artifact@v4
         with:
           name: legacy-checks-macos-15-${{ env.SOURCE_HEAD }}
@@ -231,7 +237,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.personal.outputs.run }}
-          name: uTerm-Personal-ARM64-${{ env.SOURCE_HEAD }}
+          name: ${{ steps.personal.outputs.artifact }}
           path: ci-input/native
       - name: Validate original images, source identities and matching scene grid
         run: |
