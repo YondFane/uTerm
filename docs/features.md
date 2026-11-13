@@ -511,6 +511,17 @@ attempts; later runtime checks were skipped and its matrix is incomplete. The
 retains that result. This does not accept the missing checks; current-source Mac CI must execute and
 upload them.
 
+Personal PR artifacts also include their run attempt. The paired-image collector selects the newest
+matching attempt and accepts legacy names; expired latest evidence cannot fall back to an older
+artifact. Source/merge and report checks remain required. Versioned release collection names stay
+unchanged. ARM source `4e1eb47f95282ca4b22798745b19e35ea99ab3bb` / tested merge
+`3b480c338acb7a097ba5fb6f19c89e3500613969` built and passed bridge tests but failed all five existing
+`hdiutil verify` attempts with Resource temporarily unavailable before window QA. Its
+[original artifact14021661024](https://github.com/YondFane/uTerm/actions/runs/43385658224/artifacts/14021661024)
+retains `personal-package.json` and the command log; no application screenshots were produced.
+Eight discovery tests and workflow validation pass on Linux. Actual image verification and Mac
+window acceptance remain pending; retries keep their earlier evidence.
+
 The isolated `workspace-panels-native.json` scenario captures twelve panel-grid main-window scenes
 (English/dark at 1100px and Chinese/light at 640px), clicks terminal/panel/close controls, checks
 retained views/documents and preserves terminal identity/generation. Each capture records its

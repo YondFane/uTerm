@@ -259,6 +259,13 @@ UI 检查仅为语法。
 CreateArtifact 上传尝试中均超时，后续运行检查被跳过，矩阵不完整；[失败产物14011958933](https://github.com/YondFane/uTerm/actions/runs/43365628863/artifacts/14011958933)保留此结果。缺失检查尚未验收，仍须当前源码 Mac
 CI 执行并上传。
 
+Personal 的 PR 产物也包含运行次数。成对截图汇集器选择匹配的最新尝试，仍支持旧名称；最新证据已过期时不能退回旧产物，源码／merge 和报告检查仍为必需。按版本发布的收集名称保持不变。ARM 源码
+`4e1eb47f95282ca4b22798745b19e35ea99ab3bb`／实际测试 merge
+`3b480c338acb7a097ba5fb6f19c89e3500613969`
+已构建并通过桥接测试，但在真实窗口启动前，现有五次 `hdiutil verify`
+均返回“Resource temporarily unavailable”。[原始产物14021661024](https://github.com/YondFane/uTerm/actions/runs/43385658224/artifacts/14021661024)保留
+`personal-package.json` 及命令日志，没有应用截图。Linux 八项发现测试及工作流检查通过；真实镜像校验和 Mac 窗口验收仍待完成，重跑保留之前的证据。
+
 隔离的 `workspace-panels-native.json`
 场景采集十二张面板网格主窗口：1100px 英文深色、640px 中文浅色；点击终端／面板／关闭控件，检查视图与文档保留，以及终端身份／generation。每张记录源码、实际窗口宽度及平台信息。运行面板在设置变化时重绘本地化标签；临时混合项目同时包含有效的最小 POM 与 Python 入口。此集成场景使用离线连接样例；既有 PostgreSQL、Redis、SSH 及运行测试继续覆盖服务与生命周期。 样例创建配置仅在
 `WRITER_BUSY`

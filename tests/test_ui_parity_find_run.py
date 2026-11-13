@@ -22,7 +22,7 @@ class NativeRunDiscoveryTests(unittest.TestCase):
         return dict(id=number, name='macOS personal packages', head_sha=self.head, event=event,
                     status='completed', html_url=f'https://example.invalid/runs/{number}', **changes)
 
-    def discover(self, runs, artifacts):
+    def discover(self, runs, artifacts, with_artifact=False):
         requested = []
         def read(request, timeout):
             requested.append(request.full_url)
@@ -39,7 +39,7 @@ class NativeRunDiscoveryTests(unittest.TestCase):
              patch.object(module.urllib.request, 'urlopen', side_effect=read), \
              patch.object(module.time, 'sleep', side_effect=AssertionError('Unexpected discovery wait')), \
              contextlib.redirect_stdout(output):
-            module.find_native_run('YondFane/uTerm', self.head, self.artifact)
+            module.find_native_run('YondFane/uTerm', self.head, self.artifact, with_artifact=with_artifact)
         return output.getvalue().strip(), requested
 
     def available(self):
@@ -52,6 +52,19 @@ class NativeRunDiscoveryTests(unittest.TestCase):
 
     def test_pull_request_artifacts_remain_supported(self):
         self.assertEqual(self.discover([self.run_info(9)], {9: self.available()})[0], '9')
+
+    def test_latest_attempt_is_selected_without_deleting_legacy_evidence(self):
+        artifacts = self.available() + [dict(name=self.artifact+'-1', expired=False), dict(name=self.artifact+'-2', expired=False)]
+        value = self.discover([self.run_info(9)], {9: artifacts}, with_artifact=True)[0]
+        self.assertEqual(json.loads(value), dict(run=9, artifact=self.artifact+'-2'))
+        self.assertEqual(len(artifacts), 3)
+
+    def test_expired_latest_attempt_cannot_fall_back_and_suffixes_are_exact(self):
+        artifacts = self.available() + [dict(name=self.artifact+'-2', expired=True)]
+        self.assertIsNone(module.native_artifact_name(artifacts, self.artifact))
+        for suffix in ['-0', '-01', '-2-extra', '-other', '/2']:
+            with self.subTest(suffix=suffix):
+                self.assertIsNone(module.native_artifact_name([dict(name=self.artifact+suffix, expired=False)], self.artifact))
 
     def test_ineligible_event_other_head_or_workflow_is_never_selected(self):
         wrong_head = self.run_info(25); wrong_head['head_sha'] = 'b' * 40
