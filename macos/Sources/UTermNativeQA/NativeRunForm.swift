@@ -253,9 +253,9 @@ struct NativeRunTextArea: NSViewRepresentable {
         view.isContinuousSpellCheckingEnabled = false
         view.font = .systemFont(ofSize: 12); view.textContainerInset = NSSize(width: 7, height: 4)
         view.isHorizontallyResizable = false; view.isVerticallyResizable = true
-        view.minSize = .zero; view.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        view.minSize = .zero; view.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         view.autoresizingMask = [.width]; view.textContainer?.widthTracksTextView = true
-        view.textContainer?.containerSize = NSSize(width: 180, height: .greatestFiniteMagnitude)
+        view.textContainer?.containerSize = NSSize(width: 180, height: CGFloat.greatestFiniteMagnitude)
         view.textContainer?.lineFragmentPadding = 0
         view.identifier = .init(id); view.setAccessibilityIdentifier(id); view.setAccessibilityLabel(label)
         view.delegate = context.coordinator

@@ -196,7 +196,11 @@ enum SettingsSmoke {
             guard let unshifted = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "k", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: unshifted) == false else { throw BridgeFailure(code: "SETTINGS_QA_SHIFT", message: "A shifted shortcut accepted the unshifted event") }
             let paletteMenu = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.representedObject as? String == "palette" })
             report["paletteRefreshDiagnostics"] = ["draftShortcut": model.shortcuts["palette"] ?? "", "workspaceShortcut": workspace.settings["shortcuts"]["palette"].string ?? "", "resolvedShortcut": workspace.commandItems.first(where: { $0["id"].string == "palette" })?["shortcut"].string ?? "", "workspaceErrorCode": String(workspace.error.split(separator: ":", maxSplits: 1).first ?? "")]
-            report["paletteMenuBinding"] = ["key": paletteMenu?.keyEquivalent ?? "", "modifiers": paletteMenu?.keyEquivalentModifierMask.rawValue ?? 0, "enabled": paletteMenu?.isEnabled == true]
+            var menuBinding: [String: Any] = [:]
+            menuBinding["key"] = paletteMenu?.keyEquivalent ?? ""
+            menuBinding["modifiers"] = paletteMenu?.keyEquivalentModifierMask.rawValue ?? 0
+            menuBinding["enabled"] = paletteMenu?.isEnabled == true
+            report["paletteMenuBinding"] = menuBinding
             guard paletteMenu?.keyEquivalent == "K", paletteMenu?.keyEquivalentModifierMask == [.command, .shift], let paletteEvent = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "K", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: paletteEvent) == true else { throw BridgeFailure(code: "SETTINGS_QA_MENU_BINDING", message: "Saved semantic shortcut did not update the system menu") }
             try await TerminalSmoke.wait("Open palette through the actual menu shortcut") { NSApp.keyWindow?.identifier?.rawValue == "native-command-palette" }
             guard let palette = NSApp.keyWindow else { throw BridgeFailure(code: "SETTINGS_QA_PALETTE", message: "Palette did not open") }
@@ -271,10 +275,16 @@ enum SettingsSmoke {
             await workspace.closeSession(id: terminal.id)
             guard workspace.state?.sessions.isEmpty == true else {
                 let canonical = try? await readSnapshot(bridge)
-                report["nativeSettingsCloseDiagnostics"] = ["busy": workspace.busy, "selectedID": workspace.selectedID ?? "",
-                    "expectedSessionID": terminal.id, "retainedSessionIDs": workspace.state?.sessions.map(\.sessionID) ?? [],
-                    "workspaceErrorCode": String(workspace.error.split(separator: ":", maxSplits: 1).first ?? ""),
-                    "cachedRevision": workspace.state?.snapshot.revision ?? "", "canonicalRevision": canonical?.revision ?? ""]
+                var diagnostics: [String: Any] = [:]
+                diagnostics["busy"] = workspace.busy
+                diagnostics["selectedID"] = workspace.selectedID ?? ""
+                diagnostics["expectedSessionID"] = terminal.id
+                let retained: [String] = workspace.state?.sessions.map(\.sessionID) ?? []
+                diagnostics["retainedSessionIDs"] = retained
+                diagnostics["workspaceErrorCode"] = String(workspace.error.split(separator: ":", maxSplits: 1).first ?? "")
+                diagnostics["cachedRevision"] = workspace.state?.snapshot.revision ?? ""
+                diagnostics["canonicalRevision"] = canonical?.revision ?? ""
+                report["nativeSettingsCloseDiagnostics"] = diagnostics
                 throw BridgeFailure(code: "SETTINGS_QA_CLOSE", message: "Settings QA session was not closed: " + workspace.error)
             }
             report["nativeSettingsActualRetainedSessionClosed"] = true

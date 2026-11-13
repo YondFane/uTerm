@@ -200,7 +200,10 @@ Foundation 测试覆盖布局、Python 检测／模式默认值及按字节核�
 CI；Linux 不能验收原生窗口。
 
 源码 `f3e5ba8`、实际测试 merge `3f9e9a7`
-的[ARM 性能构建产物](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)记录 AppKit 编译失败：表单复用了文件内私有的测量视图。候选将共用视图改为模块内可见。该失败构建没有可验收的新表单截图，仍须修正后的 Mac 编译和运行检查。
+的[ARM 性能构建产物](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)记录 AppKit 编译失败：表单复用了文件内私有的测量视图。候选将共用视图改为模块内可见。该失败构建没有可验收的新表单截图，仍须修正后的 Mac 编译和运行检查。 源码
+`3021b08`、实际测试 merge `ab0eb2c` 的 ARM Personal
+Release 构建也失败：文本编辑器尺寸的 CGFloat／Double 极值存在歧义，混合设置诊断表达式超出编译器类型推断预算。[产物14010274134](https://github.com/YondFane/uTerm/actions/runs/43367028623/artifacts/14010274134)保留失败构建。现显式指定
+`CGFloat` 极值并拆分带类型的诊断条目，仍须实际 Mac 编译。
 
 隐藏或关闭停靠的 Java/Python 面板会保存已加载配置，即使表单尚未编辑。操作繁忙、冲突或存储错误会保留面板与草稿；其他窗口修改配置后，明确重新读取再试。独立窗口保留保存／放弃／取消选择。关闭运行面板分离视图，后台任务继续运行。
 

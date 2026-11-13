@@ -355,7 +355,12 @@ The
 at head `f3e5ba8`, tested merge `3f9e9a7`, records an AppKit compilation failure: the form reused a
 file-private measurement view. The candidate makes that shared view module-internal. That failed
 build produced no accepted new form screenshots; corrected Mac compilation and runtime checks remain
-required.
+required. The ARM Personal Release build at head `3021b08`, tested merge `ab0eb2c`, also fails: the
+text editor size has ambiguous CGFloat/Double limits, and a mixed settings-diagnostic expression
+exceeds the compiler type-check budget. Its
+[artifact14010274134](https://github.com/YondFane/uTerm/actions/runs/43367028623/artifacts/14010274134)
+retains the failed build. Explicit `CGFloat` limits and separately typed diagnostic entries address
+those errors; actual Mac compilation is still required.
 
 Hiding or closing a docked Java/Python panel saves its loaded configuration, including an unchanged
 form. Busy operations, conflicts and storage errors keep the panel and draft open. Reload saved
