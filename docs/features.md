@@ -799,6 +799,18 @@ clicks a real theme-preview button, verifies terminal preferences are unchanged,
 automatic-save operations and same-source screenshots remain pending macOS CI; the reordered fields
 and full settings styling still require actual Mac screenshots and comparison under #53.
 
+Theme QA waits for an attached, enabled preview, finishes field editing and confirms the theme
+draft changed before waiting for save completion. `nativeSettingsThemeSaveAttempts` records each
+action's error, draft, committed theme and terminal-preference comparison. Only a visible
+`WRITER_BUSY` with unchanged committed data permits at most two explicit re-clicks, preserving the
+failure screenshot; the application does not replay writes. The final saved-value checks remain
+strict. Intel source `8ec7eaf1bcb6896aa6613e6545f956f8c3eb326c` / tested merge
+`e83d1b9dd11ce787d38aa131c7517c671b148849` failed the theme assertion without these diagnostics;
+the cause is not established. Its
+[original failure14016411976](https://github.com/YondFane/uTerm/actions/runs/43373657320/artifacts/14016411976)
+is retained. Linux Swift 6.1.2 syntax, formatting and documentation checks pass; the new control
+checks still require their own actual Mac run.
+
 The Core read for compatibility export retries only `WRITER_BUSY`, at most 20 attempts with 10 ms
 between attempts. The destination is still written once, and settings mutations are not replayed
 automatically. Actual file-lock tests cover short-contention recovery, exhaustion, cancellation and

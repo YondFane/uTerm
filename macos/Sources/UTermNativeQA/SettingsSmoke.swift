@@ -432,13 +432,53 @@ enum SettingsSmoke {
             try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
             guard let theme = model.catalog["interfaceThemes"].array.first(where: { $0["id"].string != model.values["interfaceTheme"]?.string }), let themeID = theme["id"].string else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Alternative shared interface theme is missing") }
             let themeControl = "native-settings-theme-" + themeID
-            try await TerminalSmoke.wait("Render actual theme preview controls") { (view(settings.window, id: themeControl) as? NSButton)?.isEnabled == true }
-            guard let themeButton = view(settings.window, id: themeControl) as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Actual theme preview button is missing") }
-            themeButton.performClick(nil)
-            try await TerminalSmoke.wait("Save the clicked interface theme") { !model.automaticSaving && !model.busy }
-            let themed = try await peer.snapshot()
+            let terminalKeys = ["darkTheme", "lightTheme", "customThemes", "fontSize", "fontFamily"]
+            var themeAttempts: [[String: Any]] = []
+            func themeButton() -> NSButton? {
+                guard let root = settings.window.contentView else { return nil }
+                return TerminalSmoke.descendants(root).compactMap { $0 as? NSButton }.first {
+                    $0.identifier?.rawValue == themeControl && $0.window === settings.window && !$0.isHiddenOrHasHiddenAncestor
+                }
+            }
+            func recordTheme(_ attempt: Int, _ stage: String, _ observed: CoreSnapshot? = nil) {
+                var entry: [String: Any] = [:]
+                entry["attempt"] = attempt; entry["stage"] = stage; entry["error"] = model.error; entry["errorCode"] = model.errorCode
+                entry["expectedTheme"] = themeID; entry["draftTheme"] = model.values["interfaceTheme"]?.string ?? ""
+                entry["savedTheme"] = observed?.document.settings["interfaceTheme"].string ?? ""
+                entry["busy"] = model.busy; entry["automaticSaving"] = model.automaticSaving
+                entry["retainedFontSizeDraft"] = model.numbers["fontSize"] ?? ""
+                entry["terminalPreferencesUnchanged"] = observed.map { snapshot in terminalKeys.allSatisfy { snapshot.document.settings[$0] == saved.document.settings[$0] } } ?? false
+                entry["actualControlEnabled"] = themeButton()?.isEnabled ?? false
+                themeAttempts.append(entry); report["nativeSettingsThemeSaveAttempts"] = themeAttempts
+            }
+            var themed = saved
+            for attempt in 1...3 {
+                do {
+                    try await TerminalSmoke.wait("Render attached and enabled theme preview controls") { !model.busy && !model.automaticSaving && themeButton()?.isEnabled == true }
+                    guard let actual = themeButton() else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Actual attached theme preview button is missing") }
+                    settings.window.makeKeyAndOrderFront(nil); _ = actual.scrollToVisible(actual.bounds)
+                    settings.window.makeFirstResponder(actual)
+                    try await TerminalSmoke.wait("Finish field editing before the actual theme action") { !model.busy && !model.automaticSaving && actual.isEnabled && actual.window === settings.window }
+                    actual.performClick(nil)
+                    try await TerminalSmoke.wait("Apply the actual theme preview action") { model.values["interfaceTheme"]?.string == themeID }
+                    try await TerminalSmoke.wait("Save the clicked interface theme") { !model.automaticSaving && !model.busy }
+                    themed = try await readSnapshot(peer)
+                    recordTheme(attempt, "completed", themed)
+                } catch { recordTheme(attempt, "failed"); throw error }
+                guard model.errorCode == "WRITER_BUSY", attempt < 3 else { break }
+                guard !model.error.isEmpty, model.values["interfaceTheme"]?.string == themeID,
+                      themed.document.settings["interfaceTheme"] == saved.document.settings["interfaceTheme"],
+                      model.numbers["fontSize"] == draft,
+                      terminalKeys.allSatisfy({ themed.document.settings[$0] == saved.document.settings[$0] }) else {
+                    throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Busy theme save lost its draft, hid its error or changed committed preferences")
+                }
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent("native-settings-theme-busy-\(attempt).png"))
+                // Retry only by explicitly clicking the retained control after verifying the rejected write.
+                // 仅在核对被拒写入后明确再次点击保留的控件，应用本身不重试写入。
+                try await Task.sleep(for: .milliseconds(100))
+            }
             guard model.error.isEmpty, themed.document.settings["interfaceTheme"].string == themeID,
-                  ["darkTheme", "lightTheme", "customThemes", "fontSize", "fontFamily"].allSatisfy({ themed.document.settings[$0] == saved.document.settings[$0] }) else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Theme selection changed terminal preferences or failed to save") }
+                  terminalKeys.allSatisfy({ themed.document.settings[$0] == saved.document.settings[$0] }) else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Theme selection changed terminal preferences or failed to save; see nativeSettingsThemeSaveAttempts") }
             let oldSize = settings.window.contentView?.bounds.size ?? NSSize(width: 760, height: 620)
             var themeCaptures: [String] = []
             for width in [900, 640] {
