@@ -527,11 +527,18 @@ enum SettingsSmoke {
         usage.performClick(nil)
         try await TerminalSmoke.wait("Read local usage inside the same settings overlay") { model.section == "usage" && agents.inlineVisible && agents.qaUsageReads > reads && agents.usage(for: agents.usageSelected) != .null && !agents.busy }
         let firstUsageAgent = agents.usageSelected, firstUsage = agents.usage(for: agents.usageSelected)
-        guard let tabs = view(settings.window, id: "native-agent-usage-tabs") as? NSSegmentedControl else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual Usage Agent tabs are missing") }
         let nextAgent = firstUsageAgent == "kimi" ? "grok" : "kimi"
         let nextReads = agents.qaUsageReadsByAgent[nextAgent] ?? 0
+        report["nativeUsageTabAction"] = ["phase": "waiting-for-control", "requestedAgent": nextAgent, "selectedAgent": agents.usageSelected, "modelBusy": agents.busy, "workspaceBusy": model.workspace.busy, "controlEnabled": (view(settings.window, id: "native-agent-usage-tabs") as? NSSegmentedControl)?.isEnabled == true] as [String: Any]
+        try await TerminalSmoke.wait("Actual Usage Agent tabs are enabled after the local read") {
+            guard let tabs = view(settings.window, id: "native-agent-usage-tabs") as? NSSegmentedControl else { return false }
+            return tabs.window === settings.window && !tabs.isHiddenOrHasHiddenAncestor && tabs.isEnabled && !agents.busy && !agents.frozen && !model.workspace.busy
+        }
+        guard let tabs = view(settings.window, id: "native-agent-usage-tabs") as? NSSegmentedControl, tabs.isEnabled else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual Usage Agent tabs are missing or disabled") }
         tabs.selectedSegment = AgentSettingsModel.usageAgents.firstIndex(of: nextAgent)!
-        guard let action = tabs.action, NSApp.sendAction(action, to: tabs.target, from: tabs) else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual usage tab selection was not delivered") }
+        let delivered = tabs.action.map { NSApp.sendAction($0, to: tabs.target, from: tabs) } ?? false
+        report["nativeUsageTabAction"] = ["phase": "action-delivered", "requestedAgent": nextAgent, "selectedAgent": agents.usageSelected, "modelBusy": agents.busy, "workspaceBusy": model.workspace.busy, "controlEnabled": tabs.isEnabled, "delivered": delivered, "selectedSegment": tabs.selectedSegment] as [String: Any]
+        guard delivered, agents.usageSelected == nextAgent else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Enabled Usage Agent tab action did not select \(nextAgent)") }
         try await TerminalSmoke.wait("Usage Agent tabs refresh independently of an unsaved command") { agents.usageSelected == nextAgent && (agents.qaUsageReadsByAgent[nextAgent] ?? 0) > nextReads && agents.usage(for: nextAgent) != .null && !agents.busy }
         guard agents.selected == commandAgent, agents.program == draft, agents.dirty, agents.usage(for: firstUsageAgent) == firstUsage else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Changing usage Agent discarded a command or another Agent's result") }
         guard !agents.qaUsageLastRemote, !agents.qaUsageLastKeychain, agents.program == draft else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Inline usage lost the command draft or requested account access") }
