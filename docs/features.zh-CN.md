@@ -191,7 +191,9 @@ Swift 语法及脚本解析通过，新的 Mac 原图和后续通知检查仍待
 `ui-parity-run-form-{kind}-{language}-{appearance}-{width}.png`。缺少另一版原图、未执行输入、样例值变化、过期源码／merge 元数据、无效几何或原图缺失均拒绝配对。这些是采集门禁，尚不代表新 Mac 场景已通过。
 
 Linux 通过 13 项 Swift
-Foundation、12 项 Node 及 60 项包／配对策略测试，以及类型、生产构建、格式及文档检查。
+Foundation、12 项 Node 及 60 项包／配对策略测试，以及类型、生产构建、格式及文档检查。 使用 Temurin
+JDK 21.0.13 的完整 Node 套件通过 489 项、按平台跳过 11 项；`JAVA_HOME` 必须指向包含 `javac`
+的完整 JDK。
 
 Linux Swift 6.1.2
 Foundation 测试覆盖布局、Python 检测／模式默认值及按字节核对的共用参数／环境变量样例。Node 对普通版两种语言面板运行同一样例，覆盖 CRLF、空字符串、Windows 反斜杠、Unicode 空白及保留环境变量名。新的 AppKit 渲染、输入／保存及绑定源码的截图仍须 macOS
@@ -508,6 +510,12 @@ ARM64 运行在字体操作中显示了
 `native-settings-autosave-busy.png`，再明确重新选择同一控件，最多重选两次。应用不会自动重试失败的变更。同一检查点击真实主题预览按钮、核对终端偏好未变，并采集
 `native-settings-theme-cards-900.png`／`native-settings-theme-cards-640.png`。新增自动保存操作及同源码截图仍待 macOS
 CI；调整后的字段与完整设置样式仍需实际 Mac 截图并在 #53 对照。
+
+兼容导出的 Core 读取仅在 `WRITER_BUSY`
+时有限重读，最多 20 次、每次间隔 10 毫秒；目标文件仍仅写入一次，不自动重放设置写入。实际文件锁测试覆盖短暂争用恢复、持续争用退出、取消及原始快照字节不变，须由 macOS
+CI 执行。当前 ARM64 `1336ba7`／`733e066`
+的导出检查失败，仅记录通用提示，不能据此确认底层原因。失败报告现记录错误码及目标、忙碌状态；本次检查仍待新源码 macOS 结果。 Linux
+x86_64 通过 18 项相关 Core 持久化、Git 收藏及 PDF 测试；本次 root 会话跳过一项既有的非特权文件系统检查。
 
 原生 QA 打开并取消真实保存对话框，检查关闭保护，在有无效草稿时导出已提交数据，并拒绝目录目标、保留已有导出，记录
 `nativeLegacyExportProof`、`native-settings-legacy-export.json` 和

@@ -361,7 +361,13 @@ enum SettingsSmoke {
         try await TerminalSmoke.wait("Cancelling export restores settings without saving") { settings.window.attachedSheet == nil && !model.busy && settings.window.isVisible }
         guard model.numbers["fontSize"] == "999", try Data(contentsOf: file) == bytes else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Cancelled export changed saved data or discarded a draft") }
         let name = "native-settings-legacy-export.json", destination = evidence.appendingPathComponent(name)
-        guard await model.exportLegacy(to: destination) else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: model.error) }
+        guard await model.exportLegacy(to: destination) else {
+            report["nativeLegacyExportFailure"] = ["errorCode": model.errorCode, "message": model.error,
+                "destinationExists": FileManager.default.fileExists(atPath: destination.path),
+                "destinationParentExists": FileManager.default.fileExists(atPath: destination.deletingLastPathComponent().path),
+                "busy": model.busy, "automaticSaving": model.automaticSaving, "frozen": model.frozen]
+            throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: model.errorCode + ": " + model.error)
+        }
         let exportedBytes = try Data(contentsOf: destination), exported = try JSONDecoder().decode(JSONValue.self, from: exportedBytes)
         guard let source = exported["values"]["uterm.desktop.settings.v1"].string,
               try JSONDecoder().decode(JSONValue.self, from: Data(source.utf8)) == before.document.settings,
