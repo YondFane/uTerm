@@ -13,7 +13,7 @@ def validate_native_run_forms(report, fixture, head, tested, phase):
     def finite(value):
         return type(value) in [int, float] and math.isfinite(value)
     for row in proofs:
-        for key in ['passed', 'actualAdvancedToggle', 'actualTextEditorInput', 'invalidArgumentRetainedWithoutWrite', 'literalArgumentsSaved', 'temporaryEnvironmentRetainedWithoutPersistence', 'actualSaveButtonAndFeedback', 'compactRightAlignedSave', 'actualConfigurationCollapseAndRestore', 'canonicalStateAndSessionRetained']:
+        for key in ['passed', 'actualAdvancedToggle', 'actualTextEditorInput', 'invalidArgumentRetainedWithoutWrite', 'literalArgumentsSaved', 'validArgumentTextRetained', 'temporaryEnvironmentRetainedWithoutPersistence', 'actualSaveButtonAndFeedback', 'compactRightAlignedSave', 'actualConfigurationCollapseAndRestore', 'canonicalStateAndSessionRetained']:
             assert row.get(key) is True, 'Unverified actual run-form action: ' + key
         assert row.get('fixtureArguments') == fixture['runFormInput']['arguments'] and row.get('fixtureEnvironment') == fixture['runFormInput']['environment'] and row.get('savedArguments') == fixture['runFormInput']['argumentValues'], 'Different literal run-form data'
         assert row.get('sourceHeadSHA') == head and row.get('testedMergeSHA') == tested, 'Stale run-form evidence'

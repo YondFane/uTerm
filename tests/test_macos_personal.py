@@ -21,7 +21,7 @@ class PersonalPackageTests(unittest.TestCase):
         for phase in ["initial", "replacement"]:
             report = self.workspace_evidence(phase)
             package.validate_native_run_forms(report, fixture, "a"*40, "b"*40, phase)
-            changes = [(key, False) for key in ["passed", "actualAdvancedToggle", "actualTextEditorInput", "invalidArgumentRetainedWithoutWrite", "literalArgumentsSaved", "temporaryEnvironmentRetainedWithoutPersistence", "actualSaveButtonAndFeedback", "compactRightAlignedSave", "actualConfigurationCollapseAndRestore", "canonicalStateAndSessionRetained"]]
+            changes = [(key, False) for key in ["passed", "actualAdvancedToggle", "actualTextEditorInput", "invalidArgumentRetainedWithoutWrite", "literalArgumentsSaved", "validArgumentTextRetained", "temporaryEnvironmentRetainedWithoutPersistence", "actualSaveButtonAndFeedback", "compactRightAlignedSave", "actualConfigurationCollapseAndRestore", "canonicalStateAndSessionRetained"]]
             changes += [("fixtureArguments", "changed"), ("fixtureEnvironment", "changed"), ("savedArguments", []), ("sourceHeadSHA", "c"*40), ("testedMergeSHA", "c"*40), ("architecture", "x86_64"), ("screenshot", "old.png")]
             for key, value in changes:
                 wrong = copy.deepcopy(report); wrong["runPanelFormProof"][0][key] = value

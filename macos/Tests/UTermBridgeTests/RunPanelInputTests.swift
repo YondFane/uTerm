@@ -32,6 +32,14 @@ final class RunPanelInputTests: XCTestCase {
             XCTAssertEqual(result.map { Array($0.utf8) }, values.map { Array($0.utf8) })
         }
     }
+    func testValidDraftFormattingIsRetainedOnlyForExactlySavedBytes() throws {
+        let raw = "  'hello world' '' C:\\tools\\run.exe  "
+        let values = try RunPanelInput.arguments(raw)
+        XCTAssertEqual(RunPanelInput.formatArguments(values, retaining: raw), raw)
+        XCTAssertNotEqual(RunPanelInput.formatArguments(["changed"], retaining: raw), raw)
+        XCTAssertNotEqual(Array(RunPanelInput.formatArguments(["é"], retaining: "e\u{301}").utf8), Array("e\u{301}".utf8))
+        XCTAssertEqual(RunPanelInput.formatArguments(["safe"], retaining: "'unfinished"), "safe")
+    }
     func testSharedEnvironmentPreservesLiteralValuesAndRejectsDuplicateOrControlNames() throws {
         let fixture = try fixture()
         for row in fixture.validEnvironment { XCTAssertEqual(try RunPanelInput.environment(row.text), row.expected, row.name) }

@@ -274,7 +274,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         actual = ordinary['checks']
         for key in ['kind', 'language', 'appearance', 'width', 'height', 'fixtureArguments', 'fixtureEnvironment', 'savedArguments']:
             assert actual.get(key) == proof[key], 'Different actual run-form data: ' + key
-        for key in ['passed', 'actualAdvancedToggle', 'actualTextEditorInput', 'invalidArgumentRetainedWithoutWrite', 'literalArgumentsSaved', 'temporaryEnvironmentRetainedWithoutPersistence', 'actualSaveButtonAndFeedback', 'compactRightAlignedSave', 'canonicalStateAndSessionRetained']:
+        for key in ['passed', 'actualAdvancedToggle', 'actualTextEditorInput', 'invalidArgumentRetainedWithoutWrite', 'literalArgumentsSaved', 'validArgumentTextRetained', 'temporaryEnvironmentRetainedWithoutPersistence', 'actualSaveButtonAndFeedback', 'compactRightAlignedSave', 'canonicalStateAndSessionRetained']:
             assert actual.get(key) is True, 'Unverified ordinary run-form action: ' + key
         for key in ['saveWidth', 'saveHeight', 'saveRightInset']:
             assert type(actual.get(key)) in [int, float] and math.isfinite(actual[key]), 'Invalid ordinary Save geometry'

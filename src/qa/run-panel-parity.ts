@@ -209,9 +209,10 @@ export async function runPanelParity(
         assert(control && !control.disabled, "Missing actual enabled Save configuration");
         control.scrollIntoView({ block: "nearest" });
         control.click();
+        await new Promise((resolve) => setTimeout(resolve, 0));
         await until(
           () =>
-            !panel.querySelector<HTMLFieldSetElement>("fieldset")?.disabled &&
+            !control.disabled &&
             (invalid
               ? panel.querySelector("[role=alert]")
               : panel.querySelector(".java-panel-notice[role=status]")),
@@ -238,6 +239,8 @@ export async function runPanelParity(
       assert(
         JSON.stringify(saved.project.arguments) ===
           JSON.stringify(fixture.runFormInput.argumentValues) &&
+          args.value === fixture.runFormInput.arguments &&
+          (!vm || vm.value === fixture.runFormInput.vmArguments) &&
           (!vm ||
             JSON.stringify(saved.project.vm_arguments) ===
               JSON.stringify(fixture.runFormInput.vmArgumentValues)),
@@ -268,6 +271,7 @@ export async function runPanelParity(
         actualTextEditorInput: true,
         invalidArgumentRetainedWithoutWrite: true,
         literalArgumentsSaved: true,
+        validArgumentTextRetained: true,
         temporaryEnvironmentRetainedWithoutPersistence: true,
         canonicalStateAndSessionRetained: true,
         fixtureArguments: fixture.runFormInput.arguments,

@@ -114,7 +114,7 @@
     { "language": "zh-Hans", "appearance": "light", "width": 640, "height": 720 }
   ],
   "runFormInput": {
-    "arguments": "\"hello world\" \"\" C:\\tools\\run.exe \"中文 🧪\" $(literal)",
+    "arguments": "  'hello world' '' C:\\tools\\run.exe   \"中文 🧪\" $(literal)  ",
     "argumentValues": [
       "hello world",
       "",
@@ -122,7 +122,7 @@
       "中文 🧪",
       "$(literal)"
     ],
-    "vmArguments": "\"-Dqa.text=hello world\"",
+    "vmArguments": "  -Dqa.text='hello world'  ",
     "vmArgumentValues": [
       "-Dqa.text=hello world"
     ],

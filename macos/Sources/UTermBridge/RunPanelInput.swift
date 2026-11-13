@@ -37,8 +37,9 @@ public enum RunPanelInput {
         return result
     }
 
-    public static func formatArguments(_ values: [String]) -> String {
-        values.map { value in
+    public static func formatArguments(_ values: [String], retaining input: String? = nil) -> String {
+        if let input, let parsed = try? arguments(input), parsed.map({ Array($0.utf8) }) == values.map({ Array($0.utf8) }) { return input }
+        return values.map { value in
             if value.isEmpty || value.contains("\"") || value.contains("'") || value.unicodeScalars.contains(where: whitespace) {
                 return "\"" + value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
             }

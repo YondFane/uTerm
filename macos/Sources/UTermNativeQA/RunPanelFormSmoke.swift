@@ -50,7 +50,9 @@ enum RunPanelFormSmoke {
             }
         }
         func saveAndWait(expectError: Bool = false) async throws {
-            if let java { java.feedback = "" }; if let python { python.feedback = "" }
+            // Previous feedback must not complete the next awaited control action.
+            // 旧反馈不能被当成下一次控件操作的完成结果。
+            if let java { java.feedback = ""; java.error = "" }; if let python { python.feedback = ""; python.error = "" }
             try await button("save-configuration").performClick(nil)
             try await TerminalSmoke.wait("Complete the actual Save configuration callback") {
                 if let java { return !java.busy && (!java.feedback.isEmpty || !java.error.isEmpty) }
@@ -109,6 +111,8 @@ enum RunPanelFormSmoke {
         try await saveAndWait()
         let saved = try await configuration()
         guard saved["project"]["arguments"] == input["argumentValues"],
+              (java?.argumentInput ?? python?.argumentInput) == literal,
+              java == nil || java?.vmArgumentInput == vmInput,
               java == nil || saved["project"]["vm_arguments"] == input["vmArgumentValues"],
               saved["project"]["environment"] == .null,
               (java?.environmentInput ?? python?.environmentInput) == environment,
@@ -132,7 +136,7 @@ enum RunPanelFormSmoke {
             throw BridgeFailure(code: "RUN_FORM_QA", message: "Run form actions changed the retained session or canonical workspace/settings")
         }
         var proof: [String: Any] = ["kind": kind, "language": language, "appearance": appearance, "width": Int(width), "height": Int(scene["height"].number ?? 0),
-            "passed": true, "actualAdvancedToggle": true, "actualTextEditorInput": true, "invalidArgumentRetainedWithoutWrite": true, "literalArgumentsSaved": true, "temporaryEnvironmentRetainedWithoutPersistence": true, "fixtureArguments": literal, "fixtureEnvironment": environment, "savedArguments": input["argumentValues"].array.compactMap(\.string), "actualSaveButtonAndFeedback": true, "compactRightAlignedSave": true,
+            "passed": true, "actualAdvancedToggle": true, "actualTextEditorInput": true, "invalidArgumentRetainedWithoutWrite": true, "literalArgumentsSaved": true, "validArgumentTextRetained": true, "temporaryEnvironmentRetainedWithoutPersistence": true, "fixtureArguments": literal, "fixtureEnvironment": environment, "savedArguments": input["argumentValues"].array.compactMap(\.string), "actualSaveButtonAndFeedback": true, "compactRightAlignedSave": true,
             "actualConfigurationCollapseAndRestore": true, "canonicalStateAndSessionRetained": true, "fieldFrames": frames, "columnCount": columns, "interpreterFullRow": fullInterpreter,
             "panelWidth": Double(panel.view.bounds.width), "saveWidth": Double(saveRect.width), "saveHeight": Double(saveRect.height), "saveRightInset": Double(inset), "screenshot": name,
             "input": "Actual attached AppKit field/text editors and NSButton actions; no physical pointer claim"]

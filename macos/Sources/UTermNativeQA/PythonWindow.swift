@@ -90,10 +90,12 @@ final class PythonRunModel: ObservableObject {
             await refreshTasks()
         } catch { self.error = error.localizedDescription }
     }
-    private func apply(_ response: JSONValue) throws {
+    private func apply(_ response: JSONValue, preservingArgumentInput: Bool = false) throws {
         let loaded = try JSONDecoder().decode(CorePythonConfiguration.self, from: JSONEncoder().encode(response))
+        let retainedInput = preservingArgumentInput ? argumentInput : nil
         config = loaded.project; revision = loaded.revision
         arguments = (loaded.project.arguments ?? []).map { PythonArgument(text: $0) }
+        argumentInput = RunPanelInput.formatArguments(loaded.project.arguments ?? [], retaining: retainedInput)
         port = String(loaded.project.port ?? 0)
         dirty = false
     }
@@ -165,7 +167,7 @@ final class PythonRunModel: ObservableObject {
         let response = try await bridge.call("python.saveConfiguration", params: .object([
             "directory": .string(directory), "revision": .string(revision), "config": try value(formConfig())
         ]))
-        try apply(response)
+        try apply(response, preservingArgumentInput: true)
         feedback = localized("Configuration saved.", "配置已保存。")
     }
     private func environmentValues() throws -> [String: JSONValue] {

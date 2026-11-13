@@ -324,10 +324,11 @@ native branch control uses the ordinary Mac control's measured 23px height.
 Both real-client collectors operate advanced-form controls in Java/Python, English/dark wide and
 Chinese/light narrow windows. They enter the same quoted arguments, empty argument, Windows path,
 Unicode and literal shell symbols through actual editors. An incomplete quote must retain its input
-and leave the saved project/revision unchanged. A valid Save must preserve exact argument values and
-retain temporary environment text without persisting it. Native JVM/application arguments use
-single-line editors for Java; Python arguments and both temporary-environment fields use multiline
-editors. JDK home and its native chooser remain available.
+and leave the saved project/revision unchanged. A valid Save retains the original quote/spacing text
+and must preserve exact argument values and retain temporary environment text without persisting it.
+Native JVM/application arguments use single-line editors for Java; Python arguments and both
+temporary-environment fields use multiline editors. JDK home and its native chooser remain
+available.
 
 The native collector additionally measures wide/narrow field rows and the 28px right-aligned Save
 button, requires feedback, collapses/restores configuration and checks retained sessions plus
@@ -335,9 +336,11 @@ canonical workspace/settings. Four required advanced-form pairs use
 `personal-{phase}-run-form-{kind}-{language}-{appearance}-{width}.png` and
 `ui-parity-run-form-{kind}-{language}-{appearance}-{width}.png`. Missing counterparts, unexecuted
 edits, altered fixture values, stale source/merge metadata, invalid geometry or missing originals
-reject pairing. These are required collectors, not a claim that the new Mac scenes have passed.
+reject pairing. These are required collectors, not a claim that the new Mac scenes have passed. Each
+save check clears its previous test feedback and waits for the new callback; the ordinary collector
+waits for the actual Save control to become enabled after dispatch.
 
-Linux passes 13 Swift Foundation, 12 Node and 60 package/pairing policy tests, plus type checking,
+Linux passes 14 Swift Foundation, 12 Node and 60 package/pairing policy tests, plus type checking,
 production build, formatting and documentation checks. The complete Node suite passes 489 tests with
 11 platform skips using Temurin JDK 21.0.13; `JAVA_HOME` must identify a full JDK including `javac`.
 

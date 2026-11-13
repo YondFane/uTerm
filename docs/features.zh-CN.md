@@ -184,13 +184,13 @@ Swift 语法及脚本解析通过，新的 Mac 原图和后续通知检查仍待
 
 **运行表单验证**
 
-两版真实采集器均操作 Java／Python 高级表单，覆盖英文深色宽窗与中文浅色窄窗。通过真实编辑器输入相同的引号参数、空参数、Windows 路径、Unicode 和字面 shell 符号。引号未闭合时必须保留输入，已保存项目及 revision 不变；有效保存后必须保留精确参数值，并保留临时环境变量文本且不将其持久化。Java 的 JVM／应用参数为单行编辑器，Python 参数及两版环境变量为多行编辑器；JDK 目录与原生选择器仍保留。
+两版真实采集器均操作 Java／Python 高级表单，覆盖英文深色宽窗与中文浅色窄窗。通过真实编辑器输入相同的引号参数、空参数、Windows 路径、Unicode 和字面 shell 符号。引号未闭合时必须保留输入，已保存项目及 revision 不变；有效保存后保留原有引号／空格文本，并必须保留精确参数值，并保留临时环境变量文本且不将其持久化。Java 的 JVM／应用参数为单行编辑器，Python 参数及两版环境变量为多行编辑器；JDK 目录与原生选择器仍保留。
 
 原生采集器还测量宽窄字段行及 28px 高的靠右保存按钮，要求实际反馈，展开／收起配置，并检查保留会话及规范工作区／设置。新增四组高级表单配对使用
 `personal-{phase}-run-form-{kind}-{language}-{appearance}-{width}.png` 与
-`ui-parity-run-form-{kind}-{language}-{appearance}-{width}.png`。缺少另一版原图、未执行输入、样例值变化、过期源码／merge 元数据、无效几何或原图缺失均拒绝配对。这些是采集门禁，尚不代表新 Mac 场景已通过。
+`ui-parity-run-form-{kind}-{language}-{appearance}-{width}.png`。缺少另一版原图、未执行输入、样例值变化、过期源码／merge 元数据、无效几何或原图缺失均拒绝配对。这些是采集门禁，尚不代表新 Mac 场景已通过。 每次保存检查清理上次测试反馈并等待新的回调；普通版在派发后等待真实保存控件恢复可用。
 
-Linux 通过 13 项 Swift
+Linux 通过 14 项 Swift
 Foundation、12 项 Node 及 60 项包／配对策略测试，以及类型、生产构建、格式及文档检查。 使用 Temurin
 JDK 21.0.13 的完整 Node 套件通过 489 项、按平台跳过 11 项；`JAVA_HOME` 必须指向包含 `javac`
 的完整 JDK。

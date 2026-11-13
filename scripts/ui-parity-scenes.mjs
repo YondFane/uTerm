@@ -105,6 +105,7 @@ export function assertParityOperations(scenes, fixture) {
       "actualTextEditorInput",
       "invalidArgumentRetainedWithoutWrite",
       "literalArgumentsSaved",
+      "validArgumentTextRetained",
       "temporaryEnvironmentRetainedWithoutPersistence",
       "actualSaveButtonAndFeedback",
       "compactRightAlignedSave",

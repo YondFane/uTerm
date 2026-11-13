@@ -28,7 +28,7 @@ def policy_forms(fixture, phase, head, tested, system):
                 fields = [dict(id=name, left=12 + (index % 2)*144, top=20 + (index // 2)*48, width=132, height=40) for index, name in enumerate(names)]
             if full_interpreter:
                 fields = [dict(id=names[0], left=12, top=20, width=276, height=60), dict(id=names[1], left=12, top=88, width=132, height=40), dict(id=names[2], left=156, top=88, width=132, height=40)]
-            rows.append(dict(item, kind=kind, passed=True, actualAdvancedToggle=True, actualTextEditorInput=True, invalidArgumentRetainedWithoutWrite=True, literalArgumentsSaved=True, temporaryEnvironmentRetainedWithoutPersistence=True,
+            rows.append(dict(item, kind=kind, passed=True, actualAdvancedToggle=True, actualTextEditorInput=True, invalidArgumentRetainedWithoutWrite=True, literalArgumentsSaved=True, validArgumentTextRetained=True, temporaryEnvironmentRetainedWithoutPersistence=True,
                              fixtureArguments=fixture["runFormInput"]["arguments"], fixtureEnvironment=fixture["runFormInput"]["environment"], savedArguments=fixture["runFormInput"]["argumentValues"], actualSaveButtonAndFeedback=True,
                              compactRightAlignedSave=True, actualConfigurationCollapseAndRestore=True,
                              canonicalStateAndSessionRetained=True, panelWidth=300, saveWidth=100, saveHeight=28, saveRightInset=12,

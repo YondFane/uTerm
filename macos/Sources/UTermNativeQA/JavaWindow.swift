@@ -90,12 +90,16 @@ final class JavaRunModel: ObservableObject {
             await refreshTasks()
         } catch { self.error = error.localizedDescription }
     }
-    private func apply(_ response: JSONValue) throws {
+    private func apply(_ response: JSONValue, preservingArgumentInput: Bool = false) throws {
         let loaded = try JSONDecoder().decode(CoreJavaConfiguration.self, from: JSONEncoder().encode(response))
+        let retainedInput = preservingArgumentInput ? argumentInput : nil
+        let retainedVM = preservingArgumentInput ? vmArgumentInput : nil
         config = loaded.project; revision = loaded.revision
         arguments = (loaded.project.arguments ?? []).map { JavaArgument(text: $0) }
+        argumentInput = RunPanelInput.formatArguments(loaded.project.arguments ?? [], retaining: retainedInput)
         global = loaded.global
         vmArguments = (loaded.project.vm_arguments ?? []).map { JavaArgument(text: $0) }
+        vmArgumentInput = RunPanelInput.formatArguments(loaded.project.vm_arguments ?? [], retaining: retainedVM)
         dirty = false
     }
     private func detectValues() async throws {
@@ -138,7 +142,7 @@ final class JavaRunModel: ObservableObject {
         let response = try await bridge.call("java.saveConfiguration", params: .object([
             "directory": .string(directory), "revision": .string(revision), "project": try value(formConfig()), "global": try value(global)
         ]))
-        try apply(response)
+        try apply(response, preservingArgumentInput: true)
         feedback = localized("Configuration saved.", "配置已保存。")
     }
     private func environmentValues() throws -> [String: JSONValue] {
