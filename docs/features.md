@@ -2383,6 +2383,14 @@ retains its existing mouse behavior. Close failures remain visible and retain th
 
 #### Validation and limits
 
+The local Linux full frontend/build-helper run passes 482 checks and skips 11 optional/platform
+checks; two shared-core checks fail on environment prerequisites. The SSH recheck uses real OpenSSH
+with a test-only empty configuration to avoid invalid ownership/permissions in the host system
+configuration. The Java recheck sets `JAVA_HOME` to an official JDK 21. Both isolated rechecks pass
+without modifying system SSH configuration. TypeScript, production build, formatting, localization,
+documentation and the complete serial host suite pass. These checks do not establish native
+macOS/Windows window acceptance.
+
 - Windows validation: 158 frontend/build-helper tests pass, with two platform-specific tests
   skipped; 40 backend tests, 16 local-service tests, locked dependency installation,
   TypeScript/production build, localization and documentation checks pass. Component regression
