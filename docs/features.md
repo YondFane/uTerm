@@ -2829,6 +2829,16 @@ Native temporary connections offer **Save connection** in their context menu and
 Cleanup retains file/tunnel ownership and database/Redis dependencies, including legacy SSH-host
 references; an unresolved native connection draft also defers cleanup.
 
+Native GitHub comparison waits for the current shared tools view to attach and its real GitHub
+button to be enabled before dispatching one click. Failure records the DOM disabled/fieldset state,
+live mode/content identity, workspace modal state and visible alerts; it does not retry the
+navigation. Personal evidence requires the enabled-control assertion. The
+[Intel Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43352777010/artifacts/14007338549)
+at head `8c8a35c`, tested merge `d5419c8`, passes its initial phase in 106.3s but times out opening
+GitHub in replacement at 95.0s; the original still shows Files. This predates the added
+control-state diagnostics and does not establish that the button was disabled. The new precondition
+and report policy require a fresh Mac run.
+
 The native Quick SSH smoke check waits for the real sidebar row to be visible and its attached
 button to be enabled after each asynchronous workspace operation. It still opens the actual form six
 times and checks create, keep and cleanup behavior; a missing or disabled control fails within the
