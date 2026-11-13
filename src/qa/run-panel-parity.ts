@@ -3,7 +3,18 @@ import { translate } from "../lib/i18n";
 import { terminalPerformanceSnapshot } from "../lib/terminal-performance-qa";
 
 type Scene = { language: "en" | "zh-Hans"; appearance: string; width: number; height: number };
-type Fixture = { runPanelKinds: string[]; runPanelScenes: Scene[] };
+type Fixture = {
+  runPanelKinds: string[];
+  runPanelScenes: Scene[];
+  runFormInput: {
+    arguments: string;
+    argumentValues: string[];
+    vmArguments: string;
+    vmArgumentValues: string[];
+    environment: string;
+    invalidArguments: string;
+  };
+};
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
 }
@@ -21,6 +32,7 @@ export async function runPanelParity(
   configure: (scene: Scene) => Promise<void>,
   snapshot: () => Promise<string>,
   record: (name: string, checks: unknown) => Promise<void>,
+  directory: string,
 ) {
   const terminal = await until(
     () => document.querySelector('[data-session-id="ui-parity-0"]'),
@@ -155,6 +167,124 @@ export async function runPanelParity(
             .height,
         });
       };
+      const advanced = panel.querySelector<HTMLDetailsElement>(".java-advanced");
+      assert(advanced, "Missing actual advanced form");
+      advanced.querySelector("summary")!.click();
+      await until(() => advanced.open, "actual advanced disclosure");
+      const formField = (label: string) => {
+        const control = [...advanced.querySelectorAll("label")]
+          .find((row) => row.textContent?.includes(label))
+          ?.querySelector<HTMLInputElement | HTMLTextAreaElement>("input, textarea");
+        assert(control, "Missing actual run form field: " + label);
+        return control;
+      };
+      const args = formField(translate(scene.language, "应用参数"));
+      const env = formField(
+        translate(scene.language, kind === "java" ? "环境变量 · 仅本次运行" : "环境变量"),
+      );
+      const vm = kind === "java" ? formField(translate(scene.language, "JVM 参数")) : null;
+      const original = { arguments: args.value, environment: env.value, vm: vm?.value ?? "" };
+      const input = async (field: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+        assert(!field.disabled && field.isConnected, "Run field is not enabled and attached");
+        field.scrollIntoView({ block: "nearest" });
+        field.focus();
+        const prototype =
+          field instanceof HTMLTextAreaElement
+            ? HTMLTextAreaElement.prototype
+            : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(field, value);
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        assert(field.value === value, "Actual input was not retained");
+      };
+      const configuration = () =>
+        invoke<{
+          revision: string;
+          project: { arguments: string[]; vm_arguments?: string[]; environment?: unknown };
+        }>(kind + "_configuration", { directory });
+      const save = async (invalid = false) => {
+        const control = [...advanced.querySelectorAll("button")].find(
+          (button) => button.textContent === translate(scene.language, "保存配置"),
+        );
+        assert(control && !control.disabled, "Missing actual enabled Save configuration");
+        control.scrollIntoView({ block: "nearest" });
+        control.click();
+        await until(
+          () =>
+            !panel.querySelector<HTMLFieldSetElement>("fieldset")?.disabled &&
+            (invalid
+              ? panel.querySelector("[role=alert]")
+              : panel.querySelector(".java-panel-notice[role=status]")),
+          "actual save feedback",
+        );
+        assert(invalid || !panel.querySelector("[role=alert]"), "Valid run form save failed");
+        return control;
+      };
+      const beforeInput = await configuration();
+      await input(args, fixture.runFormInput.invalidArguments);
+      await save(true);
+      const invalidAfter = await configuration();
+      assert(
+        args.value === fixture.runFormInput.invalidArguments &&
+          JSON.stringify(invalidAfter.project) === JSON.stringify(beforeInput.project) &&
+          invalidAfter.revision === beforeInput.revision,
+        "Invalid run draft changed saved configuration",
+      );
+      await input(args, fixture.runFormInput.arguments);
+      await input(env, fixture.runFormInput.environment);
+      if (vm) await input(vm, fixture.runFormInput.vmArguments);
+      const saveButton = await save();
+      const saved = await configuration();
+      assert(
+        JSON.stringify(saved.project.arguments) ===
+          JSON.stringify(fixture.runFormInput.argumentValues) &&
+          (!vm ||
+            JSON.stringify(saved.project.vm_arguments) ===
+              JSON.stringify(fixture.runFormInput.vmArgumentValues)),
+        "Literal arguments changed while saving",
+      );
+      assert(
+        env.value === fixture.runFormInput.environment && !("environment" in saved.project),
+        "Temporary environment was persisted or discarded",
+      );
+      const rect = saveButton.getBoundingClientRect(),
+        formRect = panel.getBoundingClientRect();
+      assert(
+        rect.height <= 30 &&
+          rect.width > 0 &&
+          rect.width < 200 &&
+          rect.top >= formRect.top &&
+          rect.bottom <= formRect.bottom &&
+          formRect.right - rect.right >= 0 &&
+          formRect.right - rect.right <= 40,
+        "Save configuration is stretched or not right aligned",
+      );
+      await unchanged();
+      await record(`run-form-${kind}-${scene.language}-${scene.appearance}-${scene.width}`, {
+        ...scene,
+        kind,
+        passed: true,
+        actualAdvancedToggle: true,
+        actualTextEditorInput: true,
+        invalidArgumentRetainedWithoutWrite: true,
+        literalArgumentsSaved: true,
+        temporaryEnvironmentRetainedWithoutPersistence: true,
+        canonicalStateAndSessionRetained: true,
+        fixtureArguments: fixture.runFormInput.arguments,
+        fixtureEnvironment: fixture.runFormInput.environment,
+        savedArguments: saved.project.arguments,
+        actualSaveButtonAndFeedback: true,
+        compactRightAlignedSave: true,
+        saveWidth: rect.width,
+        saveHeight: rect.height,
+        saveRightInset: formRect.right - rect.right,
+      });
+      await input(args, original.arguments);
+      await input(env, original.environment);
+      if (vm) await input(vm, original.vm);
+      await save();
+      advanced.querySelector("summary")!.click();
+      await until(() => !advanced.open, "collapse actual advanced disclosure");
       await expand(true);
       await expand(false);
       await expand(true);

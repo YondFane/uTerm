@@ -15,8 +15,10 @@ final class PythonRunModel: ObservableObject {
     private(set) var settings: JSONValue
     private(set) var settingsCatalog: JSONValue
     @Published var config: CorePythonRunConfig?
-    @Published var arguments: [PythonArgument] = []
-    @Published var environment: [PythonEnvironment] = []
+    @Published var argumentInput = ""
+    @Published var arguments: [PythonArgument] = [] { didSet { if !editingArgumentInput { argumentInput = RunPanelInput.formatArguments(arguments.map(\.text)) } } }
+    @Published var environmentInput = ""
+    @Published var environment: [PythonEnvironment] = [] { didSet { if !editingEnvironmentInput { environmentInput = environment.map { $0.key + "=" + $0.value }.joined(separator: "\n") } } }
     @Published var port = ""
     @Published var error = ""
     @Published var feedback = ""
@@ -30,6 +32,8 @@ final class PythonRunModel: ObservableObject {
     @Published var search = ""
     @Published var searchSummary = ""
     @Published private(set) var terminal: TerminalSession?
+    private var editingArgumentInput = false
+    private var editingEnvironmentInput = false
     private var revision = ""
     private var polling: Task<Void, Never>?
     private var frames: Task<Void, Never>?
@@ -135,11 +139,26 @@ final class PythonRunModel: ObservableObject {
         guard panel.runModal() == .OK else { return }
         _ = await applySelection(panel.url, kind: kind)
     }
+    func editArguments(_ text: String) {
+        guard !busy, !prepared else { return }
+        editingArgumentInput = true; defer { editingArgumentInput = false }
+        argumentInput = text
+        if let values = try? RunPanelInput.arguments(text) { arguments = values.map { PythonArgument(text: $0) } }
+        dirty = true
+    }
+    func editEnvironment(_ text: String) {
+        guard !busy, !prepared else { return }
+        editingEnvironmentInput = true; defer { editingEnvironmentInput = false }
+        environmentInput = text
+        if let values = try? RunPanelInput.environment(text) { environment = values.sorted { $0.key < $1.key }.map { PythonEnvironment(key: $0.key, value: $0.value) } }
+    }
     private func formConfig() throws -> CorePythonRunConfig {
         guard var result = config, let number = UInt16(port) else {
             throw BridgeFailure(code: "PYTHON_CONFIG_INVALID", message: localized("Enter a valid port.", "请填写有效端口。"))
         }
-        result.port = number; result.arguments = arguments.map(\.text)
+        result.port = number
+        do { result.arguments = try RunPanelInput.arguments(argumentInput) }
+        catch { throw BridgeFailure(code: "PYTHON_ARGUMENTS_INVALID", message: localized("Complete argument quotes and remove unsupported control characters.", "请补全参数引号并移除不支持的控制字符。")) }
         return result
     }
     private func persist() async throws {
@@ -150,14 +169,8 @@ final class PythonRunModel: ObservableObject {
         feedback = localized("Configuration saved.", "配置已保存。")
     }
     private func environmentValues() throws -> [String: JSONValue] {
-        var values: [String: JSONValue] = [:]
-        for row in environment {
-            guard values[row.key] == nil else {
-                throw BridgeFailure(code: "PYTHON_ENVIRONMENT_INVALID", message: localized("Environment names must be unique.", "环境变量名称不能重复。"))
-            }
-            values[row.key] = .string(row.value)
-        }
-        return values
+        do { return try RunPanelInput.environment(environmentInput).mapValues { .string($0) } }
+        catch { throw BridgeFailure(code: "PYTHON_ENVIRONMENT_INVALID", message: localized("Use one NAME=value per line with unique names; UTERM_ names are reserved.", "每行填写一个 NAME=value，名称不能重复；UTERM_ 前缀为保留名称。")) }
     }
     private func startSaved(environment: [String: JSONValue]) async throws {
         let task = try await bridge.call("python.start", params: .object([
@@ -349,25 +362,14 @@ struct PythonRunView: View {
     }
     private var advancedFields: some View {
         VStack(alignment: .leading, spacing: 8) {
-            NativeRunFormField(localized("Application arguments", "应用参数")) {
-                ForEach($model.arguments) { $argument in
-                    HStack {
-                        TextField(localized("Literal argument", "字面参数"), text: $argument.text).onChange(of: argument.text) { _, _ in model.dirty = true }
-                        Button("−") { model.arguments.removeAll { $0.id == argument.id }; model.dirty = true }
-                    }
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                NativeRunFormField(localized("Application arguments", "应用参数")) {
+                    NativeRunTextArea(text: Binding(get: { model.argumentInput }, set: { model.editArguments($0) }), label: localized("Application arguments", "应用参数"), id: "native-python-arguments", palette: palette).frame(height: 40)
                 }
-                Button(localized("Add argument", "添加参数")) { model.arguments.append(PythonArgument(text: "")); model.dirty = true }
-            }
-            NativeRunFormField(localized("Environment variables", "环境变量")) {
-                ForEach($model.environment) { $row in
-                    HStack {
-                        TextField(localized("Environment name", "环境变量名称"), text: $row.key)
-                        TextField(localized("Temporary value", "临时值"), text: $row.value)
-                        Button("−") { model.environment.removeAll { $0.id == row.id } }
-                    }
+                NativeRunFormField(localized("Environment variables", "环境变量")) {
+                    NativeRunTextArea(text: Binding(get: { model.environmentInput }, set: { model.editEnvironment($0) }), label: localized("Environment variables", "环境变量"), id: "native-python-environment", palette: palette).frame(height: 40)
+                    Text(localized("Only for this run; environment values are not saved.", "仅用于本次运行，不保存环境变量。")).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
-                Button(localized("Add temporary environment variable", "添加临时环境变量")) { model.environment.append(PythonEnvironment()) }
-                Text(localized("Environment values apply only to this run and are not saved.", "环境变量只用于本次运行，不保存。")).font(.system(size: 11)).foregroundStyle(.secondary)
             }
             HStack {
                 Spacer()

@@ -112,5 +112,21 @@
   "runPanelScenes": [
     { "language": "en", "appearance": "dark", "width": 1100, "height": 720 },
     { "language": "zh-Hans", "appearance": "light", "width": 640, "height": 720 }
-  ]
+  ],
+  "runFormInput": {
+    "arguments": "\"hello world\" \"\" C:\\tools\\run.exe \"中文 🧪\" $(literal)",
+    "argumentValues": [
+      "hello world",
+      "",
+      "C:\\tools\\run.exe",
+      "中文 🧪",
+      "$(literal)"
+    ],
+    "vmArguments": "\"-Dqa.text=hello world\"",
+    "vmArgumentValues": [
+      "-Dqa.text=hello world"
+    ],
+    "environment": "QA_LITERAL=$HOME & literal\nQA_UNICODE=中文 🧪",
+    "invalidArguments": "\"unfinished"
+  }
 }

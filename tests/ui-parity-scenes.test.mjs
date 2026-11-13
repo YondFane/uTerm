@@ -30,6 +30,11 @@ const scenes = [
       ),
     ),
   ),
+  ...fixture.runPanelScenes.flatMap((scene) =>
+    fixture.runPanelKinds.map(
+      (kind) => `run-form-${kind}-${scene.language}-${scene.appearance}-${scene.width}`,
+    ),
+  ),
   ...fixture.ordinaryOperations,
   ...fixture.contentScenes.map(
     (scene) => `pdf-highlights-${scene.language}-${scene.appearance}-${scene.width}`,
@@ -98,6 +103,30 @@ const prEvidence = fixture.githubScenes.map((scene) => ({
     modalTop: (scene.height - 500) / 2,
   },
 }));
+const formEvidence = fixture.runPanelScenes.flatMap((scene) =>
+  fixture.runPanelKinds.map((kind) => ({
+    scenario: `run-form-${kind}-${scene.language}-${scene.appearance}-${scene.width}`,
+    checks: {
+      ...scene,
+      kind,
+      passed: true,
+      actualAdvancedToggle: true,
+      actualTextEditorInput: true,
+      invalidArgumentRetainedWithoutWrite: true,
+      literalArgumentsSaved: true,
+      temporaryEnvironmentRetainedWithoutPersistence: true,
+      actualSaveButtonAndFeedback: true,
+      compactRightAlignedSave: true,
+      canonicalStateAndSessionRetained: true,
+      fixtureArguments: fixture.runFormInput.arguments,
+      fixtureEnvironment: fixture.runFormInput.environment,
+      savedArguments: fixture.runFormInput.argumentValues,
+      saveWidth: 100,
+      saveHeight: 28,
+      saveRightInset: 12,
+    },
+  })),
+);
 const runEvidence = fixture.runPanelScenes.flatMap((item) =>
   fixture.runPanelKinds.flatMap((kind) =>
     fixture.runPanelStates.map((state) => ({
@@ -133,12 +162,20 @@ const runCleanup = {
 };
 const assertOperations = (records) =>
   assertParityOperations(
-    [...records, ...pdfEvidence, ...quickEvidence, ...prEvidence, ...runEvidence, runCleanup],
+    [
+      ...records,
+      ...pdfEvidence,
+      ...quickEvidence,
+      ...prEvidence,
+      ...formEvidence,
+      ...runEvidence,
+      runCleanup,
+    ],
     fixture,
   );
 
 test("the complete grid and required restart accept file-system enumeration order", () => {
-  assert.equal(scenes.length, 52);
+  assert.equal(scenes.length, 56);
   assert.doesNotThrow(() => assertParityScenes([...scenes].reverse(), fixture));
 });
 
@@ -179,7 +216,15 @@ test("PDF proof rejects missing, duplicate, stale data and unexecuted controls",
   };
   assert.doesNotThrow(() =>
     assertParityOperations(
-      [restart, ...pdfEvidence, ...quickEvidence, ...prEvidence, ...runEvidence, runCleanup],
+      [
+        restart,
+        ...pdfEvidence,
+        ...quickEvidence,
+        ...prEvidence,
+        ...formEvidence,
+        ...runEvidence,
+        runCleanup,
+      ],
       fixture,
     ),
   );
@@ -189,7 +234,15 @@ test("PDF proof rejects missing, duplicate, stale data and unexecuted controls",
     assert.throws(
       () =>
         assertParityOperations(
-          [restart, ...rows, ...quickEvidence, ...prEvidence, ...runEvidence, runCleanup],
+          [
+            restart,
+            ...rows,
+            ...quickEvidence,
+            ...prEvidence,
+            ...formEvidence,
+            ...runEvidence,
+            runCleanup,
+          ],
           fixture,
         ),
       key,
@@ -198,7 +251,15 @@ test("PDF proof rejects missing, duplicate, stale data and unexecuted controls",
   for (const rows of [[], pdfEvidence.slice(1), [pdfEvidence[0], pdfEvidence[0]]])
     assert.throws(() =>
       assertParityOperations(
-        [restart, ...rows, ...quickEvidence, ...prEvidence, ...runEvidence, runCleanup],
+        [
+          restart,
+          ...rows,
+          ...quickEvidence,
+          ...prEvidence,
+          ...formEvidence,
+          ...runEvidence,
+          runCleanup,
+        ],
         fixture,
       ),
     );
@@ -219,7 +280,15 @@ test("Quick SSH pairing rejects missing controls, data changes and stale fixture
   };
   assert.doesNotThrow(() =>
     assertParityOperations(
-      [restart, ...pdfEvidence, ...quickEvidence, ...prEvidence, ...runEvidence, runCleanup],
+      [
+        restart,
+        ...pdfEvidence,
+        ...quickEvidence,
+        ...prEvidence,
+        ...formEvidence,
+        ...runEvidence,
+        runCleanup,
+      ],
       fixture,
     ),
   );
@@ -229,7 +298,15 @@ test("Quick SSH pairing rejects missing controls, data changes and stale fixture
     assert.throws(
       () =>
         assertParityOperations(
-          [restart, ...pdfEvidence, ...rows, ...prEvidence, ...runEvidence, runCleanup],
+          [
+            restart,
+            ...pdfEvidence,
+            ...rows,
+            ...prEvidence,
+            ...formEvidence,
+            ...runEvidence,
+            runCleanup,
+          ],
           fixture,
         ),
       key,
@@ -238,7 +315,15 @@ test("Quick SSH pairing rejects missing controls, data changes and stale fixture
   for (const rows of [[], quickEvidence.slice(1), [quickEvidence[0], quickEvidence[0]]])
     assert.throws(() =>
       assertParityOperations(
-        [restart, ...pdfEvidence, ...rows, ...prEvidence, ...runEvidence, runCleanup],
+        [
+          restart,
+          ...pdfEvidence,
+          ...rows,
+          ...prEvidence,
+          ...formEvidence,
+          ...runEvidence,
+          runCleanup,
+        ],
         fixture,
       ),
     );
@@ -288,7 +373,15 @@ test("PR scenes reject tool-width forms, changed literals, missing operations an
   };
   const verify = (rows) =>
     assertParityOperations(
-      [restart, ...pdfEvidence, ...quickEvidence, ...rows, ...runEvidence, runCleanup],
+      [
+        restart,
+        ...pdfEvidence,
+        ...quickEvidence,
+        ...rows,
+        ...formEvidence,
+        ...runEvidence,
+        runCleanup,
+      ],
       fixture,
     );
   assert.doesNotThrow(() => verify(prEvidence));
@@ -329,6 +422,7 @@ test("run-panel proof rejects unexecuted controls, duplicate scenes, invalid fra
         ...pdfEvidence,
         ...quickEvidence,
         ...prEvidence,
+        ...formEvidence,
         ...rows,
         ...(cleanup ? [cleanup] : []),
       ],
@@ -355,4 +449,44 @@ test("run-panel proof rejects unexecuted controls, duplicate scenes, invalid fra
   const rows = structuredClone(runEvidence);
   rows[0].checks.panelTop = 900;
   assert.throws(() => verify(rows));
+});
+
+test("run forms reject unexecuted edits, changed literals and missing or duplicate counterparts", () => {
+  const base = [
+    {
+      scenario: "terminal-restart",
+      checks: {
+        passed: true,
+        actualRestartButton: true,
+        parsedUnicodeOutput: true,
+        canonicalWorkspaceRetained: true,
+        terminalViewRetained: true,
+        generationBeforeRestart: "a",
+        restartedGeneration: "b",
+      },
+    },
+    ...pdfEvidence,
+    ...quickEvidence,
+    ...prEvidence,
+    ...runEvidence,
+    runCleanup,
+  ];
+  const verify = (rows) => assertParityOperations([...base, ...rows], fixture);
+  assert.doesNotThrow(() => verify(formEvidence));
+  for (const key of [
+    "actualTextEditorInput",
+    "invalidArgumentRetainedWithoutWrite",
+    "literalArgumentsSaved",
+    "temporaryEnvironmentRetainedWithoutPersistence",
+    "fixtureArguments",
+    "fixtureEnvironment",
+    "savedArguments",
+    "saveHeight",
+  ]) {
+    const rows = structuredClone(formEvidence);
+    rows[0].checks[key] = null;
+    assert.throws(() => verify(rows), key);
+  }
+  assert.throws(() => verify(formEvidence.slice(1)));
+  assert.throws(() => verify([...formEvidence, formEvidence[0]]));
 });

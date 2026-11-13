@@ -321,17 +321,31 @@ native branch control uses the ordinary Mac control's measured 23px height.
 
 **Run-form validation**
 
-The native Personal grid additionally operates actual attached disclosure and Save controls in
-Java/Python, English/dark wide and Chinese/light narrow windows. It measures the actual wide/narrow
-field rows and a compact right-aligned Save button, requires save feedback, collapses/restores
-configuration, and checks retained sessions plus canonical workspace/settings. Originals are named
-`personal-{phase}-run-form-{kind}-{language}-{appearance}-{width}.png`. Missing actions, stale
-source/merge metadata, malformed geometry or missing originals fail acceptance. Nine Linux Swift
-6.1.2 Foundation tests cover expanded-window origin, narrow task-action bounds, saved Python drafts,
-detection ambiguity, mode changes and service-link rejection. Thirty package/evidence and 38
-paired/discovery/fixture policy checks pass, as do TypeScript, production build, chrome generation
-and localization checks. New AppKit rendering and these controls still require current-source macOS
-CI; Linux checks do not accept native windows.
+Both real-client collectors operate advanced-form controls in Java/Python, English/dark wide and
+Chinese/light narrow windows. They enter the same quoted arguments, empty argument, Windows path,
+Unicode and literal shell symbols through actual editors. An incomplete quote must retain its input
+and leave the saved project/revision unchanged. A valid Save must preserve exact argument values and
+retain temporary environment text without persisting it. Native JVM/application arguments use
+single-line editors for Java; Python arguments and both temporary-environment fields use multiline
+editors. JDK home and its native chooser remain available.
+
+The native collector additionally measures wide/narrow field rows and the 28px right-aligned Save
+button, requires feedback, collapses/restores configuration and checks retained sessions plus
+canonical workspace/settings. Four required advanced-form pairs use
+`personal-{phase}-run-form-{kind}-{language}-{appearance}-{width}.png` and
+`ui-parity-run-form-{kind}-{language}-{appearance}-{width}.png`. Missing counterparts, unexecuted
+edits, altered fixture values, stale source/merge metadata, invalid geometry or missing originals
+reject pairing. These are required collectors, not a claim that the new Mac scenes have passed.
+
+Linux passes 13 Swift Foundation, 12 Node and 60 package/pairing policy tests, plus type checking,
+production build, formatting and documentation checks. The complete Node suite passes 489 tests with
+11 platform skips using Temurin JDK 21.0.13; `JAVA_HOME` must identify a full JDK including `javac`.
+
+Linux Swift 6.1.2 Foundation tests cover layout, Python detection/mode defaults and byte-exact
+shared argument/environment fixtures. Node runs the same parser fixtures for both ordinary language
+panels, including CRLF, empty strings, Windows backslashes, Unicode whitespace and reserved
+environment names. New AppKit rendering, input/save operations and source-bound screenshots still
+require macOS CI; Linux does not accept native windows.
 
 The
 [ARM performance build artifact](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)
@@ -380,7 +394,7 @@ write makes a clean configuration stale; hiding must fail and retain the panel. 
 injected unsaved draft then fails against the same revision without overwriting the peer. An
 explicit QA fixture reload followed by another edit and actual Hide must persist the exact draft.
 Reports label the injected draft, retain both conflict originals and require 16 workspace-smoke
-PNGs; the 50-pair Personal/ordinary grid is separate. Linux passes 56 existing
+PNGs; the 54-pair Personal/ordinary grid is separate. Linux passes 56 existing
 evidence/package/matrix policy checks and two existing run-panel frontend regressions, plus type,
 format and document checks; Swift and shell/Python parsing pass. These checks do not compile AppKit.
 New Mac execution and original-image inspection remain required.
@@ -393,7 +407,7 @@ expects two files while the expanded POM/Python fixture has four. The inspected 
 retain all four readable paths. Both the collector and package validator require the exact shared
 file set and each file's untracked state. Linux passed 54 package/pairing policies, including
 initial/replacement refusal of missing or modified POM/Python states and unexpected files; these
-synthetic reports are not native window evidence. App replacement and the 50-pair grid still need
+synthetic reports are not native window evidence. App replacement and the 54-pair grid still need
 fresh Mac execution.
 
 The native Java run header provides **Manage tools**, opening **Settings → Java development tools**
@@ -403,7 +417,7 @@ retaining its configuration, arguments, environment and live task, even when its
 workspace. The settings window owns this one-time completion; closing the original run prevents
 further detection. Opening this page starts no installation.
 
-Native Personal QA adds two Java-tools originals per phase, separately from the 50 paired scenes. It
+Native Personal QA adds two Java-tools originals per phase, separately from the 54 paired scenes. It
 clicks the actual header and close controls, checks the five shared components and completed
 redetection, and retains the panel, terminal generation and canonical data. The busy state and
 unsaved argument are explicitly injected QA fixtures; disabled-action dispatch must be rejected, and
@@ -420,7 +434,7 @@ retaining the original terminal generation and panel view. The native collector 
 noninteractive AppKit background view and header; the ordinary collector measures the rendered panel
 element and header. Missing scenes, stale originals, unexecuted controls, invalid geometry or a
 difference of at least one pixel reject pairing. Closing the clean file must retain its run panel.
-The candidate produces 50 required pairs plus ordinary restart and final panel-cleanup originals;
+The candidate produces 54 required pairs plus ordinary restart and final panel-cleanup originals;
 this is a larger capture grid, not complete functional acceptance. Linux passes 484 Node tests (11
 platform skips), 53 paired/Personal policy tests and seven run-discovery/matrix policies. Type
 checking, production build, i18n, formatting, Swift parsing and documentation checks pass. An

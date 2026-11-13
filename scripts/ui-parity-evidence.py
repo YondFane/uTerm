@@ -264,11 +264,30 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
                           native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
     validate_native_run_forms(native, fixture, head, tested, 'initial')
     native_run_forms = []
+    ordinary_forms = [row for row in tauri['scenes'] if row['scenario'].startswith('run-form-')]
+    assert len(ordinary_forms) == len(native['runPanelFormProof']), 'Incomplete ordinary run-form grid'
+    expected_form_names = {f"run-form-{proof['kind']}-{proof['language']}-{proof['appearance']}-{proof['width']}" for proof in native['runPanelFormProof']}
+    assert {row['scenario'] for row in ordinary_forms} == expected_form_names, 'Missing or duplicate ordinary run-form scenes'
     for proof in native['runPanelFormProof']:
+        name = f"run-form-{proof['kind']}-{proof['language']}-{proof['appearance']}-{proof['width']}"
+        ordinary = next(row for row in ordinary_forms if row['scenario'] == name)
+        actual = ordinary['checks']
+        for key in ['kind', 'language', 'appearance', 'width', 'height', 'fixtureArguments', 'fixtureEnvironment', 'savedArguments']:
+            assert actual.get(key) == proof[key], 'Different actual run-form data: ' + key
+        for key in ['passed', 'actualAdvancedToggle', 'actualTextEditorInput', 'invalidArgumentRetainedWithoutWrite', 'literalArgumentsSaved', 'temporaryEnvironmentRetainedWithoutPersistence', 'actualSaveButtonAndFeedback', 'compactRightAlignedSave', 'canonicalStateAndSessionRetained']:
+            assert actual.get(key) is True, 'Unverified ordinary run-form action: ' + key
+        for key in ['saveWidth', 'saveHeight', 'saveRightInset']:
+            assert type(actual.get(key)) in [int, float] and math.isfinite(actual[key]), 'Invalid ordinary Save geometry'
+        assert 0 < actual['saveWidth'] < 200 and 0 < actual['saveHeight'] <= 30 and 0 <= actual['saveRightInset'] <= 40, 'Stretched ordinary Save button'
+        expected = 'ui-parity-' + name + '.png'
+        assert ordinary['screenshot'] == expected, 'Substituted ordinary run-form original'
         _, digest = image(native_path.parent, proof['screenshot'], minimum_height=proof['height'])
+        _, ordinary_digest = image(tauri_path.parent, expected, minimum_height=proof['height'])
         native_run_forms.append(dict(proof, SHA256=digest))
+        pairs.append(dict(area='run-form', kind=proof['kind'], language=proof['language'], appearance=proof['appearance'], width=proof['width'], height=proof['height'],
+                          native=proof['screenshot'], tauri=expected, nativeSHA256=digest, tauriSHA256=ordinary_digest))
     native_runs = native.get("runPanelScenes", [])
-    ordinary_runs = [row["checks"] for row in tauri["scenes"] if row["scenario"].startswith("run-") and row["scenario"] != "run-panels-complete"]
+    ordinary_runs = [row["checks"] for row in tauri["scenes"] if row["scenario"].startswith("run-") and not row["scenario"].startswith("run-form-") and row["scenario"] != "run-panels-complete"]
     left_runs = validate_run_panels(native_runs, fixture)
     right_runs = validate_run_panels(ordinary_runs, fixture)
     assert native.get("runPanelActualFileCloseAndHideVerified") is True, "Native run-panel close/hide was not executed"
@@ -313,7 +332,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
                   ordinaryRunPanelsCleanup=dict(screenshot=run_cleanup_file.name, SHA256=run_cleanup_digest, checks=run_cleanup["checks"]),
                   nativeRunFormEvidence=native_run_forms,
                   comparisonReady=True, functionalParityAccepted=False,
-                  scope="Workspace, settings, PDF, Quick SSH, GitHub PR and Java/Python docked/expanded/file screenshots. PR uses the isolated simulated CLI, literal form input and actual Cancel; no real GitHub write. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
+                  scope="Workspace, settings, PDF, Quick SSH, GitHub PR and Java/Python advanced-form and docked/expanded/file screenshots. PR uses the isolated simulated CLI, literal form input and actual Cancel; no real GitHub write. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
     (output / "comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     write_viewer(output, result)
     rows = ["# Real-window comparison / 真实窗口对照", "", f"Source head: `{head}`", f"Tested merge: `{tested}`", "",
@@ -325,9 +344,6 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         rows.append(f"| {label} | ![ordinary]({pair['tauri']}) | ![personal]({pair['native']}) |")
     rows.extend(["", "Actual ordinary restart / 普通版实际重启", "", f"![restart]({restart_file.name})"])
     rows.extend(["", "Actual ordinary run-panel cleanup / 普通版运行面板实际清理", "", f"![run-panel cleanup]({run_cleanup_file.name})"])
-    rows.extend(["", "Additional native form controls (unpaired) / 补充原生表单控件（未配对）", ""])
-    for proof in native_run_forms:
-        rows.extend([f"{proof['kind']} / {proof['language']} / {proof['appearance']} / {proof['width']}×{proof['height']}", "", f"![native form]({proof['screenshot']})", ""])
     (output / "comparison.md").write_text("\n".join(rows) + "\n")
     return result
 

@@ -14,10 +14,13 @@ final class JavaRunModel: ObservableObject {
     private(set) var settings: JSONValue
     private(set) var settingsCatalog: JSONValue
     @Published var config: CoreJavaProjectConfig?
-    @Published var arguments: [JavaArgument] = []
-    @Published var environment: [JavaEnvironment] = []
+    @Published var argumentInput = ""
+    @Published var arguments: [JavaArgument] = [] { didSet { if !editingArgumentInput { argumentInput = RunPanelInput.formatArguments(arguments.map(\.text)) } } }
+    @Published var environmentInput = ""
+    @Published var environment: [JavaEnvironment] = [] { didSet { if !editingEnvironmentInput { environmentInput = environment.map { $0.key + "=" + $0.value }.joined(separator: "\n") } } }
     @Published var global: CoreJavaMavenConfig?
-    @Published var vmArguments: [JavaArgument] = []
+    @Published var vmArgumentInput = ""
+    @Published var vmArguments: [JavaArgument] = [] { didSet { if !editingArgumentInput { vmArgumentInput = RunPanelInput.formatArguments(vmArguments.map(\.text)) } } }
     @Published var action = "run"
     @Published var error = ""
     @Published var feedback = ""
@@ -32,6 +35,8 @@ final class JavaRunModel: ObservableObject {
     @Published var search = ""
     @Published var searchSummary = ""
     @Published private(set) var terminal: TerminalSession?
+    private var editingArgumentInput = false
+    private var editingEnvironmentInput = false
     private var revision = ""
     private var polling: Task<Void, Never>?
     private var frames: Task<Void, Never>?
@@ -103,11 +108,30 @@ final class JavaRunModel: ObservableObject {
         defer { busy = false }
         do { try await detectValues(); qaCompletedDetections += 1 } catch { self.error = error.localizedDescription }
     }
+    func editArguments(_ text: String, vm: Bool = false) {
+        guard !busy, !prepared else { return }
+        editingArgumentInput = true; defer { editingArgumentInput = false }
+        if vm {
+            vmArgumentInput = text
+            if let values = try? RunPanelInput.arguments(text) { vmArguments = values.map { JavaArgument(text: $0) } }
+        } else {
+            argumentInput = text
+            if let values = try? RunPanelInput.arguments(text) { arguments = values.map { JavaArgument(text: $0) } }
+        }
+        dirty = true
+    }
+    func editEnvironment(_ text: String) {
+        guard !busy, !prepared else { return }
+        editingEnvironmentInput = true; defer { editingEnvironmentInput = false }
+        environmentInput = text
+        if let values = try? RunPanelInput.environment(text) { environment = values.sorted { $0.key < $1.key }.map { JavaEnvironment(key: $0.key, value: $0.value) } }
+    }
     private func formConfig() throws -> CoreJavaProjectConfig {
         guard var result = config else {
             throw BridgeFailure(code: "JAVA_CONFIG_INVALID", message: localized("Load Java configuration first.", "请先读取 Java 配置。"))
         }
-        result.arguments = arguments.map(\.text); result.vm_arguments = vmArguments.map(\.text)
+        do { result.arguments = try RunPanelInput.arguments(argumentInput); result.vm_arguments = try RunPanelInput.arguments(vmArgumentInput) }
+        catch { throw BridgeFailure(code: "JAVA_ARGUMENTS_INVALID", message: localized("Complete argument quotes and remove unsupported control characters.", "请补全参数引号并移除不支持的控制字符。")) }
         return result
     }
     private func persist() async throws {
@@ -118,14 +142,8 @@ final class JavaRunModel: ObservableObject {
         feedback = localized("Configuration saved.", "配置已保存。")
     }
     private func environmentValues() throws -> [String: JSONValue] {
-        var values: [String: JSONValue] = [:]
-        for row in environment {
-            guard values[row.key] == nil else {
-                throw BridgeFailure(code: "JAVA_ENVIRONMENT_INVALID", message: localized("Environment names must be unique.", "环境变量名称不能重复。"))
-            }
-            values[row.key] = .string(row.value)
-        }
-        return values
+        do { return try RunPanelInput.environment(environmentInput).mapValues { .string($0) } }
+        catch { throw BridgeFailure(code: "JAVA_ENVIRONMENT_INVALID", message: localized("Use one NAME=value per line with unique names; UTERM_ names are reserved.", "每行填写一个 NAME=value，名称不能重复；UTERM_ 前缀为保留名称。")) }
     }
     private func startSaved(environment: [String: JSONValue]) async throws {
         let task = try await bridge.call("java.start", params: .object([
@@ -321,18 +339,6 @@ struct JavaRunView: View {
             model.dirty = true
         })
     }
-    func argumentRows(_ rows: Binding<[JavaArgument]>, title: String) -> some View {
-        VStack(alignment: .leading) {
-            Text(title).font(.caption)
-            ForEach(rows) { row in
-                HStack {
-                    TextField(title, text: row.text).onChange(of: row.wrappedValue.text) { _, _ in model.dirty = true }
-                    Button("−") { let id = row.wrappedValue.id; rows.wrappedValue.removeAll { $0.id == id }; model.dirty = true }
-                }
-            }
-            Button(localized("Add argument", "添加参数")) { rows.wrappedValue.append(JavaArgument(text: "")); model.dirty = true }
-        }
-    }
     var mavenFields: some View {
         GroupBox(localized("Maven configuration", "Maven 配置")) {
             VStack {
@@ -444,26 +450,24 @@ struct JavaRunView: View {
     }
     private var advancedFields: some View {
         VStack(alignment: .leading, spacing: 8) {
-            NativeRunFormField(localized("JDK home (automatic when empty)", "JDK 目录（留空自动检测）")) {
-                HStack(spacing: 5) {
-                    input(localized("JDK home", "JDK 目录"), \.java_home, id: "jdk-home", completions: model.jdks.compactMap { $0["home"].string })
-                    NativeRunAction(title: localized("Choose JDK", "选择 JDK"), id: "native-java-choose-jdk", palette: palette, icon: .folder, iconOnly: true) { model.choosePath("jdk") }.fixedSize()
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                NativeRunFormField(localized("Full JDK home", "完整 JDK 主目录")) {
+                    HStack(spacing: 5) {
+                        input(localized("JDK home", "JDK 目录"), \.java_home, id: "jdk-home", completions: model.jdks.compactMap { $0["home"].string })
+                        NativeRunAction(title: localized("Choose JDK", "选择 JDK"), id: "native-java-choose-jdk", palette: palette, icon: .folder, iconOnly: true) { model.choosePath("jdk") }.fixedSize()
+                    }
                 }
-                HStack {
-                    Button(localized("Register JDK", "注册 JDK")) { Task { await model.registerJDK() } }
-                    Button(localized("Remove registration", "移除注册")) { Task { await model.registerJDK(remove: true) } }
+                NativeRunFormField(localized("JVM arguments", "JVM 参数")) {
+                    NativeRunTextField(text: Binding(get: { model.vmArgumentInput }, set: { model.editArguments($0, vm: true) }), label: localized("JVM arguments", "JVM 参数"), id: "native-java-vm-arguments", palette: palette).frame(height: 28)
+                }
+                NativeRunFormField(localized("Application arguments", "应用参数")) {
+                    NativeRunTextField(text: Binding(get: { model.argumentInput }, set: { model.editArguments($0) }), label: localized("Application arguments", "应用参数"), id: "native-java-arguments", palette: palette).frame(height: 28)
+                }
+                NativeRunFormField(localized("Environment variables", "环境变量")) {
+                    NativeRunTextArea(text: Binding(get: { model.environmentInput }, set: { model.editEnvironment($0) }), label: localized("Environment variables", "环境变量"), id: "native-java-environment", palette: palette).frame(height: 40)
+                    Text(localized("Only for this run; environment values are not saved.", "仅用于本次运行，不保存环境变量。")).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
-            argumentRows($model.vmArguments, title: localized("Literal JVM argument", "字面 JVM 参数"))
-            argumentRows($model.arguments, title: localized("Literal application argument", "字面应用参数"))
-            ForEach($model.environment) { $row in
-                HStack {
-                    TextField(localized("Environment name", "环境变量名称"), text: $row.key)
-                    TextField(localized("Temporary value", "临时值"), text: $row.value)
-                    Button("−") { model.environment.removeAll { $0.id == row.id } }
-                }
-            }
-            Button(localized("Add temporary environment", "添加临时环境变量")) { model.environment.append(JavaEnvironment()) }
             HStack { Toggle(localized("Skip tests", "跳过测试"), isOn: flag(\.skip_tests)); Toggle(localized("Maven offline", "Maven 离线"), isOn: flag(\.offline)) }
             HStack {
                 Spacer()

@@ -238,6 +238,58 @@ struct NativeRunTextField: NSViewRepresentable {
 }
 
 @MainActor
+struct NativeRunTextArea: NSViewRepresentable {
+    @Binding var text: String
+    let label: String
+    let id: String
+    let palette: JSONValue
+    func makeCoordinator() -> Coordinator { Coordinator($text) }
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 180, height: 40))
+        let view = NSTextView(frame: scroll.bounds)
+        view.isRichText = false; view.importsGraphics = false; view.allowsUndo = true
+        view.isAutomaticQuoteSubstitutionEnabled = false; view.isAutomaticDashSubstitutionEnabled = false
+        view.isAutomaticTextReplacementEnabled = false; view.isAutomaticSpellingCorrectionEnabled = false
+        view.isContinuousSpellCheckingEnabled = false
+        view.font = .systemFont(ofSize: 12); view.textContainerInset = NSSize(width: 7, height: 4)
+        view.isHorizontallyResizable = false; view.isVerticallyResizable = true
+        view.minSize = .zero; view.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        view.autoresizingMask = [.width]; view.textContainer?.widthTracksTextView = true
+        view.textContainer?.containerSize = NSSize(width: 180, height: .greatestFiniteMagnitude)
+        view.textContainer?.lineFragmentPadding = 0
+        view.identifier = .init(id); view.setAccessibilityIdentifier(id); view.setAccessibilityLabel(label)
+        view.delegate = context.coordinator
+        scroll.documentView = view; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true
+        scroll.borderType = .noBorder; scroll.wantsLayer = true; scroll.layer?.cornerRadius = 5; scroll.layer?.borderWidth = 1
+        return scroll
+    }
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let view = scroll.documentView as? NSTextView else { return }
+        context.coordinator.value = $text
+        view.isEditable = context.environment.isEnabled
+        let foreground = NativePreferences.color(palette["text"], fallback: .labelColor)
+        let background = NativePreferences.color(palette["surface"], fallback: .textBackgroundColor)
+        view.textColor = foreground; view.insertionPointColor = foreground; view.backgroundColor = background
+        scroll.backgroundColor = background; scroll.layer?.borderColor = NativePreferences.color(palette["border"], fallback: .separatorColor).cgColor
+        if !view.hasMarkedText(), view.string != text {
+            let selection = view.selectedRange(); view.string = text
+            view.setSelectedRange(NSRange(location: min(selection.location, (text as NSString).length), length: 0))
+        }
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
+        CGSize(width: max(0, proposal.width ?? 180), height: 40)
+    }
+    @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
+        var value: Binding<String>
+        init(_ value: Binding<String>) { self.value = value }
+        func textDidChange(_ notification: Notification) {
+            guard let view = notification.object as? NSTextView, view.isEditable else { return }
+            value.wrappedValue = view.string
+        }
+    }
+}
+
+@MainActor
 struct NativeRunTaskState: View {
     let running: Bool
     let busy: Bool

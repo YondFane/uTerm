@@ -103,6 +103,14 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
   };
   githubScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
   quickScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
+  runFormInput: {
+    arguments: string;
+    argumentValues: string[];
+    vmArguments: string;
+    vmArgumentValues: string[];
+    environment: string;
+    invalidArguments: string;
+  };
   runPanelKinds: string[];
   runPanelScenes: {
     language: "en" | "zh-Hans";
@@ -1281,6 +1289,7 @@ async function runUiParity() {
         ((await observeCore("snapshot.read")) as unknown as CoreSnapshot).document.workspace,
       ),
     scene,
+    pdfContext.project,
   );
   await invoke("qa_request_exit");
 }

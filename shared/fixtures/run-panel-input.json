@@ -1,0 +1,104 @@
+{
+  "validArguments": [
+    {
+      "name": "literal shell syntax and Windows path",
+      "text": "'one value' C:\\work\\demo & echo %PATH% $(literal)",
+      "expected": ["one value", "C:\\work\\demo", "&", "echo", "%PATH%", "$(literal)"]
+    },
+    {
+      "name": "empty and adjacent quoted values",
+      "text": "a\"\"b '' \"\"",
+      "expected": ["ab", "", ""]
+    },
+    {
+      "name": "quoted escapes",
+      "text": "\"a\\\"b\" \"c\\\\d\"",
+      "expected": ["a\"b", "c\\d"]
+    },
+    {
+      "name": "Unicode separators and literal NEL",
+      "text": "\"中文 é 👩‍💻\" ab x y",
+      "expected": ["中文 é 👩‍💻", "ab", "x", "y"]
+    },
+    {
+      "name": "quoted literal controls",
+      "text": "\"tab\tline\nreturn\rvalue\"",
+      "expected": ["tab\tline\nreturn\rvalue"]
+    },
+    {
+      "name": "blank ECMA separators",
+      "text": " \t\r\n﻿　",
+      "expected": []
+    },
+    {
+      "name": "outside quote backslashes stay literal",
+      "text": "C:\\\\server\\share trailing\\",
+      "expected": ["C:\\\\server\\share", "trailing\\"]
+    }
+  ],
+  "invalidArguments": ["'unclosed", "\"unclosed", "bad\u0000value", "\"tail\\"],
+  "roundTrips": [
+    [
+      "",
+      "two words",
+      "C:\\work\\demo",
+      "literal\"quote",
+      "'",
+      "\\",
+      "中文 👩‍💻 é",
+      "line\nbreak\rreturn\ttab",
+      "%PATH%",
+      "$(literal)",
+      "&",
+      "xy",
+      "﻿"
+    ]
+  ],
+  "validEnvironment": [
+    {
+      "name": "literal values and empty string",
+      "text": "TOKEN=value=with=equals\nNAME=中文 & %PATH%\nEMPTY=",
+      "expected": {
+        "TOKEN": "value=with=equals",
+        "NAME": "中文 & %PATH%",
+        "EMPTY": ""
+      }
+    },
+    {
+      "name": "CRLF and blank separators",
+      "text": "A=first\r\n \t﻿\r\nB=  keep spaces  ",
+      "expected": {
+        "A": "first",
+        "B": "  keep spaces  "
+      }
+    },
+    {
+      "name": "prototype names stay data",
+      "text": "__proto__=literal\nconstructor=value",
+      "expected": {
+        "__proto__": "literal",
+        "constructor": "value"
+      }
+    },
+    {
+      "name": "NEL in value stays literal",
+      "text": "A=xy",
+      "expected": {
+        "A": "xy"
+      }
+    }
+  ],
+  "invalidEnvironment": [
+    "TOKEN=a\ntoken=b",
+    "UTERM_DESKTOP_HOST=elsewhere",
+    "uTerm_Custom=value",
+    "NO_EQUALS",
+    "1INVALID=value",
+    " BAD=value",
+    "中文=value",
+    "A=b\rc",
+    "A=b\r",
+    "A=b c",
+    "A=b c"
+  ]
+}

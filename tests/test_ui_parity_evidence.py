@@ -74,6 +74,10 @@ class ParityEvidenceTests(unittest.TestCase):
             image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", row["width"], row["height"]) + bytes(1100)
             (self.native / row["screenshot"]).write_bytes(image)
             self.n["captures"].append(row["screenshot"])
+            name = f"run-form-{row['kind']}-{row['language']}-{row['appearance']}-{row['width']}"
+            tauri = f"ui-parity-{name}.png"
+            (self.tauri / tauri).write_bytes(image)
+            self.t['scenes'].append(dict(scenario=name, screenshot=tauri, checks=dict(row)))
         cleanup = "ui-parity-run-panels-complete.png"
         (self.tauri / cleanup).write_bytes(image)
         self.t["scenes"].append(dict(scenario="run-panels-complete", screenshot=cleanup, checks=dict(passed=True, actualFileCloseAndHideVerified=True, terminalGenerationRetained=True, canonicalWorkspaceRetained=True)))
@@ -189,13 +193,29 @@ class ParityEvidenceTests(unittest.TestCase):
         result = self.run_compare()
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
-        self.assertEqual(len(result["pairs"]), 50)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 106)
+        self.assertEqual(len(result["pairs"]), 54)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 110)
         self.assertEqual(len(result['nativeRunFormEvidence']), 4)
         for proof in result['nativeRunFormEvidence']:
             original = (self.native / proof['screenshot']).read_bytes()
             self.assertEqual((self.root / 'comparison' / proof['screenshot']).read_bytes(), original)
             self.assertEqual(proof['SHA256'], hashlib.sha256(original).hexdigest())
+
+    def test_run_forms_require_both_originals_and_matching_actual_literal_operations(self):
+        baseline = copy.deepcopy(self.t)
+        form = next(row for row in self.t['scenes'] if row['scenario'].startswith('run-form-'))
+        for key, value in [('actualTextEditorInput', False), ('invalidArgumentRetainedWithoutWrite', False), ('literalArgumentsSaved', False), ('temporaryEnvironmentRetainedWithoutPersistence', False), ('fixtureArguments', 'changed'), ('savedArguments', []), ('saveHeight', 80)]:
+            self.t = copy.deepcopy(baseline)
+            next(row for row in self.t['scenes'] if row['scenario'] == form['scenario'])['checks'][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): self.run_compare()
+        self.t = copy.deepcopy(baseline)
+        self.t['scenes'] = [row for row in self.t['scenes'] if row['scenario'] != form['scenario']]
+        with self.assertRaises(AssertionError): self.run_compare()
+        self.t = copy.deepcopy(baseline); self.t['scenes'].append(copy.deepcopy(form))
+        with self.assertRaises(AssertionError): self.run_compare()
+        self.t = baseline
+        (self.tauri / form['screenshot']).unlink()
+        with self.assertRaises(FileNotFoundError): self.run_compare()
 
     def test_quick_ssh_requires_current_main_window_images_and_preserved_data(self):
         original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
