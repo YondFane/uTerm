@@ -688,7 +688,7 @@ GPU 截图仍为空白。输入文件副作用与已解析文字不代表 GPU �
 Tauri 并存 QA 现保留旧所有者的就绪确认，等待只读观察者启动并完成渲染截图；核对相同会话 ID、generation 和宿主 PID 后，再同时放行旧所有者的断言与观察者的真实接管。现有 30 秒界面断言、只读输入拒绝及正常退出／重新接管检查不变。`input-control-handoff.json` 记录放行时序、身份和完成状态。源码
 `3e609640ba640a9ae665adb80ca4dcfc0c063f03`／实际测试 merge
 `266c379eb9c5b66070db1921a3f7592a7ea858d2`
-的 Mac 所有者就绪与观察者只读报告相隔 32 秒，观察者截图尚未完成确认时所有者已超时。[失败报告与原始窗口14030727283](https://github.com/YondFane/uTerm/actions/runs/43408460674/artifacts/14030727283)保留。Linux 已通过 14 项交接／输入／生命周期回归，覆盖慢启动、会话／generation／宿主不符、重复及重放场景；仍须当前源码真实 Mac 执行。
+的 Mac 所有者就绪与观察者只读报告相隔 32 秒，观察者截图尚未完成确认时所有者已超时。[失败报告与原始窗口14030727283](https://github.com/YondFane/uTerm/actions/runs/43408460674/artifacts/14030727283)保留。Linux 已通过 14 项交接／输入／生命周期回归，覆盖慢启动、会话／generation／宿主不符、重复及重放场景。慢启动回归模拟观测到的 32 秒截图间隔，并未执行 Mac 应用；仍须当前源码真实 Mac 执行。
 
 Tauri 并存 QA 保留原始 GPU 截图，再通过 `WEBGL_lose_context`
 令实际 WebGL 上下文丢失，要求 xterm 现有 DOM 回退显示相同 Shell 标记。两个应用进程在恢复、接管和输出期间保持同一会话／generation。

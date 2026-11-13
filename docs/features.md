@@ -1382,8 +1382,9 @@ UI assertions, passive-input rejection and ordinary-exit/reacquisition checks re
 seconds apart; the owner timed out before the peer completed its capture acknowledgement. The
 [failure report and original windows14030727283](https://github.com/YondFane/uTerm/actions/runs/43408460674/artifacts/14030727283)
 are retained. Linux passes 14 handoff/input/lifecycle regressions, including delayed peer startup,
-cross-session/generation/host rejection, duplicate and replayed scenes. Actual current-source Mac
-execution is still required.
+cross-session/generation/host rejection, duplicate and replayed scenes. The delayed-start regression
+simulates the observed 32-second capture interval; it does not execute a Mac application. Actual
+current-source Mac execution is still required.
 
 Tauri ownership QA retains baseline GPU captures before explicitly losing the actual WebGL context
 through `WEBGL_lose_context`, then requires xterm's existing DOM fallback to display the same shell

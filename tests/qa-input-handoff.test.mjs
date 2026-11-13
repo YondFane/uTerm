@@ -16,7 +16,9 @@ test("slow peer startup and capture do not consume the owner's takeover assertio
   acknowledge(ready.acknowledgements);
   now = 26000;
   assert.equal(handoff.observe("input-viewer-gpu-readonly", "gpu.ack", owner), null);
-  now = 32000; // Observed Mac startup/renderer/capture interval exceeds the unchanged 30s assertion.
+  // The observed startup/renderer/capture interval exceeds the unchanged 30s assertion.
+  // 实际观测的启动／渲染／截图间隔超过保持不变的 30 秒断言时限。
+  now = 32000;
   assert.equal(ownerAssertionStarted, undefined);
   const peer = handoff.observe("input-viewer-readonly", "viewer.ack", { ...owner });
   assert.deepEqual(peer.acknowledgements, ["owner.ack", "viewer.ack"]);
