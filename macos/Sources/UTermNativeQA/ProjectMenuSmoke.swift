@@ -23,6 +23,7 @@ enum ProjectMenuSmoke {
             generations[id] = generation; views[id] = ObjectIdentifier(terminal.view)
         }
         guard ids.count >= 2 else { throw BridgeFailure(code: "PROJECT_MENU", message: "Project menu fixture needs two real terminals") }
+        report["nativeProjectMenuStage"] = "session-drag"
         let dragProof = try await SessionDragSimulation.run(model: model, table: table, coordinator: coordinator, ids: ids)
         var groupedThroughMenu = false
         if originalLayout.array.isEmpty {
@@ -35,6 +36,7 @@ enum ProjectMenuSmoke {
         }
         let layout = model.workspace["projects"].array.first { $0["id"].string == projectID }?["splitGroups"].array ?? []
         let targetID = UUID().uuidString
+        report["nativeProjectMenuStage"] = "create-target-workspace"
         guard await model.mutate("workspace.create", ["id": .string(targetID), "name": .string("Menu move QA"), "select": .bool(false)]) else { throw BridgeFailure(code: "PROJECT_MENU", message: model.error) }
         model.sidebarSection = "all"; model.sidebarVisible = true
         @MainActor func projectMenu() throws -> NSMenu {
@@ -47,8 +49,10 @@ enum ProjectMenuSmoke {
             return (submenu, index)
         }
         @MainActor func dispatch(_ menu: NSMenu, index: Int, label: String, accepted: @escaping @MainActor () -> Bool) async throws {
+            report["nativeProjectMenuStage"] = label + ":baseline"
             let before = try await bridge.snapshot()
             for attempt in 0..<3 {
+                report["nativeProjectMenuStage"] = label + ":action"
                 model.error = ""
                 menu.performActionForItem(at: index)
                 do {
@@ -75,10 +79,28 @@ enum ProjectMenuSmoke {
         let pinned = initial["pinned"].bool == true
         let (oldMoveMenu, oldMoveIndex) = try moveItem(staleMove, target: targetID)
         let peerInterval = JSONValue.number(oldInterval.number == 31 ? 32 : 31)
+        report["nativeProjectMenuStage"] = "peer-open"
         let peer = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
         do {
+            report["nativeProjectMenuStage"] = "peer-baseline"
             let snapshot = try await peer.snapshot()
-            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(snapshot.revision), "patch": .object(["breakInterval": peerInterval])]))
+            for attempt in 1...3 {
+                report["nativeProjectMenuStage"] = "peer-write"
+                do {
+                    _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(snapshot.revision), "patch": .object(["breakInterval": peerInterval])]))
+                    report["nativeProjectMenuPeerWriteAttempts"] = attempt
+                    break
+                } catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" {
+                    report["nativeProjectMenuPeerWriteAttempts"] = attempt
+                    let unchanged = try await peer.snapshot()
+                    guard attempt < 3, unchanged.revision == snapshot.revision,
+                          unchanged.document.workspace == snapshot.document.workspace,
+                          unchanged.document.settings == snapshot.document.settings else { throw failure }
+                    // Repeat only the rejected QA peer fixture, with its exact unchanged original revision.
+                    // 仅在原修订及完整数据未变时，明确重试已拒绝的 QA 外部样例写入。
+                    try await Task.sleep(for: .milliseconds(100))
+                }
+            }
             await peer.close()
         } catch { await peer.close(); throw error }
         await model.reload(); model.error = ""
@@ -93,6 +115,7 @@ enum ProjectMenuSmoke {
         guard await model.mutate("workspace.switch", ["id": .string(targetID)]) else { throw BridgeFailure(code: "PROJECT_MENU", message: model.error) }
         await model.selectSession(originalSession)
         try await TerminalSmoke.wait("Moved project retains native terminal views") { ids.allSatisfy { model.terminals[$0]?.generation == generations[$0] && model.terminals[$0].map { ObjectIdentifier($0.view) } == views[$0] } }
+        report["nativeProjectMenuStage"] = "reopen-layout"
         let reopened = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
         let saved = try await reopened.snapshot(); await reopened.close()
         guard let project = saved.document.workspace["projects"].array.first(where: { $0["id"].string == projectID }), project["workspaceId"].string == targetID, project["splitGroups"].array == layout else { throw BridgeFailure(code: "PROJECT_MENU_PERSIST", message: "Reopened snapshot lost project ownership or split layout") }
@@ -123,5 +146,6 @@ enum ProjectMenuSmoke {
         proof["testedMergeSHA"] = report["testedMergeSHA"] as? String ?? report["sourceSHA"] as? String ?? ""
         proof["platform"] = "macOS"; proof["architecture"] = report["architecture"] as? String ?? ""; proof["system"] = report["system"] as? String ?? ""
         report["nativeProjectMenuRevisionAndWorkspaceMove"] = proof
+        report["nativeProjectMenuStage"] = "completed"
     }
 }

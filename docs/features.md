@@ -83,6 +83,20 @@ Linux checks verify release bytes, styles, delayed mounting, load failures and r
 Chromium loads all five faces with an M advance of 9.9609375px at 17px. Latest macOS font
 registration, window rendering and paired metrics still require CI.
 
+Workspace reports read actual renderer columns/rows, viewport bounds, cell sizes and backing scale
+from SwiftTerm and xterm. They observe each renderer's proposed dimensions and require an unchanged,
+fitted grid for at least 250 ms before capture and the same metrics after capture. The collectors do
+not force a fit. Viewport measurement covers the available terminal container, while screen and
+native optimal sizes remain separate diagnostics. Performance polling does not measure layout unless
+screenshot QA explicitly requests it.
+
+A source `c78fa57` ordinary capture recorded a 423px grid in a 531.8px container; those earlier
+measurements cannot establish settled rendering. The paired report now rejects unfitted grids as
+well as missing/invalid measurements and retains both grids for diagnosis. Matching font glyph
+widths alone does not establish matching wrapping or full visual acceptance. Linux passes 34
+paired-evidence/run-discovery policies, type/production build and formatting/documentation checks.
+Fresh same-source Mac captures of this wait condition remain required.
+
 Regular toolbar/sidebar vectors and dimensions use `shared/contracts/chrome-ui-v1.json`. React reads
 that source and Swift renders the generated paths through CoreGraphics. The native candidate uses
 the shared 44-point toolbar and interface palette; Agent brands and special close controls remain
@@ -169,6 +183,48 @@ list inset. Row padding and larger interface text still expand rows.
 Native selection uses the same rounded accent fill/border, and project folder icons reveal
 disclosure arrows on hover. The toolbar shows pane zoom only for split layouts.
 
+Native workspace/project headings use the configured interface font; Worktree and SSH headings
+include the selected resource name. Toolbar heading/actions use the ordinary client's spacing,
+30/36-point action targets and narrow-window trailing inset. The branch picker uses an 11-point
+monospaced label, a 5-point caption gap and compact bordered control; non-Git projects omit it.
+Quick SSH uses a flat action and a 36-point host-search field, with the same list inset. Cascadia
+Code semibold uses its bundled exact face.
+
+Running Java/Python projects and Worktrees use their language icon in the sidebar, matched to the
+exact task root. Task refreshes update these rows even when the workspace snapshot is unchanged.
+Build/history tasks do not light the icon, stopping restores the folder/branch, and Python takes
+precedence when both languages share a root. Toolbar and sidebar use the same running colors.
+Projects, Worktrees and saved SSH rows with open sessions retain the ordinary green activity ring,
+including while collapsed; a run task alone does not create a session ring.
+
+**Activity-indicator validation**
+
+At source `6de2397be9a85862a95684149d387b282238b33f`, tested merge
+`a012a3e6f3762ca679ed018e807980cd484b22fe`, the
+[ARM native matrix](https://github.com/YondFane/uTerm/actions/runs/43484429586/artifacts/14068028024)
+passes, but the reviewed `native-java-launch-list-workspace.png` still shows a folder during a real
+run. The
+[Intel Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43484429722/artifacts/14068232932)
+shows the corrected narrow Quick SSH wrapping and visible terminal marker, but lacks the active
+project ring. Its initial smoke passes; replacement stops at `WRITER_BUSY` during sidebar checks.
+The report did not identify the exact call. New QA records project-menu stages and permits at most
+three explicit rejected peer-fixture writes only while the original revision and full data are
+unchanged. Application writes retain their existing behavior. New actual-image/run-stop and
+collapsed-ring assertions require fresh Mac evidence; these earlier passes do not accept the fix.
+Linux Swift6.1.2 passes four exact-copy root-matching regressions, including Windows/UNC forms, task
+filtering and language precedence. Eighty-five evidence-policy checks, both existing run
+summary/navigation tests, type/production build, formatting and bilingual documentation checks pass.
+Linux parses the changed AppKit sources but does not execute them.
+
+The main window retains AppKit's actual close/minimize/zoom buttons and aligns their container to
+the ordinary client's 16/24 inset, including after resize or leaving fullscreen. Workspace capture
+records their actual bounds and the mounted branch control's font, size and caption spacing. The
+paired collector rejects missing controls, a wrong branch/font/gap or mismatched control heights.
+Linux passes 18 personal-package and 24 paired-evidence policies, plus type/production build, i18n
+and generated-contract checks. Corrected native rendering, focus/hover and same-source paired
+acceptance remain pending Mac CI; earlier originals identify the differences but do not accept these
+changes.
+
 The native toolbar includes the selected repository's branch picker. Left click or Arrow Down opens
 local and remote branches; right click or Shift-F10 opens Push, Pull, Fetch and Refresh. Mutations
 capture the project, working directory and expected branch, retain editor-save and conflict checks,
@@ -244,6 +300,16 @@ uses name, host and username, ignoring case, and retains selection, sessions and
 search editor. Native Quick SSH displays the same modal form and parser over the main workspace.
 Full workbench integration and visual alignment remain pending.
 
+At source `047ff1a7`, tested merge `885b4efb`, Intel settings verifies actual Agent search, empty
+results and Escape, inline editing, usage/quit cancellation, shortcuts, export/default Agent and
+palette-key dispatch. The suite subsequently fails with `WRITER_BUSY` after inactive workspace
+rename;
+[artifact13957846028](https://github.com/YondFane/uTerm/actions/runs/43243047041/artifacts/13957846028)
+retains the partial report. QA now records the peer-rename phase and bounds its peer fixture retry
+to three attempts, only after the original revision and complete workspace/settings remain
+unchanged. The actual stale application rename still runs once and must reject with its draft
+retained. No application write retry is introduced; full current-source Mac acceptance is pending.
+
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
 The separate Agent QA window fits within the visible desktop after each enlarged capture size,
@@ -254,12 +320,233 @@ capture because 37,557 Dock pixels intersect the enlarged window; the full
 retains this failure. Swift syntax and script parsing pass on Linux. New Mac screenshots and the
 remaining notification checks are pending; the alpha gate is unchanged.
 
-Java/Maven, Python and SSH/SFTP open as native tabs in the main workspace. Switching to the terminal
-and back retains the same native view, run model, transfers and drafts; closing uses the existing
-save/transfer/run guards. Database and Redis use workspace document tabs. Closing a workbench tab
-hides its retained client; reopening restores the same WebKit document, connection handles and
-drafts. Project changes scope visible panels without retargeting an in-flight request. New terminal
-actions return to the terminal, and closing a native panel restores terminal focus.
+Native run forms use three equal columns in wide windows and two columns at window widths up to
+900px; Python interpreters fill their own row up to 850px. They provide separate **Run
+configuration** and **Advanced settings** disclosure controls. Java keeps module, launch mode and
+JDK together, followed by the main class and Maven scope/profiles. Python keeps interpreter, launch
+mode and startup target together. Interpreter and target fields retain detected completions and file
+pickers. **Save configuration** stays inside the advanced area on its own right-aligned row at 28px
+height. The ordinary Java panel also keeps Save configuration on a separate right-aligned row below
+its checkboxes, using the same compact sizing as Python. Java's toolbar separates the build goal,
+Build and Run; task controls wrap inside narrow panels. **More actions** retains explicit
+saved-configuration reload, rerun and force stop. Search, copy and the adjacent Auto follow checkbox
+share the log toolbar. Stop and Force stop target the active task even while an older task log is
+selected. The real Java/Python task suites additionally select completed history before stopping a
+separate active task and require that history selection to remain unchanged.
+
+For an unconfigured Python project, the native draft follows the ordinary client's detection
+priority: one framework entry, otherwise one main.py, otherwise one unambiguous candidate, plus the
+first existing interpreter. A saved configuration remains unchanged. Changing launch mode clears an
+incompatible target unless exactly one matching candidate exists, and Flask defaults to port 5000.
+Detection and mode selection only change the draft. Running web tasks expose their numeric HTTP
+service address; this does not assert service readiness. The panel does not install Python,
+dependencies or environments.
+
+Expanded panels use an 80px window-relative top inset, counting the 44px titlebar once; compact
+windows use 44px. Native run headers follow the ordinary Mac header's measured 46px height. The
+native branch control uses the ordinary Mac control's measured 23px height.
+
+The fitted configuration scroll area keeps its last valid content height while its native hosting
+view is detached. On remount it measures attached intrinsic content, so hiding the Java panel behind
+Manage tools does not collapse the configuration to zero. Both architectures at head `5b768fb` /
+tested merge `896f6d8` compile and pass bridge tests, then fail actual form-layout acceptance with
+an empty configuration area. The
+[ARM artifact14012559826](https://github.com/YondFane/uTerm/actions/runs/43368364086/artifacts/14012559826)
+and
+[Intel artifact14013367625](https://github.com/YondFane/uTerm/actions/runs/43368364086/artifacts/14013367625)
+retain the reports and real failure images. The field-layout assertion remains required; new
+failures record actual frames and attachment state. Current-source Mac rendering remains pending.
+
+The selected JDK home stays on one line with middle truncation and a full-path tooltip; the editable
+home and saved value remain unchanged. Form evidence measures the actual primary-grid bounds and
+window backing scale. Both Swift and Python require each column's left edge, width and right edge to
+stay within that container's physical-pixel floor/ceiling, with the same row order and wrapping.
+This accepts integer-pixel distribution without accepting stretched, overlapping or clipped fields.
+Source `bc7f747cd344fadf6fb5c4406c6a41df371b576e` / tested merge
+`f86245fe9e43918a0e1c609547e03ead7111b8b1` restores the visible form but fails the old equal-width
+assertion on measured 164/163/164-point columns; the JDK path also wraps to several lines. Its
+[actual failure14019779207](https://github.com/YondFane/uTerm/actions/runs/43385658859/artifacts/14019779207)
+retains `personal-initial.json` with field rectangles and `personal-initial-failure.png`. Sixteen
+Linux Swift Foundation tests cover the observed grid, Retina rounding, narrow Python rows and
+rejection of wrong columns, shifted edges and overlap. New same-source Mac operation and image
+acceptance remain required.
+
+**Run-form validation**
+
+Both real-client collectors operate advanced-form controls in Java/Python, English/dark wide and
+Chinese/light narrow windows. They enter the same quoted arguments, empty argument, Windows path,
+Unicode and literal shell symbols through actual editors. An incomplete quote must retain its input
+and leave the saved project/revision unchanged. A valid Save retains the original quote/spacing text
+and must preserve exact argument values and retain temporary environment text without persisting it.
+Native JVM/application arguments use single-line editors for Java; Python arguments and both
+temporary-environment fields use multiline editors. JDK home and its native chooser remain
+available.
+
+The native collector additionally measures wide/narrow field rows and the 28px right-aligned Save
+button, requires feedback, collapses/restores configuration and checks retained sessions plus
+canonical workspace/settings. Four required advanced-form pairs use
+`personal-{phase}-run-form-{kind}-{language}-{appearance}-{width}.png` and
+`ui-parity-run-form-{kind}-{language}-{appearance}-{width}.png`. Missing counterparts, unexecuted
+edits, altered fixture values, stale source/merge metadata, invalid geometry or missing originals
+reject pairing. These are required collectors, not a claim that the new Mac scenes have passed. Each
+save check clears its previous test feedback and waits for the new callback; the ordinary collector
+waits for the actual Save control to become enabled after dispatch.
+
+After integrating the verified release baseline, Linux passes 20 Swift Foundation tests (16
+layout/input/default cases and four operation-feedback cases), 12 Node checks and 83 Python
+package/pairing/artifact/workbench/interaction policies, plus type checking, production build,
+formatting and documentation checks. The full Node suite requires `JAVA_HOME` to identify a full JDK
+including `javac` and remains part of current-source CI.
+
+Linux Swift 6.1.2 Foundation tests cover layout, Python detection/mode defaults and byte-exact
+shared argument/environment fixtures. Node runs the same parser fixtures for both ordinary language
+panels, including CRLF, empty strings, Windows backslashes, Unicode whitespace and reserved
+environment names. New AppKit rendering, input/save operations and source-bound screenshots still
+require macOS CI; Linux does not accept native windows.
+
+The task-log QA waits for the actual restored window, terminal dimensions and output ACKs to remain
+stable for 250ms before pausing and after receiving further output. It retains the exact anchor and
+follow-mode checks and records the before/after viewport, top line, frame counts and replay resets.
+Source `3a621c1441d9882c8a92c74fff9696560aa451bc` / tested merge
+`ec5e9fbe11094cbaa28679feda1b043c4ec6fc59` still fails Java's paused anchor after docking/remount;
+the
+[actual report14054981144](https://github.com/YondFane/uTerm/actions/runs/43454656732/artifacts/14054981144)
+is retained. At source `5b166d511ed56be719012a3a9bb7894de91878d8` / tested merge
+`e18cb7dc08a2dbefb5b11cef2506752823dc772b`, actual Java/Python suites pass on both
+[ARM](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14059446877) and
+[Intel](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14061505895).
+
+The reviewed `personal-initial-run-form-java-zh-Hans-light-640.png` in
+[Personal artifact 14059049858](https://github.com/YondFane/uTerm/actions/runs/43464826845/artifacts/14059049858)
+at that source shows a partly clipped Save button despite valid button-size metrics. At source
+`310ffbd33ed2b615a0b42191010cabed18ac481d` / tested merge
+`ae2187c3ef0938e0041c4902b43d7d8621460933`, the reviewed native Java button is fully visible in
+[paired artifact 14064655571](https://github.com/YondFane/uTerm/actions/runs/43471895657/artifacts/14064655571),
+while the ordinary Java button in the same 640px scene is still clipped. Both collectors now finish
+editing, focus/reveal the actual action before clicking and capturing, and record visible
+width/height through clipping ancestors. Package, Node and pair validators reject partial clipping,
+missing measurements and nonfinite values. Linux passes 84 evidence policies, 16 focused Node checks
+including scroll-axis/border/transform/window clipping, and four existing sidebar regressions. The
+ordinary capture correction still needs fresh Mac execution.
+
+Source `b8cee0a690eef025df2a2a055117829c90ef753a` / tested merge
+`4c808d19340648ac31be44f2c726640c7083e2a5` passes actual ARM activity rings, project menus and
+settings scenes, then fails its first workspace capture: the formerly rendered Unicode marker is
+absent from the full buffer. The
+[actual failure14069114979](https://github.com/YondFane/uTerm/actions/runs/43491526926/artifacts/14069114979)
+records 25 equal received/rendered/ACK frames, one replay reset, a 51×30 host/local grid and no
+connection error; the original shows the activity ring and missing output. The exact failing event
+is not established. No parser loss was reproduced in the isolated model. Native workspace capture
+requires the marker inside the current renderer viewport and equal received/rendered/ACK counts,
+with the actual grid and frame state stable for 250ms. Reports include visible text, host grid and
+failure diagnostics; no output is cleared or viewport forced to manufacture a match. Three
+exact-copy SwiftTerm parser tests pass on Linux Swift6.1.2 at the locked dependency revision,
+including Unicode preservation across repeated resizes and host-sized reset replay. These model
+tests do not replace new Mac window validation. Isolated Personal fixtures now retain at most 512
+frame/layout events with a 1MiB serialized-event budget and publish a source-bound trace on this
+failure. The trace includes raw output bytes, string sequence, dimensions, settings and parsed text;
+regular applications do not collect it. No output/viewport rewrite or relaxed assertion masks the
+loss.
+
+The
+[ARM performance build artifact](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)
+at head `f3e5ba8`, tested merge `3f9e9a7`, records an AppKit compilation failure: the form reused a
+file-private measurement view. The candidate makes that shared view module-internal. That failed
+build produced no accepted new form screenshots; corrected Mac compilation and runtime checks remain
+required. The ARM Personal Release build at head `3021b08`, tested merge `ab0eb2c`, also fails: the
+text editor size has ambiguous CGFloat/Double limits, and a mixed settings-diagnostic expression
+exceeds the compiler type-check budget. Its
+[artifact14010274134](https://github.com/YondFane/uTerm/actions/runs/43367028623/artifacts/14010274134)
+retains the failed build. Explicit `CGFloat` limits and separately typed diagnostic entries address
+those errors; actual Mac compilation is still required.
+
+Hiding or closing a docked Java/Python panel saves its loaded configuration, including an unchanged
+form. Busy operations, conflicts and storage errors keep the panel and draft open. Reload saved
+configuration explicitly after another window changes it, then try again. Standalone windows retain
+their Save/Discard/Cancel choice. Closing a run panel detaches its view and preserves its task.
+
+Java/Maven and Python dock below the main terminal or file, using shared default heights of 380px
+and 470px. Drag the separator or use Up/Down in 24px steps, Home/End for its bounds, and
+double-click for the default height. Expand/Restore retains the docked height and the same native
+view, run model and task log. Window shrinking clamps the panel and reserves 88px for the main area,
+including the native document-tab strip; expansion uses the same top inset as the ordinary client.
+Docked configuration and log areas can shrink within the panel minimum; standalone logs retain their
+160px minimum. Opening or closing a file retains the run panel; connection workbenches and SSH use
+their existing main-area selection. SSH/SFTP remains a native workspace tab. Switching to the
+terminal and back retains the same native view, run model, transfers and drafts; closing uses the
+existing save/transfer/run guards. Database and Redis use workspace document tabs. Closing a
+workbench tab hides its retained client; reopening restores the same WebKit document, connection
+handles and drafts. Project changes scope visible panels without retargeting an in-flight request.
+New terminal actions return to the terminal, and closing a native panel restores terminal focus.
+
+At source `047ff1a7`, tested merge `885b4efb`, the real Intel Java/Python suites fail their Home-key
+minimum-height check. The corrected flexible docked log and tab-inclusive geometry retain that
+assertion; a failed wait captures the original window and records actual host/content bounds.
+[Artifact13958940224](https://github.com/YondFane/uTerm/actions/runs/43243047041/artifacts/13958940224)
+retains the failed reports. Fresh Mac interaction and matched ordinary-client images remain
+required.
+
+At source `d0c5ebb`, tested merge `b93af668`, ARM64 SDK and editor recovery reports pass, including
+recovery in the main workspace and actual tab close preserving the readonly draft.
+[Artifact13976370340](https://github.com/YondFane/uTerm/actions/runs/43282517996/artifacts/13976370340)
+retains the originals and logs. Workspace integration fails when closing the clean file; its
+inspected original still shows an empty editor region. QA now waits for the actual fixture text and
+enabled Reload control before capture or close, and requires a clean file. This is a readiness
+correction, not evidence that the failed close behavior has passed. The subsequent Hide-conflict
+checks were not reached; new Mac execution remains required.
+
+The native workspace smoke adds actual Hide-button checks for both Java and Python: a peer Core
+write makes a clean configuration stale; hiding must fail and retain the panel. A separately
+injected unsaved draft then fails against the same revision without overwriting the peer. An
+explicit QA fixture reload followed by another edit and actual Hide must persist the exact draft.
+Reports label the injected draft, retain both conflict originals and require 20 workspace-smoke
+PNGs; the 54-pair Personal/ordinary grid is separate. Linux passes 56 existing
+evidence/package/matrix policy checks and two existing run-panel frontend regressions, plus type,
+format and document checks; Swift and shell/Python parsing pass. These checks do not compile AppKit.
+New Mac execution and original-image inspection remain required.
+
+Personal workspace collection derives its exact expected paths, visible file checks and Git-state
+map from every key in the shared fixture. Source `7356a7c`, tested merge `b12d5c56`, passes 24
+actual settings captures but then fails before its first workspace image because the collector still
+expects two files while the expanded POM/Python fixture has four. The inspected original and
+[artifact13968962533](https://github.com/YondFane/uTerm/actions/runs/43262878537/artifacts/13968962533)
+retain all four readable paths. Both the collector and package validator require the exact shared
+file set and each file's untracked state. Linux passed 54 package/pairing policies, including
+initial/replacement refusal of missing or modified POM/Python states and unexpected files; these
+synthetic reports are not native window evidence. App replacement and the 54-pair grid still need
+fresh Mac execution.
+
+The native Java run header provides **Manage tools**, opening **Settings → Java development tools**
+with the existing component model. Busy or prepared runs, a different project and another modal
+block the action. Closing settings refreshes the captured run model's JDK/module detection while
+retaining its configuration, arguments, environment and live task, even when its panel left the
+workspace. The settings window owns this one-time completion; closing the original run prevents
+further detection. Opening this page starts no installation.
+
+Native Personal QA adds two Java-tools originals per phase, separately from the 54 paired scenes. It
+clicks the actual header and close controls, checks the five shared components and completed
+redetection, and retains the panel, terminal generation and canonical data. The busy state and
+unsaved argument are explicitly injected QA fixtures; disabled-action dispatch must be rejected, and
+the draft must survive. QA also explicitly hides the originating panel to exercise view teardown,
+requires detection to finish while it is absent, then restores the same panel through the actual
+Java toolbar. This is a labelled context-change simulation, not a physical workspace-switch claim.
+Linux passed 55 package/pairing policies and Swift syntax parsing; actual AppKit compilation, both
+language captures and comparison with the ordinary dialog remain pending.
+
+The paired run-panel grid uses the shared minimal POM/Python project and twelve required scenes:
+Java/Python × docked/expanded/file × English dark 1100px/Chinese light 640px, all at 720px height.
+Both collectors click actual toolbar, expand/restore, Files-row, file-close and hide controls while
+retaining the original terminal generation and panel view. The native collector measures an actual
+noninteractive AppKit background view and header; the ordinary collector measures the rendered panel
+element and header. Missing scenes, stale originals, unexecuted controls, invalid geometry or a
+difference of at least one pixel reject pairing. Closing the clean file must retain its run panel.
+The candidate produces 54 required pairs plus ordinary restart and final panel-cleanup originals;
+this is a larger capture grid, not complete functional acceptance. Linux passes 484 Node tests (11
+platform skips), 53 paired/Personal policy tests and seven run-discovery/matrix policies. Type
+checking, production build, i18n, formatting, Swift parsing and documentation checks pass. An
+initial i18n failure in the collector is corrected; these checks do not execute AppKit or establish
+new window acceptance. New Mac collection and original-image review remain required; existing real
+long-running Java/Python suites separately verify running-task behavior.
 
 Java and Python toolbar buttons show live run status; right-click or Shift-F10 opens the language's
 launch list. Selecting a task reveals its project/Worktree panel and the same task generation;
@@ -267,6 +554,40 @@ removed projects and stale generations report an error. Clicking an active run b
 terminal without closing its retained task. Both clients read the same Core discovery logic, which
 never starts a host and excludes build/test history. The native Close menu labels embedded content
 as a tab and a standalone file as a file; each action retains its existing save and close guard.
+
+The dock candidate adds two passing Swift 6.1.2 Linux Foundation-only geometry tests and five
+passing Node panel/navigation/vector regressions. These do not compile AppKit or establish native
+docking acceptance. The required Mac run exercises real responder keys, actual Expand/Restore
+buttons and labelled synthetic double-click events, both on empty panels and while real Java/Python
+tasks run. Reports retain task IDs/generations, follow mode, native-view identity, original
+expanded/restored PNGs and the main terminal or file. Failed waits include the expected height and
+actual host/content/window bounds. This candidate's Mac execution and ordinary-client panel pairing
+remain pending; earlier full-tab images do not accept the new dock.
+
+When the available native SSH pane is narrower than 720 points, its connection list becomes a
+disclosure row and the form fills the pane. Profile, transfer and forwarding actions wrap within the
+available width. Resizing and opening the connection list retain the SSH draft and saved profile.
+Database and Redis keep the existing compact workbench by default. Below 720px, opening connection
+management shows a full-width list; **Back to workbench** or selecting a profile restores the same
+mounted workbench. The four tool-switch buttons shrink within a compact tools column while retaining
+their icons and keyboard actions.
+
+Linux passes the complete frontend suite (489 passed, 11 platform skips), 43 paired-evidence
+policies and 30 Personal package policies. The new rejection cases cover the observed clipping,
+incomplete control operations, stale sources and missing originals. Type checking, production build,
+i18n, formatting and documentation checks pass; Swift UI validation on Linux is syntax-only.
+
+The
+[ARM native artifact14011143963](https://github.com/YondFane/uTerm/actions/runs/43365628863/artifacts/14011143963),
+head `6857087` / tested merge `0b677e5`, passes integration checks but its actual 640px originals
+reveal clipped SSH actions and a squeezed database editor. Those images do not accept narrow-window
+visual parity. The current layout checks measure real SSH fields/Save bounds, operate the actual
+disclosure and require unchanged drafts/store bytes. Database/Redis checks click actual connection,
+return and profile controls, verify a full-width viewport and retain the same DOM/profile/store.
+Four `native-workspace-panel-{kind}-connections-{language}-{appearance}-{width}.png` originals
+supplement the twelve grid scenes and four run/file/conflict originals, for twenty required
+workspace screenshots. These are separate from the 54-pair Personal/ordinary grid. Current-source
+Mac rendering, actions and original-image review remain required.
 
 Native CI preserves early Git evidence without stopping independent runtime checks when that early
 upload fails. The final complete artifact upload and interaction-matrix gates remain mandatory.
@@ -281,14 +602,14 @@ Personal PR artifacts also include their run attempt. The paired-image collector
 matching attempt and accepts legacy names; expired latest evidence cannot fall back to an older
 artifact. Source/merge and report checks remain required. Versioned release collection names stay
 unchanged. ARM source `4e1eb47f95282ca4b22798745b19e35ea99ab3bb` / tested merge
-`3b480c338acb7a097ba5fb6f19c89e3500613969` built and passed bridge tests but failed all five existing
-`hdiutil verify` attempts with Resource temporarily unavailable before window QA. Its
+`3b480c338acb7a097ba5fb6f19c89e3500613969` built and passed bridge tests but failed all five
+existing `hdiutil verify` attempts with Resource temporarily unavailable before window QA. Its
 [original artifact14021661024](https://github.com/YondFane/uTerm/actions/runs/43385658224/artifacts/14021661024)
-retains `personal-package.json` and the command log; no application screenshots were produced.
-Eight discovery tests and workflow validation pass on Linux. Actual image verification and Mac
-window acceptance remain pending; retries keep their earlier evidence.
+retains `personal-package.json` and the command log; no application screenshots were produced. Eight
+discovery tests and workflow validation pass on Linux. Actual image verification and Mac window
+acceptance remain pending; retries keep their earlier evidence.
 
-The isolated `workspace-panels-native.json` scenario captures twelve actual main-window scenes
+The isolated `workspace-panels-native.json` scenario captures twelve panel-grid main-window scenes
 (English/dark at 1100px and Chinese/light at 640px), clicks terminal/panel/close controls, checks
 retained views/documents and preserves terminal identity/generation. Each capture records its
 source, actual window width and platform metadata. Run panels redraw localized labels when settings
@@ -419,8 +740,9 @@ to the captured repository/project and reject changed workspace context.
 Native Git status/snapshot reads normalize the returned repository root with the same Cocoa
 filesystem rules as the selected Files root. This keeps temporary-directory and symlink aliases in
 one path namespace without changing draft keys, relative change paths or write guards. Workspace
-captures now require actual untracked markers on both fixture files; missing or incorrect states
-fail Personal and paired evidence checks. Raw Git/selected/normalized roots remain in the report.
+captures now require actual untracked markers on every shared fixture file; missing or incorrect
+states fail Personal and paired evidence checks. Raw Git/selected/normalized roots remain in the
+report.
 
 The Linux real Git/Core alias check and 20 file-state/native-transport regressions pass, as do 16
 Personal and 26 paired/fixture policies. Two Swift checks cover alias normalization, malformed roots
@@ -572,9 +894,27 @@ Standalone previews and detached regression windows retain separate presentation
 tab/window restoration, wrapping, embedded workbenches and complete settings styling still require
 alignment.
 
-The toolbar footer and app menu open complete settings. Save/reload/reset and unsaved drafts remain
-available when the settings window is hidden; Return commits an edited field and Command-W hides it.
-The local CLI control switch remains an immediate service control in Local control.
+The toolbar footer and app menu open settings over the live main workspace with a dimmed, blurred
+backdrop. The centered surface shares the ordinary client's 760 px / 94% width, category navigation,
+header and responsive theme previews. The close control, Escape and an outside click hide settings
+and retain drafts; active settings/component operations keep the close guard. Search consumes Escape
+first when its query is nonempty. Closing restores workspace focus; reopening retains the same
+settings model. Restore defaults is in General, while retry/reload controls appear for retained
+drafts or errors. Return commits an edited field. Local control still changes its service
+immediately.
+
+PR and manually dispatched CI collect same-source original images and reports into downloadable
+artifacts. Discovery accepts only exact-head PR/manual Personal runs and uses the newest eligible
+run; a failed or expired newest artifact cannot be replaced by an older pass. Four isolated HTTP
+fixture checks cover this selection without network access. Both collectors record the actual
+settings card bounds inside matching workspace windows. Pairing rejects separate settings windows,
+missing measurements, out-of-bounds cards or different actual positions/sizes. Linux passes 25
+paired-evidence policy checks, including both-client modal and geometry rejection; 479 Node checks
+pass with 11 platform skips, alongside type/production build and format checks. Native QA uses the
+640×420 minimum workspace, clicks the actual close button, verifies workspace focus and cached
+reopen, and requires `nativeSettingsOverlayProof` plus `native-settings-workspace-overlay.png`.
+These new actual-window operations and screenshots remain pending current-source macOS CI; the
+complete settings field styling is not accepted yet.
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
 side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or
@@ -650,9 +990,9 @@ and peer settings; reopen the menu to act on fresh data. Disclosure controls ret
 immediate behavior.
 
 Native QA holds actual pin/move menus across a second Core client's write, requires conflict
-rejection, then moves grouped real terminals to another workspace and back through fresh menus.
-It checks the same PTY generations and native views, and reopens the saved snapshot to verify the
-split layout. Originals are `native-project-workspace-move.png` and
+rejection, then moves grouped real terminals to another workspace and back through fresh menus. It
+checks the same PTY generations and native views, and reopens the saved snapshot to verify the split
+layout. Originals are `native-project-workspace-move.png` and
 `personal-{phase}-project-workspace-move.png`; packages require source-bound
 `nativeProjectMenuRevisionAndWorkspaceMove` proof. A delegate simulation uses an owned pasteboard
 and actual NSTableView callbacks to reject foreign sources, forged payloads, cancelled drags and
@@ -662,27 +1002,37 @@ has not been executed; grouping-menu execution is recorded separately.
 Snapshot recovery clears only feedback originating from a snapshot read. A failed menu or Git
 operation remains visible even when its error text is identical to the earlier read error;
 background read failures cannot replace an operation conflict. Four isolated Foundation tests pass
-with Swift 6.1.2 on Linux; AppKit execution still requires the new source's Mac run.
+with Swift 6.1.2 on Linux and within the recorded Mac Native suites below.
 
 Menu and Worktree QA records each action result. Only a visible `WRITER_BUSY` with the exact
 original revision, workspace and settings unchanged permits at most two explicit re-clicks; menus
 retain their captured revision, and Worktree actions require another real confirmation and the
 original directory/dirty bytes. Dirty deletion must report `GIT_ERROR`, not merely any error.
-Application writes are not replayed. Source `1eb5621f56fbfadc541449ae886ca6a723b4f878` / tested merge
-`2da80460cd36c7d6813af65dd90fc31fa307b736` failed the ARM stale-pin wait and Intel clean-Worktree
-wait, with writer-busy feedback in both original windows. The [ARM report14044417035](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14044417035)
-and [Intel report14045730537](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14045730537)
-are retained; these failures are not waived. The revised feedback and action checks await their
-own current-source Mac validation.
+Application writes are not replayed. Source `1eb5621f56fbfadc541449ae886ca6a723b4f878` / tested
+merge `2da80460cd36c7d6813af65dd90fc31fa307b736` failed the ARM stale-pin wait and Intel
+clean-Worktree wait, with writer-busy feedback in both original windows. The
+[ARM report14044417035](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14044417035)
+and
+[Intel report14045730537](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14045730537)
+are retained. The revised feedback and action checks pass at the explicitly recorded Native source
+below; the current chrome candidate still requires fresh source-bound validation.
 
 The native interaction audit requires the workspace report, its matching source/merge, platform,
 architecture and system, all menu/move/generation checks, the labelled drag simulation and the
 original project-move screenshot. Real application exit/relaunch also compares the complete saved
-split layout and exact session/generation map, verifies both terminal views are visible and replayed,
-and captures `native-reconnect-restored-layout.png` before closing either session. Missing, failed,
-stale or cross-platform evidence cannot promote the capability to accepted. Linux passes ten
-interaction-evidence policy tests, Swift 6.1.2 parsing and shell/report syntax; the new source still
-requires actual Mac build, operations and originals. Manual interaction remains waived, not executed.
+split layout and exact session/generation map, verifies both terminal views are visible and
+replayed, and captures `native-reconnect-restored-layout.png` before closing either session.
+Missing, failed, stale or cross-platform evidence cannot promote the capability to accepted. Linux
+passes ten interaction-evidence policy tests, Swift 6.1.2 parsing and shell/report syntax. Source
+`8d7a526000bf70e9bd5f4ebf291057bbb28ec047` / tested merge `a02aad0fa85bc495ed856eeddc96d92caacb5e6d`
+passes both actual Native suites, 69 Swift tests per architecture and both Personal
+initial/replacement installs. The
+[ARM report14047259103](https://github.com/YondFane/uTerm/actions/runs/43440735630/artifacts/14047259103)
+and
+[Intel report14049170337](https://github.com/YondFane/uTerm/actions/runs/43440735630/artifacts/14049170337)
+retain actual project-move and relaunch originals and full session/generation/layout proofs. These
+results accept that source; the current chrome/forms candidate requires its own new-source CI and
+paired-window review. Manual interaction remains waived, not executed.
 
 [Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
 checks for drag/group operations, layout persistence, content tabs and workbench integration. Both
@@ -696,11 +1046,21 @@ visual parity.
 Real-window CI prepares a display of at least 1280×900 before the matching screenshot grid; the
 required 720-pixel content height is still checked against actual window bounds. Personal smoke
 failures retain the raw report and available original captures before validation, including an
-attempted failure-window capture. Each initial/replacement phase has a 180-second process deadline
+attempted failure-window capture. Each initial/replacement phase has a 300-second process deadline
 for the full grid. Atomic progress checkpoints retain the exact source/merge, stage and elapsed
 time. A timeout samples only the owned QA process for at most five seconds and keeps incomplete
 reports and existing original images, even if no final report was produced. Incomplete progress
-cannot satisfy acceptance; all operation, fixture and shutdown assertions remain required.
+cannot satisfy acceptance; all operation, fixture and shutdown assertions remain required. Settings
+QA waits for workspace writes to finish before closing its explicitly captured retained session and
+records any remaining IDs and canonical revision on failure.
+
+The SDK capture-boundary test loads its local loopback helper from the repository's scripts
+directory, matching direct script execution. At source `6153824`, tested merge `0f49119a`, its
+[CI log](https://github.com/YondFane/uTerm/actions/runs/43274768437/job/131380131074) records an
+import failure before the SDK scenario ran. The same failure was reproduced on Linux; the corrected
+capture-boundary test and real numeric-loopback request both pass. The loopback check requires
+socket access outside the default cloud sandbox. Actual new Mac SDK execution remains required; a
+continue-on-error step conclusion does not establish that execution.
 
 The SDK capture-boundary test loads its local loopback helper from the repository's scripts
 directory, matching direct script execution. At source `6153824`, tested merge `0f49119a`, its
@@ -788,12 +1148,109 @@ control, checks durable pin/collapse/order, rejects a stale reorder after a sett
 verifies the selected terminal generation remains unchanged. Both clients use the same literal
 workspace name as well as matching project data.
 
+The Maven settings hide/reopen QA uses the application's actual settings entry to reattach the same
+overlay over its workspace and checks that the Maven draft remains intact. Directly showing a
+detached underlying window cannot satisfy the child-window acceptance. The
+[old actual settings failure14030703318](https://github.com/YondFane/uTerm/actions/runs/43395354646/artifacts/14030703318)
+retains the missing-parent failure; the corrected entry still requires current-source Mac
+validation.
+
 Settings use left-side categories for General, Appearance, Terminal, Workspaces, Shortcuts, Agents,
 Usage, Local control, Database components, Maven settings, Java development tools and Software
-updates. Appearance includes file font/tab preferences; workspace management offers shared
-create/rename/delete operations. Agent commands/hooks and quota open their existing complete native
-window. Java development tools has a standalone section; its source-bound native checks are recorded
-under Optional JDK and Maven tools.
+updates. Appearance includes file font preferences; the file-tab limit is in General. Agents and
+Usage now show their controls inside the settings overlay. The menu's Agent window shares the same
+command model and draft. Usage polling has one owner per model, stops when both views are hidden and
+never requests Keychain access automatically. Quitting protects an unsaved command even when its
+separate window is hidden. Java development tools has a standalone section; its source-bound native
+checks are recorded under Optional JDK and Maven tools.
+
+**Workspace** offers **Edit** and **Delete** on every saved row, including inactive workspaces.
+Adding a workspace here keeps the active workspace and session selected; the main menu's New
+Workspace still selects its new workspace. Renaming retains the chosen row and comparison revision.
+Conflicts preserve the name draft. Deletion confirms the target and is disabled for occupied
+workspaces and the final workspace.
+
+Twenty-one shared workspace and rendering regressions pass on Linux. The new macOS check uses actual
+add/edit/delete buttons and name input while a terminal remains live, checks a stale peer rename and
+cancelled deletion, and requires the same active session, view and generation after cleanup. At
+source/tested commit `1f792a1`, Intel macOS 15.7.9 persists and displays the added row, but QA
+samples the result before the naming action has cleaned up its draft. Its failed report and
+originals remain in
+[artifact13945614134](https://github.com/YondFane/uTerm/actions/runs/43219505232/artifacts/13945614134).
+The collector now waits for the complete naming action, records each attempt before checking it and
+keeps the unchanged-store requirement for any explicit busy retry. Rename, stale-peer and deletion
+proofs still require current-source Mac execution; Linux cannot validate these AppKit controls.
+
+The new native QA edits the actual command field, selects Usage through its category button, reads
+local usage, hides/reopens both entries and cancels a real application quit. It requires retained
+drafts, unchanged saved data and two originals, `native-settings-inline-agent-command.png` and
+`native-settings-inline-agent-usage.png`, in `nativeInlineAgentSettingsProof`. The actual Intel run
+described below passes this proof; the full settings suite remains incomplete. Linux passes 23
+focused settings/Agent tests, 34 paired-evidence/discovery policies, 19 personal package policies,
+formatting, report-validator syntax and documentation checks for this candidate.
+
+Usage has independent Claude, Codex, Kimi and Grok tabs, so changing its Agent never selects or
+discards a command draft. Results and errors are retained per Agent, including cache-read/write
+counts and partial/no-record notices. Visible entries share one sequential polling task; automatic
+reads preserve unrelated command errors. QA operates the actual Agent tabs with an unsaved command
+and requires a new read plus both retained results.
+
+At source `b0539f19c329a6d6a8ba4a9151788ce1ae06a125` / tested merge
+`50cd3ea615382f90a61523180d4e3b840e247e32`, both Mac architectures time out at the Usage Agent
+switch. The reviewed Intel original still shows Claude selected;
+[Intel artifact 14056188657](https://github.com/YondFane/uTerm/actions/runs/43459108237/artifacts/14056188657)
+and
+[ARM artifact 14057117665](https://github.com/YondFane/uTerm/actions/runs/43459108237/artifacts/14057117665)
+retain the failures. The collector now waits for the attached, visible tab control itself to be
+enabled after the local read, records control/model readiness and requires the delivered action to
+select the requested Agent before checking its new result. It does not retry the selection or relax
+draft/result retention. Intel source `5b166d511ed56be719012a3a9bb7894de91878d8` / tested merge
+`e18cb7dc08a2dbefb5b11cef2506752823dc772b` passes the complete settings suite:
+[artifact 14061810238](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14061810238)
+records an enabled, delivered Kimi action, both retained results/draft, and all five actual
+overlay-close/reopen/focus checks. Its `native-settings-workspace-overlay.png` was reviewed. ARM
+stops earlier at the Return check described below; the new Return and capture corrections still
+require their own Mac runs.
+
+The native command page searches saved Agent names, identifiers and executable paths, with **All
+Agents**, **Available** and **Enabled** filters. Filtering keeps the selected command and its draft;
+empty results do not select another Agent. Escape clears a nonempty search before closing settings.
+An unavailable Agent can be disabled if already enabled, but cannot be newly enabled. The enable
+action retains the Agent identifier captured when it was clicked.
+
+The native collector uses the actual search field and filter menus, checks case-insensitive and
+empty results, Escape, frozen controls and unchanged saved data with a retained command draft. It
+requires `nativeAgentCatalogProof` and `native-settings-agent-search-empty.png`. These new controls
+remain pending current-source Mac execution. Four ordinary Agent/settings regressions and 30 report
+policies pass on Linux; these do not establish native acceptance.
+
+Source/tested commit `1f792a1` on Intel macOS 15.7.9 passes the reopened catalog-read barrier,
+actual quit confirmation/cancellation, all four usage tabs and retained command results. It also
+passes actual automatic saves, icon colors, default Agent selection and the real 182×28-point export
+button with save-sheet guards. `nativeInlineAgentSettingsProof` and `nativeShortcutActionsProof` are
+true in
+[artifact13945614134](https://github.com/YondFane/uTerm/actions/runs/43219505232/artifacts/13945614134).
+The suite then fails the workspace naming collector described above; this is partial native
+evidence, not a complete settings pass. Both architectures still need the final candidate's full
+gates.
+
+General, Terminal, Workspace, Shortcuts, Local control, Maven and Software updates use plain
+scrollable rows with checkboxes instead of macOS grouped cards. Maven paths have visible labels,
+blank-value hints and adjacent native pickers; its global scope, explicit save and conflict guards
+remain in place. General keeps the existing login-item approval/retry controls, with compact
+export/reset actions below a divider; narrow windows stack these actions. Native export QA measures
+the actual button before opening its save sheet. Current-source Mac builds and screenshots must
+still verify the Workspace and Maven layouts and compare all sections against the ordinary client;
+full visual parity is not accepted.
+
+In **Shortcuts**, Backspace clears the binding being recorded and **Restore default shortcuts**
+clears all overrides immediately. Both operations save only `shortcuts`, retaining other preferences
+and drafts. The actual recorder disables with the settings page during saves or a frozen quit.
+Native QA dispatches Backspace, clicks the actual reset button, checks the complete Core snapshot
+with an unrelated numeric draft, and verifies a frozen recorder refuses input. It requires
+`nativeShortcutActionsProof` and `native-settings-shortcuts-reset.png`. Source/tested commit
+`1f792a1` passes these actual Intel controls in the settings artifact above; the final candidate
+still requires its full Mac gates.
 
 Settings QA reads retry a writer-busy snapshot at most twice. A peer fixture write repeats only
 after confirming that its original revision, workspace and settings are unchanged; an uncertain
@@ -828,6 +1285,31 @@ localized names, descriptions and a selected marker. Narrow settings use one col
 saves the interface theme while retaining terminal colors. Full settings styling still requires
 comparison.
 
+Native Appearance provides the same **Icon highlight → Follow theme / Custom color** choices as the
+ordinary client. Custom starts with the current interface accent and offers a native color well plus
+a hex field; choosing Follow theme clears the custom value. Actual selection saves only
+`activeIconColor`. Invalid text retains the draft, last saved swatch and visible error; Enter/blur
+trims surrounding whitespace before validation.
+
+The new real-window QA operates the actual mode picker and color-well action, reads the Core
+snapshot, rejects invalid hex without changing saved data, checks the retained swatch and returns to
+Follow theme. `nativeIconColorProof` requires these operations and screenshots
+`native-settings-icon-color-custom.png` / `native-settings-icon-color-invalid.png`. The color-panel
+pointer gesture is not simulated as native input acceptance. Current-source Mac execution remains
+pending; Linux preference validation, policy, syntax and documentation checks cannot establish these
+AppKit operations.
+
+Real Intel captures at source `c78fa57` exposed clipped navigation labels and an unreadable close
+symbol in the settings overlay. The candidate constrains the navigation to its actual column, wraps
+long category names, hides scroll indicators and gives search the shared 40-point row. The close
+control draws the same visible circle/cross and hover colors as the ordinary client, with keyboard
+focus and busy disabling retained. Fresh Mac screenshots remain required; the earlier images are
+diagnostic evidence, not acceptance of this candidate. Child-overlay captures bring the owned
+workspace forward and record WindowServer's visible screen rectangle, validating its window ID,
+process and bounds first. This includes the actual workspace behind the overlay; other window
+captures retain the window-surface method. Reports record the capture method, and fresh same-source
+Mac execution remains required.
+
 Native General includes **Export legacy-compatible data**, using the shared export format and a
 native save sheet. Cancel leaves the store and drafts unchanged. Export writes committed values,
 keeps pending drafts, and reports destination failures without replacing a prior export. The
@@ -843,27 +1325,40 @@ Mac artifact. Automatic-save QA uses actual AppKit field editing, invalid blur a
 input with an unrelated numeric draft, then an actual font selection with an unrelated draft and a
 concurrent Core writer. It checks invalid-input retention, correction, scoped persistence, the
 original conflict baseline and explicit reload recovery, recording
-`nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`. A macOS ARM64 run
-reported visible `WRITER_BUSY` during the font action; that run does not establish scoped-save
-acceptance. CI runs settings interactions before the heavy core suite and uploads an early
+`nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`.
+
+ARM source `5b166d511ed56be719012a3a9bb7894de91878d8` / tested merge
+`e18cb7dc08a2dbefb5b11cef2506752823dc772b` fails the Return assertion;
+[artifact 14059825905](https://github.com/YondFane/uTerm/actions/runs/43464826857/artifacts/14059825905)
+retains the actual busy-error window and report. It does not establish automatic-save or subsequent
+Agent/overlay acceptance.
+
+Return QA now records every attempt in `nativeSettingsAutomaticEnterAttempts`. Only `WRITER_BUSY`
+with a visible model error, unchanged revision, complete workspace/settings and both retained
+numeric drafts permits at most two additional explicit Return actions; busy screenshots are
+retained. Success must match the complete original settings with only the intended field changed.
+This correction needs fresh Mac execution.
+
+CI runs settings interactions before the heavy core suite and uploads an early
 `native-settings-<runner>-<head>-<attempt>` artifact, while retaining every later check and final
 failure gate. QA records every attempted font action's error, committed values and retained draft in
 `nativeSettingsAutomaticSaveAttempts`. On contention it first requires unchanged committed data and
 retained drafts, captures `native-settings-autosave-busy.png`, and explicitly reselects the same
-control at most twice. The application does not retry failed mutations automatically. The same check
-clicks a real theme-preview button, verifies terminal preferences are unchanged, and captures
+control at most twice.
+
+The application does not retry failed mutations automatically. The same check clicks a real
+theme-preview button, verifies terminal preferences are unchanged, and captures
 `native-settings-theme-cards-900.png` / `native-settings-theme-cards-640.png`. These new
 automatic-save operations and same-source screenshots remain pending macOS CI; the reordered fields
 and full settings styling still require actual Mac screenshots and comparison under #53.
 
-Theme QA waits for an attached, enabled preview, finishes field editing and confirms the theme
-draft changed before waiting for save completion. `nativeSettingsThemeSaveAttempts` records each
-action's error, draft, committed theme and terminal-preference comparison. Only a visible
-`WRITER_BUSY` with unchanged committed data permits at most two explicit re-clicks, preserving the
-failure screenshot; the application does not replay writes. The final saved-value checks remain
-strict. Intel source `8ec7eaf1bcb6896aa6613e6545f956f8c3eb326c` / tested merge
-`e83d1b9dd11ce787d38aa131c7517c671b148849` failed the theme assertion without these diagnostics;
-the cause is not established. Its
+Theme QA waits for an attached, enabled preview, finishes field editing and confirms the theme draft
+changed before waiting for save completion. `nativeSettingsThemeSaveAttempts` records each action's
+error, draft, committed theme and terminal-preference comparison. Only a visible `WRITER_BUSY` with
+unchanged committed data permits at most two explicit re-clicks, preserving the failure screenshot;
+the application does not replay writes. The final saved-value checks remain strict. Intel source
+`8ec7eaf1bcb6896aa6613e6545f956f8c3eb326c` / tested merge `e83d1b9dd11ce787d38aa131c7517c671b148849`
+failed the theme assertion without these diagnostics; the cause is not established. Its
 [original failure14016411976](https://github.com/YondFane/uTerm/actions/runs/43373657320/artifacts/14016411976)
 is retained. Linux Swift 6.1.2 syntax, formatting and documentation checks pass; the new control
 checks still require their own actual Mac run.
@@ -873,19 +1368,22 @@ including restoration after theme screenshots. Setup and restoration writes use 
 original-revision guard: retry only `WRITER_BUSY` while the full saved workspace and settings are
 unchanged. Application actions and conflict assertions remain explicit. The report retains the
 current fixture stage and read/write retry counts even on failure. Intel source
-`676c9ce3e0f06f3a08ba8bb7d9fb4e0adc81508d` / tested merge
-`fe9fa9d6d1e97ddd57da344fc613b9d5e705ff89` saved the theme and captured both sizes, then failed
-with `WRITER_BUSY` during the following fixture restoration; its precise read/write operation
-was not recorded. The [failure report and originals14024845956](https://github.com/YondFane/uTerm/actions/runs/43394240939/artifacts/14024845956)
-are retained. The revised fixture still requires a current-source actual Mac run.
+`676c9ce3e0f06f3a08ba8bb7d9fb4e0adc81508d` / tested merge `fe9fa9d6d1e97ddd57da344fc613b9d5e705ff89`
+saved the theme and captured both sizes, then failed with `WRITER_BUSY` during the following fixture
+restoration; its precise read/write operation was not recorded. The
+[failure report and originals14024845956](https://github.com/YondFane/uTerm/actions/runs/43394240939/artifacts/14024845956)
+are retained. At the recorded `8d7a526` / `a02aad0` Native source above, both actual settings
+reports reach the completed restoration stage. The current chrome/settings changes still require
+their own source-bound run.
 
 The Core read for compatibility export retries only `WRITER_BUSY`, at most 20 attempts with 10 ms
 between attempts. The destination is still written once, and settings mutations are not replayed
 automatically. Actual file-lock tests cover short-contention recovery, exhaustion, cancellation and
 unchanged snapshot bytes. Source `9c16e467edcc17f911a9b4600f30c534ad420293` / tested merge
 `499a6e26847421ca008e9418565ea5d591a10379` passes both actual Mac Native suites and 65 Swift tests
-per architecture, including the OS-lock export cases. The [ARM report](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14035540650)
-and [Intel report](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14038396877)
+per architecture, including the OS-lock export cases. The
+[ARM report](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14035540650) and
+[Intel report](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14038396877)
 retain `nativeLegacyExportProof` and the actual failure/draft-retention window. This validates that
 recorded source; revised menu/relaunch evidence still requires its own current-source Mac run.
 
@@ -903,8 +1401,17 @@ labels. Existing custom font strings remain a selected custom entry until a pres
 opening or switching categories does not replace them. Selection retains the exact fallback-family
 string, and the existing settings save/conflict rules apply. Native QA checks both actual AppKit
 selectors, custom draft retention, no write while rendering and an automatic save/read round trip;
-it also captures `native-settings-custom-font.png`. Current-source macOS execution is still
-required.
+it also captures `native-settings-custom-font.png`. ARM64 head `d0c5ebb`, tested merge `b93af668`,
+records a successful interface-font save but a `WRITER_BUSY` terminal-font refusal in
+[artifact 13974362478](https://github.com/YondFane/uTerm/actions/runs/43282517996/artifacts/13974362478).
+The terminal preset and visible error remain in the draft; its stored value is unchanged. The
+collector waits for an enabled idle picker and selects a different shared preset. Only after proving
+the complete store revision/workspace/settings and original field baseline are unchanged may it
+capture the busy error and explicitly select the same actual control again, at most three
+selections. Other errors or conflicts fail immediately, and exhausted busy attempts fail. Each
+selection remains recorded in `nativeFontPickerSaveAttempts`; the application never automatically
+retries a failed write. Linux Swift parsing and 57 package/pairing/SDK/HTTP policies pass. Actual
+new Mac recovery captures and successful explicit reselection remain pending.
 
 The toolbar includes file opening, the command palette, pane zoom and a tools menu for files/search,
 Git/GitHub, Java/Python, SSH, database and Redis entry points. Commands retain their existing focus,
@@ -1443,8 +1950,8 @@ retain this gap. Manual keyboard, IME and system-clipboard acceptance remain une
 
 Concurrent Tauri QA now holds the original owner's ready acknowledgement while the readonly peer
 starts and completes its renderer captures. It releases the owner assertion and actual viewer
-takeover together only after matching session ID, generation and host PID. The existing 30-second
-UI assertions, passive-input rejection and ordinary-exit/reacquisition checks remain unchanged.
+takeover together only after matching session ID, generation and host PID. The existing 30-second UI
+assertions, passive-input rejection and ordinary-exit/reacquisition checks remain unchanged.
 `input-control-handoff.json` records release timing, identities and completion. At source
 `3e609640ba640a9ae665adb80ca4dcfc0c063f03` / tested merge
 `266c379eb9c5b66070db1921a3f7592a7ea858d2`, Mac owner-ready and viewer-readonly reports were 32
@@ -2922,6 +3429,11 @@ status.
 
 ### Quick connections and host search
 
+The sidebar action wraps long titles instead of truncating them. Both clients use a 28px minimum
+action height, matching line spacing and a 36px search field. Native row heights follow the actual
+title width when the window or language changes, retaining the search editor and the existing button
+action. This layout correction still requires fresh paired Mac originals.
+
 Choose **Quick SSH connection** in the SSH sidebar and enter a Host alias, `user@host:port` or
 `ssh://user@host:port`. IPv6 addresses with a port use brackets, such as `user@[::1]:2222`. A plain
 alias inherits OpenSSH configuration; explicit addresses default to port 22. Commands, embedded
@@ -2979,11 +3491,12 @@ temporary profile pruned. It records readiness, close stages and errors even on 
 removal still refuses active sessions. Intel source `81a7438aaaa5b78d23496a87acbb8e2f5f574065`,
 tested merge `79e010ee54d1eaa3312a4ff6f8f7d1d7a91bde5a`, passed the other independent reports but
 failed this cleanup with `SSH_CONNECTION_BUSY`; the inspector and interaction matrix were not
-accepted. The [complete failure report and originals14027282789](https://github.com/YondFane/uTerm/actions/runs/43385656739/artifacts/14027282789)
+accepted. The
+[complete failure report and originals14027282789](https://github.com/YondFane/uTerm/actions/runs/43385656739/artifacts/14027282789)
 are retained. The previous report did not record whether close was invoked while busy; its caller
 waited for published profile data while the close method may refuse a busy workspace. The new
-readiness and postcondition checks still require an actual Mac run on their own source. Linux
-passes Swift 6.1.2 parsing, shell/embedded Python syntax, three existing Core SSH tests, three
+readiness and postcondition checks still require an actual Mac run on their own source. Linux passes
+Swift 6.1.2 parsing, shell/embedded Python syntax, three existing Core SSH tests, three
 shared-form/frontend regressions, formatting and documentation checks; these do not execute AppKit.
 
 SSH host filtering retains the mounted native search cell while inserting/removing result rows. An
@@ -5610,7 +6123,8 @@ guides or defaults, including identifiers such as `constructor`.
 Provider credentials and permissions determine availability. Terminal input and process I/O are
 handled independently of UI rendering.
 
-The native QA client opens **File → Agent settings…** for custom commands, enable/disable,
+The native client provides **Settings → Agents** and **Settings → Usage** inside the workspace,
+alongside **File → Agent settings…**. Both entries share custom commands, enable/disable,
 installation, Hooks and usage. Commands use an executable and JSON string array; argument errors
 retain the draft. Hiding the window retains it, switching commands confirms unsaved changes and
 quitting refuses an active operation or asks about an unsaved command. Local usage reads no account
@@ -7680,9 +8194,9 @@ Windows source `6c91edc92260ad40944e2759bf43faff7de16856` / tested merge
 after terminal output cycle 12. The holder of the blocking handle is not identified. The
 [original artifact14018140007](https://github.com/YondFane/uTerm/actions/runs/43383383260/artifacts/14018140007)
 retains `tauri-state-qa/performance-failure.json`, its actual Windows window and the sampler report.
-Linux passes two real atomic-replacement tests, six existing sampling/report/terminal boundary
-tests and workflow validation. The Windows lock tests and complete current-source workload still
-require their own CI execution; this failed run is not performance acceptance.
+Linux passes two real atomic-replacement tests, six existing sampling/report/terminal boundary tests
+and workflow validation. The Windows lock tests and complete current-source workload still require
+their own CI execution; this failed run is not performance acceptance.
 
 - Performance validation: 119 frontend/build-helper tests, localization checks and the
   TypeScript/production build pass. The main JavaScript chunk measures 909.45 kB versus a 1,343.64
@@ -7819,6 +8333,22 @@ Database handlers explicitly include structured error codes when classifying mes
 error strings keep their existing format. Revision conflicts keep the connection form open and
 request a reload; busy/pending errors retain their specific guidance even when the host message does
 not repeat the code.
+
+Selecting a database or Redis connection in the native main sidebar opens its workbench across the
+main pane. The inner connection directory and management header stay hidden. Use the connection
+button in the workbench toolbar to edit or add profiles, then **Return to workbench**. This keeps
+the same workbench mounted, including its connection, query, temporary password and drafts.
+
+Seventeen Linux UI regressions pass, covering directory collapse, reopening management, retained
+workbench identity and the existing profile-conflict/password guards. Type checking, production
+build, localization and documentation checks also pass. Source/tested commit `994a43a` passes the
+real PostgreSQL and Redis checks on macOS 15.8.2 ARM64, Xcode 16.4 and Swift 6.1.2. Both reports
+verify full-pane bounds, the actual management button and the same retained workbench. The four
+originals `native-{database,redis}-sidebar-profile-en-dark.png` and
+`native-{database,redis}-retained-connection-manager.png` were inspected in
+[artifact13944452193](https://github.com/YondFane/uTerm/actions/runs/43216419431/artifacts/13944452193).
+This validates that source's native workbench behavior; complete current-source and paired-client
+acceptance remain pending.
 
 Closing this window hides it while retaining connections, drafts and results. Application quit
 refuses active work or pending transactions and confirms draft loss. If another window cancels quit,

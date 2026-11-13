@@ -3,6 +3,57 @@ import UTermBridge
 
 @MainActor
 enum ProjectRunSmoke {
+    private static func sidebar() -> NSTableView? {
+        for window in NSApp.windows where window.isVisible {
+            guard let content = window.contentView else { continue }
+            if let table = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-sidebar" }) as? NSTableView { return table }
+        }
+        return nil
+    }
+    static func verifySidebar(model: WorkspaceModel, root: String, language: String?) async throws {
+        await model.projectRuns.refresh()
+        try await TerminalSmoke.wait("The actual sidebar image matches the current task root and running state") {
+            guard let coordinator = sidebar()?.delegate as? NativeSidebar.Coordinator else { return false }
+            return coordinator.hasRunIndicator(root: root, language: language)
+        }
+    }
+    static func verifyStopped(model: WorkspaceModel, root: String, language: String, evidence: URL, report: inout [String: Any]) async throws {
+        try await verifySidebar(model: model, root: root, language: nil)
+        guard let window = sidebar()?.window else { throw BridgeFailure(code: "RUN_LIST", message: "Missing actual sidebar after stopping task") }
+        let screenshot = "native-" + language + "-run-stopped-workspace.png"
+        try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent(screenshot))
+        report[language + "SidebarStoppedIcon"] = ["passed": true, "actualRestoredImage": true, "screenshot": screenshot]
+    }
+    static func logViewport(_ log: TerminalSession) -> [String: Any] {
+        let terminal = log.view.getTerminal(), buffer = terminal.buffer
+        let anchor = buffer.totalLinesTrimmed + buffer.yDisp
+        var result: [String: Any] = ["anchor": anchor, "trimmed": buffer.totalLinesTrimmed, "displayRow": buffer.yDisp]
+        result["columns"] = terminal.cols; result["rows"] = terminal.rows
+        result["width"] = log.view.bounds.width; result["height"] = log.view.bounds.height
+        result["receivedFrames"] = log.qaReceivedFrames; result["renderedFrames"] = log.qaRenderedFrames
+        result["acknowledgedFrames"] = log.qaAcknowledgedFrames; result["replayResets"] = log.qaReplayResets
+        result["followsOutput"] = log.taskLogFollowsOutput
+        result["topLine"] = terminal.getScrollInvariantLine(row: anchor)?.translateToString(trimRight: true, skipNullCellsFollowingWide: true, characterProvider: { terminal.getCharacter(for: $0) }) ?? ""
+        return result
+    }
+    static func waitForLogViewport(_ log: TerminalSession, window: NSWindow?) async throws {
+        guard let window else { throw BridgeFailure(code: "RUN_PANEL", message: "Missing actual run window") }
+        var previous: [Double] = [], stableSince = ProcessInfo.processInfo.systemUptime
+        // Measure user scrolling only after actual remount, resize and output acknowledgements settle.
+        // 仅在实际重挂载、尺寸调整及输出确认稳定后测量用户滚动。
+        try await TerminalSmoke.wait("Settle the actual remounted task-log viewport and acknowledgements") {
+            let now = ProcessInfo.processInfo.systemUptime
+            guard log.view.window === window, window.isVisible, !log.view.isHiddenOrHasHiddenAncestor,
+                  log.view.visibleRect.width > 0, log.view.visibleRect.height > 0,
+                  !log.qaWaitingToRender, log.error.isEmpty,
+                  log.qaReceivedFrames == log.qaAcknowledgedFrames else { stableSince = now; return false }
+            let terminal = log.view.getTerminal()
+            let current: [Double] = [Double(log.view.bounds.width), Double(log.view.bounds.height), Double(terminal.cols), Double(terminal.rows), Double(log.qaAcknowledgedFrames)]
+            guard current.allSatisfy(\.isFinite), current.prefix(4).allSatisfy({ $0 > 0 }) else { stableSince = now; return false }
+            if current != previous { previous = current; stableSince = now; return false }
+            return now - stableSince >= 0.25
+        }
+    }
     static func restoreStandalone(model: WorkspaceModel, panel: NativeWorkspacePanels.Panel) async throws {
         guard let backing = panel.controller.window else { throw BridgeFailure(code: "RUN_PANEL", message: "The retained panel window is missing") }
         model.panels.remove(panel.controller)
@@ -65,6 +116,8 @@ enum ProjectRunSmoke {
         guard panel.view === retainedView else { throw BridgeFailure(code: "RUN_LIST", message: "Launch selection replaced the retained panel view") }
         let terminal = (controller as? JavaWindow)?.model.terminal ?? (controller as? PythonWindow)?.model.terminal
         guard terminal?.id == id, terminal?.generation == generation else { throw BridgeFailure(code: "RUN_LIST", message: "Launch selection replaced the task generation") }
+        report[language + "DockedRunPanel"] = try await RunPanelSmoke.run(model: model, panel: panel, window: window, prefix: "native-live-" + language, evidence: evidence)
+        try await verifySidebar(model: model, root: task["task"]["root"].string ?? "", language: language)
         let screenshot = "native-" + language + "-launch-list-workspace.png"
         try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent(screenshot))
         guard let content = window.contentView else { throw BridgeFailure(code: "RUN_LIST", message: "Missing actual workspace view") }
@@ -83,6 +136,8 @@ enum ProjectRunSmoke {
             "actualMainWindow": true, "actualToggleButtonRetainedGeneration": true, "retainedContentAfterBackingWindowCleared": true,
             "backingHadContentBeforeQA": backingHadContent]
         proof["screenshot"] = screenshot
+        proof["actualSidebarRunIcon"] = true
+        proof["taskID"] = id; proof["taskGeneration"] = generation
         proof["input"] = "NSApplication.sendAction using the mounted toolbar coordinator and actual NSMenuItem; explicit backing content removal reproduces the observed loss; real Core host task; no physical popup pointer/keyboard claim"
         report[language + "ToolbarRunList"] = proof
     }

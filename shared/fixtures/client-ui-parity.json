@@ -5,7 +5,7 @@
   "appearances": ["dark", "light"],
   "widths": [1100, 640],
   "height": 720,
-  "ordinaryOperations": ["terminal-restart"],
+  "ordinaryOperations": ["terminal-restart", "run-panels-complete"],
   "fontSize": 17,
   "automaticUpdates": false,
   "settingsScenes": [
@@ -46,7 +46,9 @@
   "sessions": ["Terminal 1", "Terminal 2"],
   "files": {
     "note.txt": "Original 中文\r\n",
-    "README.md": "# UI parity\n\nTemporary comparison project.\n"
+    "README.md": "# UI parity\n\nTemporary comparison project.\n",
+    "pom.xml": "<project><modelVersion>4.0.0</modelVersion><groupId>qa</groupId><artifactId>parity</artifactId><version>1</version></project>\n",
+    "main.py": "print('UI parity Python')\n"
   },
   "marker": "PERSONAL_READY 中文",
   "command": "printf 'PERSONAL_%s 中文\\n' READY",
@@ -104,5 +106,27 @@
   "githubScenes": [
     { "language": "en", "appearance": "dark", "width": 1100, "height": 720 },
     { "language": "zh-Hans", "appearance": "light", "width": 640, "height": 720 }
-  ]
+  ],
+  "runPanelKinds": ["java", "python"],
+  "runPanelStates": ["docked", "expanded", "file"],
+  "runPanelScenes": [
+    { "language": "en", "appearance": "dark", "width": 1100, "height": 720 },
+    { "language": "zh-Hans", "appearance": "light", "width": 640, "height": 720 }
+  ],
+  "runFormInput": {
+    "arguments": "  'hello world' '' C:\\tools\\run.exe   \"中文 🧪\" $(literal)  ",
+    "argumentValues": [
+      "hello world",
+      "",
+      "C:\\tools\\run.exe",
+      "中文 🧪",
+      "$(literal)"
+    ],
+    "vmArguments": "  -Dqa.text='hello world'  ",
+    "vmArgumentValues": [
+      "-Dqa.text=hello world"
+    ],
+    "environment": "QA_LITERAL=$HOME & literal\nQA_UNICODE=中文 🧪",
+    "invalidArguments": "\"unfinished"
+  }
 }

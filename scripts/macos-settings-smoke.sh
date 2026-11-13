@@ -21,16 +21,25 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     assert data['coreReady'] and not data['productionDataAccess']
     for key in ['nativeSettingsMenuAndReadonlyOpen', 'invalidNumericDraftRetainedWithoutWrite', 'unrelatedExternalSettingsPreserved', 'sameFieldConflictRetainsDraftAndPeerValue', 'hiddenWindowAndActualQuitCancellationRetainDraft', 'nativeReservedAndDuplicateShortcutErrors', 'nativeShortcutCaptureAndSave', 'nativeDynamicMenuPaletteKeyboardAndFocusReturn', 'nativeThemeImportDraftFailureAndTerminalEffects', 'explicitResetUsesSharedDefaults', 'simulatedLoginItemOptInApprovalFailureAndDisable']:
         assert data[key], key
+    assert data.get('nativeSettingsActualRetainedSessionClosed') is True
     proof = data['nativeSettingsSearchProof']
     for key in ['actualAppKitInput', 'filteredNavigation', 'matchingCategoryClickable', 'draftRetained', 'escapeClearsWithoutClosing', 'savedBytesUnchanged']:
         assert proof[key] is True, key
     assert (evidence / proof['capture']).stat().st_size > 1000
+    proof = data['nativeIconColorProof']
+    for key in ['actualModePicker', 'renderDoesNotWrite', 'customStartsWithThemeAccent', 'actualColorWellAction', 'fieldScopedPersistence', 'invalidDraftAndSavedColorRetained', 'followThemeRestored', 'preferencesRestored']:
+        assert proof[key] is True, key
+    for name in proof['captures']: assert (evidence / name).stat().st_size > 1000, name
     proof = data['nativeSettingsAutomaticSaveProof']
     for key in ['actualFieldEditorBlur', 'actualFieldEditorEnter', 'enterRetainsUnrelatedDraft', 'invalidDraftRetainedWithoutWrite', 'correctedFieldSavedAutomatically', 'actualFontPicker', 'scopedWrite', 'otherDraftRetained', 'peerWriteConflictRetained', 'actualThemePreviewSelection', 'terminalThemeUnchanged', 'explicitReloadRecovery']:
         assert proof[key] is True, key
     assert (evidence / proof['capture']).stat().st_size > 1000
     assert len(proof['themeCaptures']) == 2
     for name in proof['themeCaptures']: assert (evidence / name).stat().st_size > 1000, name
+    proof = data['nativeSettingsOverlayProof']
+    for key in ['realWorkspaceChildWindow', 'actualCloseButton', 'workspaceFocusRestored', 'sameCachedWindowReopened', 'minimumWindow640x420']:
+        assert proof[key] is True, key
+    assert (evidence / proof['capture']).stat().st_size > 1000
     proof = data['nativeLegacyExportProof']
     for key in ['actualSavePanelCancellation', 'busyCloseGuard', 'committedDataExported', 'storeUnchanged', 'draftRetained', 'failedWriteRetainsPreviousExport']:
         assert proof[key] is True, key
@@ -41,11 +50,33 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     assert proof['simulatedAgentPrograms'] == '/usr/bin/true; no real Agent account or login'
     assert (evidence / proof['capture']).stat().st_size > 1000
     assert data['nativeThemeFileNamesAndBoundedReads']
+    proof = data['nativeShortcutActionsProof']
+    for key in ['actualBackspaceEvent', 'actualResetButton', 'frozenRecorderDisabled', 'scopedPersistence', 'unrelatedDraftRetained', 'preferencesPreserved']:
+        assert proof[key] is True, key
+    assert (evidence / proof['capture']).stat().st_size > 1000
+    proof = data['nativeInlineAgentSettingsProof']
+    for key in ['actualFieldEditor', 'actualCategorySelection', 'sameWorkspaceOverlay', 'sameCachedModelAcrossMenuWindow', 'inlineLocalUsage', 'independentUsageAgentTabs', 'perAgentResultsRetained', 'hiddenPollingStopped', 'reopenedCatalogReadCompletedBeforeQuit', 'cancelledQuitRetainsDraft', 'savedDataUnchanged', 'preferencesRestored']:
+        assert proof[key] is True, key
+    assert proof['automaticKeychainAllowed'] is False
+    for name in proof['captures']: assert (evidence / name).stat().st_size > 1000, name
+    proof = data['nativeAgentCatalogProof']
+    for key in ['actualSearchField', 'actualFilterActions', 'caseInsensitive', 'emptyResultsDoNotSelect', 'availableAndEnabledMatchCatalog', 'escapeClearsWithoutClosing', 'frozenControlsDisabled', 'commandDraftRetained', 'savedDataUnchanged']:
+        assert proof[key] is True, key
+    assert (evidence / proof['capture']).stat().st_size > 1000
     assert data['settingsPeerPhase'] == 'verify-same-field-conflict'
     assert data['settingsQAReadOnlyRetryCount'] >= 0
     assert 0 <= data['settingsQAPeerWriteRetryCount'] <= 4
     assert data['nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets']
     assert data['nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation']
+    proof = data['nativeWorkspaceManagementProof']
+    for key in ['actualAddEditDeleteControls', 'actualNameField', 'inactiveRename', 'stalePeerRenameRetainsDraft', 'cancelledDeletionPreservedRow', 'occupiedWorkspaceDeleteDisabled', 'activeWorkspaceSessionAndGenerationRetained', 'savedDataRestored']:
+        assert proof[key] is True, key
+    assert (evidence / proof['capture']).stat().st_size > 1000
+    for phase in ['add', 'rename']:
+        attempts = [item for item in data['nativeWorkspaceManagementAttempts'] if item['phase'] == phase]
+        assert attempts and len(attempts) <= 3 and attempts[-1]['saved'] is True
+        assert all(item['completedAction'] is True for item in attempts)
+        assert all(item['unchangedOnBusy'] is True for item in attempts)
     assert data['nativeDatabaseComponentsReadonlyCatalogWithoutDownloads']
     assert data['nativeJavaCatalogDetectionRegistrationFailureRetentionAndRecordRemoval']
     assert data['nativeBreakReminderRenderDismissAndDisable']

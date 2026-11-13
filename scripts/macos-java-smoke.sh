@@ -61,13 +61,25 @@ public class TaskProbe {
     assert report['coreReady'] and not report['productionDataAccess'], report
     for key in ['nativeJavaMenuOpened', 'nativeJDKRegistration', 'configurationConflictRetainedDraft',
                 'realJARFinalOutputAndExitCode', 'existingJarBypassedInvalidWrapper', 'windowDetachRetainedTask',
-                'reopenedSameGenerationAndHost', 'staleGenerationStopRefused', 'forceStopCompleted',
+                'reopenedSameGenerationAndHost', 'staleGenerationStopRefused', 'activeTaskStoppedWhileHistorySelected', 'forceStopCompleted',
                 'temporaryEnvironmentNotSaved', 'nativeLogSearchFoundLiteralOutput',
                 'nativePausedFollowRetainedAnchor', 'nativeFollowResumed', 'runAgainWaitedForOldExit',
                 'normalStopRetainedFinalOutputAndCopy']:
         assert report[key], (key, report)
     assert report['unsupportedDevelopmentArgumentsRejected'], report
+    dock = report['javaDockedRunPanel']
+    for field in ['passed', 'nativeKeyboardResize', 'boundedHomeAndEnd', 'labelledDoubleClickReset', 'actualExpandAndRestore', 'retainedPanelView', 'realTaskPresent', 'taskAndFollowRetained']:
+        assert dock[field] is True, (field, dock)
+    assert dock['taskID'] and dock['taskGeneration']
+    assert len(dock['captures']) == 2
+    for name in dock['captures']:
+        assert (evidence / name).stat().st_size > 1000, name
     proof = report['javaToolbarRunList']
+    assert proof['actualSidebarRunIcon'] is True
+    stopped = report['javaSidebarStoppedIcon']
+    assert stopped['passed'] is True and stopped['actualRestoredImage'] is True
+    assert (evidence / stopped['screenshot']).stat().st_size > 1000
+    assert dock['taskID'] == proof['taskID'] and dock['taskGeneration'] == proof['taskGeneration']
     for field in ['passed', 'realHostTask', 'actualMenuAction', 'actualToolbarCoordinator', 'appKitActionDispatched', 'staleGenerationRejected', 'scopeRetainedOnRejection', 'sameTaskGeneration', 'actualMainWindow', 'actualToggleButtonRetainedGeneration', 'retainedContentAfterBackingWindowCleared']:
         assert proof[field] is True, (field, proof)
     for name in [proof['screenshot'], report['nativeJavaMenuWorkspaceCapture']]:

@@ -3,6 +3,19 @@ import SwiftUI
 import UTermBridge
 
 @MainActor
+private final class ResponsiveSidebarTable: NSTableView {
+    override func setFrameSize(_ size: NSSize) {
+        let changed = bounds.width != size.width
+        super.setFrameSize(size)
+        guard changed, size.width > 0 else { return }
+        Task { @MainActor [weak self] in
+            guard let self, self.bounds.width == size.width, self.numberOfRows > 0 else { return }
+            self.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<self.numberOfRows))
+        }
+    }
+}
+
+@MainActor
 private final class SidebarSessionCloseButton: NSButton {
     var sessionID = ""
     var hoverFill = NSColor.controlBackgroundColor
@@ -103,6 +116,7 @@ private final class SidebarRowView: NSTableRowView {
 @MainActor
 struct NativeSidebar: NSViewRepresentable {
     @ObservedObject var model: WorkspaceModel
+    @ObservedObject var runs: NativeProjectRunsModel
 
     struct Row: Equatable {
         let key: String
@@ -113,10 +127,14 @@ struct NativeSidebar: NSViewRepresentable {
         let depth: Int
         let sectionID: String?
         let collapsed: Bool
-        init(key: String, name: String, symbol: String?, projectID: String? = nil, worktreeID: String? = nil, depth: Int = 0, sectionID: String? = nil, collapsed: Bool = false) {
+        let runRoot: String?
+        let runLanguage: String?
+        let resourceActive: Bool
+        init(key: String, name: String, symbol: String?, projectID: String? = nil, worktreeID: String? = nil, depth: Int = 0, sectionID: String? = nil, collapsed: Bool = false, runRoot: String? = nil, runLanguage: String? = nil, resourceActive: Bool = false) {
             self.key = key; self.name = name; self.symbol = symbol
             self.projectID = projectID; self.worktreeID = worktreeID; self.depth = depth
             self.sectionID = sectionID; self.collapsed = collapsed
+            self.runRoot = runRoot; self.runLanguage = runLanguage; self.resourceActive = resourceActive
         }
     }
 
@@ -127,7 +145,7 @@ struct NativeSidebar: NSViewRepresentable {
         scroll.drawsBackground = false
         scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
         scroll.automaticallyAdjustsContentInsets = false
-        let table = NSTableView()
+        let table = ResponsiveSidebarTable()
         table.identifier = NSUserInterfaceItemIdentifier("native-sidebar")
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
         table.addTableColumn(column)
@@ -175,6 +193,7 @@ struct NativeSidebar: NSViewRepresentable {
             self.model = model
             guard let table else { return }
             let settings = model.settings
+            let runningRoots = ProjectRunRoots.languages(model.projectRuns.tasks)
             let palette = NativePreferences.interfacePalette(settings, catalog: model.settingsCatalog)
             let signature = [settings["interfaceFont"].string ?? "", String(settings["interfaceSize"].number ?? 13), String(settings["rowPadding"].number ?? 1), settings["interfaceTheme"].string ?? "", String(NativePreferences.light(settings)), settings["activeIconColor"].string ?? ""]
             table.rowHeight = max(CGFloat(CoreChrome.sidebarRowHeight), CGFloat(settings["interfaceSize"].number ?? 13) + 19) + CGFloat(settings["rowPadding"].number ?? 1) * 2
@@ -191,14 +210,16 @@ struct NativeSidebar: NSViewRepresentable {
             func worktreeRows(_ tree: JSONValue, project: JSONValue, depth: Int) -> [Row] {
                 let id = project["id"].string ?? ""
                 let suffix = tree["missing"] == .bool(true) ? localized(" (missing)", "（缺失）") : ""
-                var rows = [Row(key: "w:" + (tree["id"].string ?? ""), name: (tree["name"].string ?? "") + suffix, symbol: "arrow.triangle.branch", projectID: id, worktreeID: tree["id"].string, depth: depth)]
+                let root = tree["path"].string ?? ""
+                var rows = [Row(key: "w:" + (tree["id"].string ?? ""), name: (tree["name"].string ?? "") + suffix, symbol: "arrow.triangle.branch", projectID: id, worktreeID: tree["id"].string, depth: depth, runRoot: root, runLanguage: runningRoots[ProjectRunRoots.key(root)], resourceActive: project["sessions"].array.contains { $0["worktreeId"] == tree["id"] })]
                 rows += model.orderedSessions(project["sessions"].array.filter { $0["worktreeId"] == tree["id"] }).map { sessionRow($0, depth: depth + 1) }
                 return rows
             }
             func projectRows(_ project: JSONValue) -> [Row] {
                 let id = project["id"].string ?? ""
                 let collapsed = project["collapsed"].bool == true
-                var rows = [Row(key: "p:" + id, name: project["name"].string ?? "", symbol: project["pinned"].bool == true ? "pin.fill" : "folder", projectID: id, collapsed: collapsed)]
+                let root = project["directory"].string ?? ""
+                var rows = [Row(key: "p:" + id, name: project["name"].string ?? "", symbol: project["pinned"].bool == true ? "pin.fill" : "folder", projectID: id, collapsed: collapsed, runRoot: root, runLanguage: runningRoots[ProjectRunRoots.key(root)], resourceActive: !project["sessions"].array.isEmpty)]
                 if collapsed { return rows }
                 rows += model.orderedSessions(project["sessions"].array.filter { $0["worktreeId"].string == nil }).map { sessionRow($0, depth: 1) }
                 for tree in project["worktrees"].array where !project["sessions"].array.isEmpty || project["pinned"].bool == true || tree["pinned"].bool != true {
@@ -230,7 +251,7 @@ struct NativeSidebar: NSViewRepresentable {
                 for connection in group["sshConnections"].array {
                     if !query.isEmpty && !["name", "host", "username"].compactMap({ connection[$0].string }).contains(where: { $0.lowercased().contains(query) }) { continue }
                     let temporary = connection["temporary"].bool == true ? localized(" · Temporary", " · 临时") : ""
-                    connections.append(Row(key: "q:" + (connection["id"].string ?? ""), name: (connection["name"].string ?? "SSH") + temporary, symbol: "network"))
+                    connections.append(Row(key: "q:" + (connection["id"].string ?? ""), name: (connection["name"].string ?? "SSH") + temporary, symbol: "network", resourceActive: !connection["sessions"].array.isEmpty))
                     connections += model.orderedSessions(connection["sessions"].array).map { sessionRow($0, depth: 1) }
                 }
                 appendSection("ssh", "SSH", rows: connections)
@@ -295,6 +316,7 @@ struct NativeSidebar: NSViewRepresentable {
                         return row.key != "ssh-filter" && !inserted.contains(index) && previous.first(where: { $0.key == row.key }) != row
                     })
                     table.reloadData(forRowIndexes: changed, columnIndexes: IndexSet(integer: 0))
+                    if let quick = rows.firstIndex(where: { $0.key == "ssh-quick" }), changed.contains(quick) { table.noteHeightOfRows(withIndexesChanged: IndexSet(integer: quick)) }
                 } else { table.reloadData() }
                 // Reloading filtered rows must retain only an already-focused search editor.
                 // 重载筛选行时，仅恢复原本已获得焦点的搜索编辑器。
@@ -318,6 +340,22 @@ struct NativeSidebar: NSViewRepresentable {
         }
 
         func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+        func hasRunIndicator(root: String, language: String?) -> Bool {
+            guard let model, let table,
+                  let index = rows.firstIndex(where: { $0.runRoot.map(ProjectRunRoots.key) == ProjectRunRoots.key(root) }),
+                  rows[index].runLanguage == language,
+                  let cell = table.view(atColumn: 0, row: index, makeIfNecessary: true) as? NSTableCellView else { return false }
+            let row = rows[index]
+            let disclosure = cell.subviews.compactMap { $0 as? DisclosureButton }.first
+            let actual = disclosure?.image ?? cell.imageView?.image
+            let expected: NSImage
+            if let language {
+                expected = NativeChromeImages.projectRun(language, running: true, light: NativePreferences.light(model.settings))
+            } else {
+                expected = NativeChromeImages.sidebar(row.worktreeID == nil ? (row.collapsed ? .folderClosed : .folder) : .branch)
+            }
+            return actual === expected && cell.window?.isVisible == true && !cell.isHiddenOrHasHiddenAncestor
+        }
         func measuredGeometry(in root: NSView) -> [String: Double]? {
             guard let table, let first = rows.firstIndex(where: { $0.sectionID != nil }),
                   let later = rows.indices.first(where: { $0 > first && rows[$0].sectionID != nil }),
@@ -329,8 +367,24 @@ struct NativeSidebar: NSViewRepresentable {
             return ["sidebarRowHeight": Double(regularHeight), "sidebarSectionHeight": Double(section), "sidebarSectionGap": Double(table.rect(ofRow: later).height - section), "sidebarListTop": Double(top) - CoreChrome.titlebarHeight]
         }
         func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-            guard rows.indices.contains(row), rows[row].sectionID != nil else { return tableView.rowHeight }
+            guard rows.indices.contains(row) else { return tableView.rowHeight }
+            if rows[row].key == "ssh-filter" { return 50 }
+            if rows[row].key == "ssh-quick" {
+                let width = max(1, (tableView.tableColumns.first?.width ?? tableView.bounds.width) - 16)
+                let title = quickSSHTitle(rows[row].name, settings: model?.settings ?? .null)
+                let height = title.boundingRect(with: NSSize(width: width, height: CGFloat.greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading]).height
+                return max(28, ceil(height)) + 4
+            }
+            guard rows[row].sectionID != nil else { return tableView.rowHeight }
             return CGFloat(CoreChrome.sidebarSectionHeight + (row == 0 ? 0 : CoreChrome.sidebarSectionGap))
+        }
+        private func quickSSHTitle(_ name: String, settings: JSONValue) -> NSAttributedString {
+            let font = NativePreferences.semiboldFont(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.alignment = .center; paragraph.lineBreakMode = .byWordWrapping
+            paragraph.minimumLineHeight = max(18, font.pointSize * 1.4); paragraph.maximumLineHeight = paragraph.minimumLineHeight
+            let palette = NativePreferences.interfacePalette(settings, catalog: model?.settingsCatalog ?? .null)
+            return NSAttributedString(string: name, attributes: [.font: font, .paragraphStyle: paragraph, .foregroundColor: NativePreferences.color(palette["text"], fallback: .labelColor)])
         }
         func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
             let view = SidebarRowView()
@@ -561,14 +615,18 @@ struct NativeSidebar: NSViewRepresentable {
                 let control: NSView
                 if item.key == "ssh-quick" {
                     let button = NSButton(title: item.name, target: self, action: #selector(quickSSH(_:)))
-                    button.bezelStyle = .rounded
+                    button.isBordered = false; button.alignment = .center
+                    button.cell?.wraps = true; button.cell?.usesSingleLineMode = false; button.cell?.lineBreakMode = .byWordWrapping
+                    button.contentTintColor = NativePreferences.color(palette["text"], fallback: .labelColor)
                     button.identifier = NSUserInterfaceItemIdentifier("native-ssh-quick")
-                    button.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
+                    button.font = NativePreferences.semiboldFont(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
+                    button.attributedTitle = quickSSHTitle(item.name, settings: settings)
                     button.isEnabled = model?.busy == false
                     control = button
                 } else {
                     sshSearch.removeFromSuperview()
                     sshSearch.delegate = self
+                    (sshSearch.cell as? NSSearchFieldCell)?.searchButtonCell = nil
                     sshSearch.identifier = NSUserInterfaceItemIdentifier("native-sidebar-filter")
                     sshSearch.placeholderString = localized("Search SSH hosts", "搜索 SSH 主机")
                     sshSearch.setAccessibilityLabel(sshSearch.placeholderString)
@@ -578,7 +636,7 @@ struct NativeSidebar: NSViewRepresentable {
                     control = sshSearch
                 }
                 control.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(control)
-                NSLayoutConstraint.activate([control.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2), control.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2), control.centerYAnchor.constraint(equalTo: cell.centerYAnchor), control.heightAnchor.constraint(equalToConstant: 26)])
+                NSLayoutConstraint.activate([control.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8), control.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8), control.topAnchor.constraint(equalTo: cell.topAnchor, constant: item.key == "ssh-filter" ? 6 : 4), control.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: item.key == "ssh-filter" ? -8 : 0)])
                 return cell
             }
             if let section = item.sectionID {
@@ -614,23 +672,32 @@ struct NativeSidebar: NSViewRepresentable {
             var inset: CGFloat = 12
             if let symbol = item.symbol {
                 let shared: [String: CoreSidebarIcon] = ["folder": .folder, "terminal": .terminal, "arrow.triangle.branch": .branch, "network": .terminal, "externaldrive": .sqlDatabase, "cylinder": .database]
-                let image = shared[symbol].map { NativeChromeImages.sidebar($0) } ?? NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage()
+                let image = item.runLanguage.map { NativeChromeImages.projectRun($0, running: true, light: NativePreferences.light(settings)) } ?? shared[symbol].map { NativeChromeImages.sidebar($0) } ?? NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage()
                 let icon = NSImageView(image: image)
+                icon.imageScaling = .scaleProportionallyDown
                 icon.contentTintColor = NativePreferences.color(settings["activeIconColor"], fallback: NativePreferences.color(palette["accent"], fallback: .controlAccentColor))
                 icon.translatesAutoresizingMaskIntoConstraints = false
                 cell.addSubview(icon)
                 cell.imageView = icon
+                if item.resourceActive {
+                    let ring = NativeResourceRing(light: NativePreferences.light(settings))
+                    ring.identifier = .init("native-resource-active-" + item.key)
+                    ring.translatesAutoresizingMaskIntoConstraints = false
+                    cell.addSubview(ring, positioned: .below, relativeTo: icon)
+                    NSLayoutConstraint.activate([ring.centerXAnchor.constraint(equalTo: icon.centerXAnchor), ring.centerYAnchor.constraint(equalTo: icon.centerYAnchor), ring.widthAnchor.constraint(equalToConstant: 32), ring.heightAnchor.constraint(equalToConstant: 32)])
+                }
                 if item.key.hasPrefix("p:"), let id = item.projectID {
                     let collapsed = model?.projects.first(where: { $0["id"].string == id })?["collapsed"].bool == true
                     let disclosure = DisclosureButton()
                     disclosure.projectID = id; disclosure.target = self; disclosure.action = #selector(toggleDisclosure(_:))
                     disclosure.expanded = !collapsed
-                    disclosure.folder = NativeChromeImages.sidebar(collapsed ? .folderClosed : .folder)
+                    disclosure.folder = item.runLanguage.map { NativeChromeImages.projectRun($0, running: true, light: NativePreferences.light(settings)) } ?? NativeChromeImages.sidebar(collapsed ? .folderClosed : .folder)
                     disclosure.image = disclosure.folder; disclosure.contentTintColor = icon.contentTintColor
                     disclosure.imageScaling = .scaleProportionallyDown
                     icon.isHidden = true
                     disclosure.isBordered = false; disclosure.isEnabled = model?.busy == false && model?.gitFavoritesRecoveryPresented == false
                     disclosure.setAccessibilityLabel(collapsed ? localized("Expand project", "展开项目") : localized("Collapse project", "折叠项目"))
+                    if let language = item.runLanguage { disclosure.toolTip = language.capitalized + localized(" · Running", " · 运行中") }
                     disclosure.identifier = NSUserInterfaceItemIdentifier("native-project-disclosure-" + id)
                     disclosure.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(disclosure)
                     NSLayoutConstraint.activate([disclosure.leadingAnchor.constraint(equalTo: icon.leadingAnchor), disclosure.centerYAnchor.constraint(equalTo: cell.centerYAnchor), disclosure.widthAnchor.constraint(equalToConstant: CGFloat(CoreChrome.sidebarIconSize)), disclosure.heightAnchor.constraint(equalToConstant: 22)])

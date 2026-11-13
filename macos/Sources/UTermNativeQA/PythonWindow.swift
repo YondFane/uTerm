@@ -9,12 +9,16 @@ struct PythonEnvironment: Identifiable { let id = UUID(); var key = ""; var valu
 
 @MainActor
 final class PythonRunModel: ObservableObject {
+    @Published var workspaceDocked = false
     let directory: String
     let bridge: CoreBridge
     private(set) var settings: JSONValue
+    private(set) var settingsCatalog: JSONValue
     @Published var config: CorePythonRunConfig?
-    @Published var arguments: [PythonArgument] = []
-    @Published var environment: [PythonEnvironment] = []
+    @Published var argumentInput = ""
+    @Published var arguments: [PythonArgument] = [] { didSet { if !editingArgumentInput { argumentInput = RunPanelInput.formatArguments(arguments.map(\.text)) } } }
+    @Published var environmentInput = ""
+    @Published var environment: [PythonEnvironment] = [] { didSet { if !editingEnvironmentInput { environmentInput = environment.map { $0.key + "=" + $0.value }.joined(separator: "\n") } } }
     @Published var port = ""
     @Published var error = ""
     @Published var feedback = ""
@@ -28,6 +32,8 @@ final class PythonRunModel: ObservableObject {
     @Published var search = ""
     @Published var searchSummary = ""
     @Published private(set) var terminal: TerminalSession?
+    private var editingArgumentInput = false
+    private var editingEnvironmentInput = false
     private var revision = ""
     private var polling: Task<Void, Never>?
     private var frames: Task<Void, Never>?
@@ -37,11 +43,11 @@ final class PythonRunModel: ObservableObject {
     var selectedTask: JSONValue { tasks.first { $0["spec"]["id"].string == selectedID } ?? .null }
     var running: Bool { tasks.contains { $0["running"].bool == true } }
 
-    init(directory: String, bridge: CoreBridge, settings: JSONValue) {
-        self.directory = directory; self.bridge = bridge; self.settings = settings
+    init(directory: String, bridge: CoreBridge, settings: JSONValue, catalog: JSONValue = .null) {
+        self.directory = directory; self.bridge = bridge; self.settings = settings; self.settingsCatalog = catalog
     }
     func applySettings(_ value: JSONValue, catalog: JSONValue) {
-        if settings != value { objectWillChange.send(); settings = value }
+        if settings != value || settingsCatalog != catalog { objectWillChange.send(); settings = value; settingsCatalog = catalog }
         terminal?.apply(settings: value, catalog: catalog)
     }
     func start() async {
@@ -78,13 +84,18 @@ final class PythonRunModel: ObservableObject {
             let loaded = try await bridge.call("python.configuration", params: .object(["directory": .string(directory)]))
             try apply(loaded)
             try await detectValues()
+            let configuration = try JSONDecoder().decode(CorePythonConfiguration.self, from: JSONEncoder().encode(loaded))
+            config = PythonRunDraft.make(project: configuration.project, configured: configuration.configured, candidates: candidates, interpreters: interpreters)
+            port = String(config?.port ?? 8000)
             await refreshTasks()
         } catch { self.error = error.localizedDescription }
     }
-    private func apply(_ response: JSONValue) throws {
+    private func apply(_ response: JSONValue, preservingArgumentInput: Bool = false) throws {
         let loaded = try JSONDecoder().decode(CorePythonConfiguration.self, from: JSONEncoder().encode(response))
+        let retainedInput = preservingArgumentInput ? argumentInput : nil
         config = loaded.project; revision = loaded.revision
         arguments = (loaded.project.arguments ?? []).map { PythonArgument(text: $0) }
+        argumentInput = RunPanelInput.formatArguments(loaded.project.arguments ?? [], retaining: retainedInput)
         port = String(loaded.project.port ?? 0)
         dirty = false
     }
@@ -130,29 +141,38 @@ final class PythonRunModel: ObservableObject {
         guard panel.runModal() == .OK else { return }
         _ = await applySelection(panel.url, kind: kind)
     }
+    func editArguments(_ text: String) {
+        guard !busy, !prepared else { return }
+        editingArgumentInput = true; defer { editingArgumentInput = false }
+        argumentInput = text
+        if let values = try? RunPanelInput.arguments(text) { arguments = values.map { PythonArgument(text: $0) } }
+        dirty = true
+    }
+    func editEnvironment(_ text: String) {
+        guard !busy, !prepared else { return }
+        editingEnvironmentInput = true; defer { editingEnvironmentInput = false }
+        environmentInput = text
+        if let values = try? RunPanelInput.environment(text) { environment = values.sorted { $0.key < $1.key }.map { PythonEnvironment(key: $0.key, value: $0.value) } }
+    }
     private func formConfig() throws -> CorePythonRunConfig {
         guard var result = config, let number = UInt16(port) else {
             throw BridgeFailure(code: "PYTHON_CONFIG_INVALID", message: localized("Enter a valid port.", "请填写有效端口。"))
         }
-        result.port = number; result.arguments = arguments.map(\.text)
+        result.port = number
+        do { result.arguments = try RunPanelInput.arguments(argumentInput) }
+        catch { throw BridgeFailure(code: "PYTHON_ARGUMENTS_INVALID", message: localized("Complete argument quotes and remove unsupported control characters.", "请补全参数引号并移除不支持的控制字符。")) }
         return result
     }
     private func persist() async throws {
         let response = try await bridge.call("python.saveConfiguration", params: .object([
             "directory": .string(directory), "revision": .string(revision), "config": try value(formConfig())
         ]))
-        try apply(response)
+        try apply(response, preservingArgumentInput: true)
         feedback = localized("Configuration saved.", "配置已保存。")
     }
     private func environmentValues() throws -> [String: JSONValue] {
-        var values: [String: JSONValue] = [:]
-        for row in environment {
-            guard values[row.key] == nil else {
-                throw BridgeFailure(code: "PYTHON_ENVIRONMENT_INVALID", message: localized("Environment names must be unique.", "环境变量名称不能重复。"))
-            }
-            values[row.key] = .string(row.value)
-        }
-        return values
+        do { return try RunPanelInput.environment(environmentInput).mapValues { .string($0) } }
+        catch { throw BridgeFailure(code: "PYTHON_ENVIRONMENT_INVALID", message: localized("Use one NAME=value per line with unique names; UTERM_ names are reserved.", "每行填写一个 NAME=value，名称不能重复；UTERM_ 前缀为保留名称。")) }
     }
     private func startSaved(environment: [String: JSONValue]) async throws {
         let task = try await bridge.call("python.start", params: .object([
@@ -217,7 +237,7 @@ final class PythonRunModel: ObservableObject {
         } else { error = localized("Could not copy retained output.", "无法复制保留的输出。") }
     }
     func stop(force: Bool) async {
-        let task = selectedTask
+        let task = tasks.first { $0["running"].bool == true } ?? .null
         guard !busy, !prepared, task["running"].bool == true,
               let id = task["spec"]["id"].string, let generation = task["generation"].string else { return }
         busy = true; error = ""
@@ -279,114 +299,149 @@ final class PythonRunModel: ObservableObject {
 struct PythonRunView: View {
     @ObservedObject var model: PythonRunModel
     let reload: () -> Void
+    @State private var viewportWidth: CGFloat = 1100
+    @State private var configurationExpanded = true
+    @State private var advancedExpanded = false
+    private var palette: JSONValue { NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog) }
+    private var blocked: Bool { model.busy || model.prepared || model.config == nil }
+    private var web: Bool { ["fastapi", "flask", "django"].contains(model.config?.mode ?? "") }
+    private var fileTarget: Bool { ["script", "django"].contains(model.config?.mode ?? "") }
+    private var columns: [GridItem] { Array(repeating: GridItem(.flexible(minimum: 0), spacing: 12, alignment: .top), count: RunPanelLayout.formColumns(viewportWidth: Double(viewportWidth))) }
     func text(_ key: WritableKeyPath<CorePythonRunConfig, String?>) -> Binding<String> {
         Binding(get: { model.config?[keyPath: key] ?? "" }, set: { model.config?[keyPath: key] = $0; model.dirty = true })
     }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(model.directory).font(.caption).textSelection(.enabled)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        TextField(localized("Python interpreter", "Python 解释器"), text: text(\.interpreter))
-                        Button(localized("Choose…", "选择…")) { Task { await model.choosePath("interpreter") } }
-                        Menu(localized("Detected", "已检测")) {
-                            ForEach(Array(model.interpreters.enumerated()), id: \.offset) { _, interpreter in
-                                Button(interpreter["path"].string ?? "") { text(\.interpreter).wrappedValue = interpreter["path"].string ?? "" }
-                            }
-                        }
-                        Button(localized("Check again", "重新检测")) { Task { await model.detect() } }
-                    }
-                    Picker(localized("Launch mode", "启动方式"), selection: text(\.mode)) {
-                        Text(localized("Python script", "Python 脚本")).tag("script")
-                        Text(localized("Python module", "Python 模块")).tag("module")
-                        Text("FastAPI").tag("fastapi"); Text("Flask").tag("flask"); Text("Django").tag("django")
-                    }
-                    HStack {
-                        TextField(localized("Entry point", "应用入口"), text: text(\.target))
-                        if ["script", "django"].contains(model.config?.mode ?? "") {
-                            Button(localized("Choose…", "选择…")) { Task { await model.choosePath("script") } }
-                        }
-                        Menu(localized("Project entries", "项目入口")) {
-                            ForEach(Array(model.candidates.enumerated()), id: \.offset) { _, candidate in
-                                Button(candidate["target"].string ?? "") {
-                                    text(\.target).wrappedValue = candidate["target"].string ?? ""
-                                    text(\.mode).wrappedValue = candidate["mode"].string ?? "script"
-                                    text(\.working_directory).wrappedValue = candidate["working_directory"].string ?? "."
-                                }
-                            }
-                        }
-                    }
-                    HStack {
-                    TextField(localized("Working directory", "工作目录"), text: text(\.working_directory))
-                        Button(localized("Choose…", "选择…")) { Task { await model.choosePath("directory") } }
-                    }
-                    if ["fastapi", "flask", "django"].contains(model.config?.mode ?? "") {
-                        HStack {
-                            TextField(localized("Listen address", "监听地址"), text: text(\.host))
-                            TextField(localized("Port", "端口"), text: $model.port).frame(width: 80).onChange(of: model.port) { _, _ in model.dirty = true }
-                            Toggle(localized("Auto reload", "自动重载"), isOn: Binding(get: { model.config?.reload ?? false }, set: { model.config?.reload = $0; model.dirty = true }))
-                        }
-                    }
-                    DisclosureGroup(localized("Advanced settings", "高级设置")) {
-                        VStack(alignment: .leading) {
-                            ForEach($model.arguments) { $argument in
-                                HStack {
-                                    TextField(localized("Literal argument", "字面参数"), text: $argument.text).onChange(of: argument.text) { _, _ in model.dirty = true }
-                                    Button("−") { model.arguments.removeAll { $0.id == argument.id }; model.dirty = true }
-                                }
-                            }
-                            Button(localized("Add argument", "添加参数")) { model.arguments.append(PythonArgument(text: "")); model.dirty = true }
-                            ForEach($model.environment) { $row in
-                                HStack {
-                                    TextField(localized("Environment name", "环境变量名称"), text: $row.key)
-                                    TextField(localized("Temporary value", "临时值"), text: $row.value)
-                                    Button("−") { model.environment.removeAll { $0.id == row.id } }
-                                }
-                            }
-                            Button(localized("Add temporary environment variable", "添加临时环境变量")) { model.environment.append(PythonEnvironment()) }
-                            Text(localized("Environment values apply only to this run and are not saved.", "环境变量只用于本次运行，不保存。")).font(.caption)
-                        }
-                    }
-                    HStack { Spacer(); Button(localized("Save configuration", "保存配置")) { Task { _ = await model.save() } } }
-                }.padding(2)
-            }.frame(maxHeight: 290).disabled(model.busy || model.prepared || model.config == nil)
-            if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled) }
-            if !model.feedback.isEmpty { Text(model.feedback).font(.caption) }
-            HStack {
-                Button(localized("Reload saved configuration", "重新读取已保存的配置"), action: reload)
-                Spacer()
-                Button(localized("Run", "运行")) { Task { await model.run() } }.disabled(model.running)
-                Button(localized("Run again", "重新运行")) { Task { await model.runAgain() } }.disabled(model.tasks.isEmpty)
-                Button(localized("Stop", "停止")) { Task { await model.stop(force: false) } }.disabled(model.selectedTask["running"].bool != true)
-                Button(localized("Force stop", "强制停止")) { Task { await model.stop(force: true) } }.disabled(model.selectedTask["running"].bool != true)
-            }.disabled(model.busy || model.prepared)
-            if !model.tasks.isEmpty {
-                Picker(localized("Task history", "任务历史"), selection: $model.selectedID) {
-                    ForEach(Array(model.tasks.enumerated()), id: \.offset) { _, task in
-                        Text((task["task"]["name"].string ?? "") + (task["running"].bool == true ? localized(" · Running", " · 运行中") : " · \(Int(task["code"].number ?? 0))")).tag(task["spec"]["id"].string ?? "")
-                    }
-                }.onChange(of: model.selectedID) { _, _ in Task { await model.selectTask() } }.disabled(model.busy || model.prepared)
+    private func input(_ title: String, _ key: WritableKeyPath<CorePythonRunConfig, String?>, id: String, completions: [String]? = nil) -> some View {
+        NativeRunTextField(text: text(key), label: title, id: "native-python-" + id, palette: palette, completions: completions).frame(height: 28)
+    }
+    private func choose(_ kind: String, title: String) -> some View {
+        NativeRunAction(title: title, id: "native-python-choose-" + kind, palette: palette, icon: .folder, iconOnly: true) { Task { await model.choosePath(kind) } }.fixedSize()
+    }
+    private var interpreterField: some View {
+        NativeRunFormField(localized("Python interpreter", "Python 解释器"), id: "native-python-field-interpreter") {
+            HStack(spacing: 5) {
+                input(localized("Python interpreter", "Python 解释器"), \.interpreter, id: "interpreter", completions: model.interpreters.compactMap { $0["path"].string })
+                choose("interpreter", title: localized("Choose Python interpreter", "选择 Python 解释器"))
             }
-            if let terminal = model.terminal {
-                HStack {
-                    TextField(localized("Search output", "搜索输出"), text: $model.search).onSubmit { model.find() }
-                        .onChange(of: model.search) { _, value in if value.isEmpty { model.find() } }
-                    Button("↑") { model.find(previous: true) }.accessibilityLabel(localized("Previous match", "上一个匹配"))
-                    Button("↓") { model.find() }.accessibilityLabel(localized("Next match", "下一个匹配"))
-                    Text(model.searchSummary).font(.caption)
-                    Toggle(localized("Auto follow", "自动跟随"), isOn: Binding(get: { terminal.taskLogFollowsOutput }, set: { terminal.followTaskLog($0) })).toggleStyle(.checkbox)
+            Text(model.interpreters.first { $0["path"].string == model.config?.interpreter }?["version"].string ?? localized("Use an existing Python 3 environment", "使用已有 Python 3 环境"))
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+    }
+    private var primaryFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if RunPanelLayout.interpreterFillsRow(viewportWidth: Double(viewportWidth)) { interpreterField }
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                if !RunPanelLayout.interpreterFillsRow(viewportWidth: Double(viewportWidth)) { interpreterField }
+                NativeRunFormField(localized("Launch mode", "启动方式"), id: "native-python-field-mode") {
+                    Picker(localized("Launch mode", "启动方式"), selection: Binding(get: { model.config?.mode ?? "script" }, set: {
+                        guard let config = model.config else { return }
+                        model.config = PythonRunDraft.changingMode(config, to: $0, candidates: model.candidates)
+                        model.port = String(model.config?.port ?? 8000); model.dirty = true
+                    })) {
+                        Text(localized("Python script", "Python 脚本")).tag("script"); Text(localized("Python module", "Python 模块")).tag("module")
+                        Text("FastAPI").tag("fastapi"); Text("Flask").tag("flask"); Text("Django").tag("django")
+                    }.labelsHidden().frame(height: 28)
                 }
-                PythonLogCanvas(terminal: terminal).id(terminal.attachment).frame(minHeight: 160)
-                HStack {
-                    Text(terminal.error).foregroundStyle(.red)
-                    Spacer()
-                    Button(localized("Copy retained output", "复制保留的输出")) {
-                        model.copyOutput()
+                NativeRunFormField(fileTarget ? localized("Startup script", "启动脚本") : localized("Entry point", "应用入口"), id: "native-python-field-target") {
+                    HStack(spacing: 5) {
+                        input(localized("Entry point", "应用入口"), \.target, id: "target", completions: model.candidates.filter { $0["mode"].string == model.config?.mode }.compactMap { $0["target"].string })
+                        if fileTarget { choose("script", title: localized("Choose Python script", "选择 Python 脚本")) }
                     }
                 }
-            } else { Text(localized("No task output yet.", "尚无任务输出。")).frame(maxWidth: .infinity, maxHeight: .infinity) }
-        }.padding(12)
+                NativeRunFormField(localized("Working directory", "工作目录")) {
+                    HStack(spacing: 5) { input(localized("Working directory", "工作目录"), \.working_directory, id: "directory"); choose("directory", title: localized("Choose Python working directory", "选择 Python 工作目录")) }
+                }
+                if web {
+                    NativeRunFormField(localized("Listen address", "监听地址")) { input(localized("Listen address", "监听地址"), \.host, id: "host") }
+                    NativeRunFormField(localized("Port", "端口")) {
+                        HStack(spacing: 8) {
+                            NativeRunTextField(text: Binding(get: { model.port }, set: { model.port = $0; model.dirty = true }), label: localized("Port", "端口"), id: "native-python-port", palette: palette).frame(height: 28)
+                            Toggle(localized("Auto reload", "自动重载"), isOn: Binding(get: { model.config?.reload ?? false }, set: { model.config?.reload = $0; model.dirty = true })).toggleStyle(.checkbox).fixedSize()
+                        }
+                    }
+                }
+            }
+        }.padding(.top, 7).background(NativeRunPanelFrame(identifier: "native-python-primary-grid"))
+    }
+    private var advancedFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                NativeRunFormField(localized("Application arguments", "应用参数")) {
+                    NativeRunTextArea(text: Binding(get: { model.argumentInput }, set: { model.editArguments($0) }), label: localized("Application arguments", "应用参数"), id: "native-python-arguments", palette: palette).frame(height: 40)
+                }
+                NativeRunFormField(localized("Environment variables", "环境变量")) {
+                    NativeRunTextArea(text: Binding(get: { model.environmentInput }, set: { model.editEnvironment($0) }), label: localized("Environment variables", "环境变量"), id: "native-python-environment", palette: palette).frame(height: 40)
+                    Text(localized("Only for this run; environment values are not saved.", "仅用于本次运行，不保存环境变量。")).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                Spacer()
+                NativeRunAction(title: localized("Save configuration", "保存配置"), id: "native-python-save-configuration", palette: palette, height: 28) { Task { _ = await model.save() } }.fixedSize()
+            }
+        }.padding(.top, 7)
+    }
+    private var configuration: some View {
+        NativeRunDisclosure(localized("Run configuration", "运行配置"), id: "native-python-configuration-toggle", expanded: $configurationExpanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                primaryFields
+                NativeRunDisclosure(localized("Advanced settings", "高级设置"), id: "native-python-advanced-toggle", expanded: $advancedExpanded) { advancedFields }
+            }
+        }.font(.system(size: 11))
+    }
+    private var taskToolbar: some View {
+        NativeRunToolbarLayout() {
+            NativeRunTaskState(running: model.running, busy: model.busy, selected: model.selectedTask)
+            if let running = model.tasks.first(where: { $0["running"].bool == true }), let url = PythonRunDraft.serviceURL(task: running) {
+                Button(url.absoluteString) {
+                    if !NSWorkspace.shared.open(url) { model.error = localized("Could not open the service address.", "无法打开服务地址。") }
+                }.lineLimit(1).help(localized("Open service address", "打开服务地址"))
+            }
+            Spacer(minLength: 0).layoutValue(key: NativeRunToolbarSpace.self, value: true)
+            Menu {
+                Button(localized("Reload saved configuration", "重新读取已保存的配置"), action: reload)
+                Button(localized("Run again", "重新运行")) { Task { await model.runAgain() } }.disabled(model.tasks.isEmpty)
+                Button(localized("Force stop", "强制停止")) { Task { await model.stop(force: true) } }.disabled(!model.running)
+            } label: { Image(systemName: "ellipsis") }.fixedSize().help(localized("More actions", "更多操作"))
+            NativeRunAction(title: model.running ? localized("Run again", "重新运行") : localized("Run", "运行"), id: "native-python-run", palette: palette, icon: model.running ? .restart : .python, primary: true) {
+                Task { if model.running { await model.runAgain() } else { await model.run() } }
+            }.fixedSize().disabled(model.config?.interpreter?.isEmpty != false || model.config?.target?.isEmpty != false)
+            NativeRunAction(title: localized("Stop", "停止"), id: "native-python-stop", palette: palette) { Task { await model.stop(force: false) } }.fixedSize().disabled(!model.running)
+        }.disabled(model.busy || model.prepared).padding(.horizontal, 12).padding(.vertical, 6)
+            .overlay(alignment: .top) { border }.overlay(alignment: .bottom) { border }
+    }
+    private var border: some View { Color(nsColor: NativePreferences.color(palette["border"], fallback: .separatorColor)).frame(height: 1) }
+    private var output: some View {
+        Group {
+            if let terminal = model.terminal {
+                NativeRunLogToolbar(terminal: terminal, search: $model.search, summary: model.searchSummary, taskName: model.selectedTask["task"]["name"].string ?? "", find: { model.find(previous: $0) }, copy: { model.copyOutput() })
+                PythonLogCanvas(terminal: terminal).id(terminal.attachment).frame(minHeight: model.workspaceDocked ? 0 : 160, maxHeight: .infinity)
+                if !terminal.error.isEmpty { Text(terminal.error).foregroundStyle(.red).padding(8) }
+            } else {
+                Text(localized("Choose a Python environment and startup target, then run. Logs appear here.", "请选择 Python 环境和启动目标后运行，日志将在此显示。"))
+                    .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(12)
+            }
+        }
+    }
+    var body: some View {
+        GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 0) {
+                if !model.workspaceDocked {
+                    HStack { Text(model.directory).lineLimit(1).truncationMode(.middle); Spacer(); Button(localized("Check again", "重新检测")) { Task { await model.detect() } } }.padding(8).disabled(blocked)
+                }
+                NativeRunConfiguration(maximumHeight: max(0, geometry.size.height * 0.48)) { configuration }.disabled(blocked)
+                taskToolbar
+                if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).padding(8) }
+                if !model.feedback.isEmpty { Text(model.feedback).foregroundStyle(.secondary).padding(8) }
+                if model.tasks.count > 1 {
+                    Picker(localized("Task history", "任务历史"), selection: $model.selectedID) {
+                        ForEach(Array(model.tasks.enumerated()), id: \.offset) { _, task in Text(task["task"]["name"].string ?? "").tag(task["spec"]["id"].string ?? "") }
+                    }.onChange(of: model.selectedID) { _, _ in Task { await model.selectTask() } }.disabled(model.busy || model.prepared).padding(.horizontal, 12)
+                }
+                output
+            }.font(.system(size: 12)).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .foregroundStyle(Color(nsColor: NativePreferences.color(palette["text"], fallback: .labelColor)))
+                .background(Color(nsColor: NativePreferences.color(palette["canvas"], fallback: .windowBackgroundColor)))
+                .background(NativeRunViewport(width: $viewportWidth))
+        }
     }
 }
 
@@ -401,6 +456,7 @@ private struct PythonLogCanvas: NSViewRepresentable {
 final class PythonWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePanelContent {
     let model: PythonRunModel
     private(set) var workspacePanelView: NSView?
+    func workspaceEmbeddingChanged(_ embedded: Bool) { model.workspaceDocked = embedded }
     var didClose: (() -> Void)?
     private var closing = false
     init(model: PythonRunModel) {
@@ -438,7 +494,12 @@ final class PythonWindow: NSWindowController, NSWindowDelegate, NativeWorkspaceP
     }
     func prepareForQuit() async -> Bool {
         guard !model.busy else { model.error = localized("Wait for the Python operation to finish.", "请等待 Python 操作完成。"); return false }
-        if model.dirty {
+        if model.prepared { return true }
+        // Docked panels save loaded configuration on hide, including clean stale snapshots.
+        // 停靠面板隐藏时保存已加载配置，包括未编辑但修订已过期的快照。
+        if model.workspaceDocked, model.config != nil {
+            guard await model.save() else { return false }
+        } else if model.dirty {
             switch discardChoice() {
             case .alertSecondButtonReturn: break
             case .alertThirdButtonReturn: guard await model.save() else { return false }

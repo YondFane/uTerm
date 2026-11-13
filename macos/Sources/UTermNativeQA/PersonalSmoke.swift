@@ -4,6 +4,47 @@ import UTermBridge
 
 @MainActor
 enum PersonalSmoke {
+    private static func visibleTerminalText(_ session: TerminalSession) -> String {
+        let terminal = session.view.getTerminal()
+        let start = terminal.buffer.totalLinesTrimmed + terminal.buffer.yDisp
+        return (start..<(start + terminal.rows)).compactMap { row in
+            terminal.getScrollInvariantLine(row: row)?.translateToString(trimRight: true, skipNullCellsFollowingWide: true, characterProvider: { terminal.getCharacter(for: $0) })
+        }.joined(separator: "\n")
+    }
+    private static func rendererMetrics(_ terminal: TerminalSession, window: NSWindow) -> [String: Any]? {
+        let view = terminal.view, renderer = terminal.view.getTerminal(), scale = window.backingScaleFactor
+        guard view.window === window, renderer.cols > 0, renderer.rows > 0, scale > 0,
+              let pixels = view.cellSizeInPixels(source: renderer), pixels.width > 0, pixels.height > 0 else { return nil }
+        let optimal = view.getOptimalFrameSize(), cellWidth = CGFloat(pixels.width) / scale, cellHeight = CGFloat(pixels.height) / scale
+        let scrollbar = max(0, optimal.width - CGFloat(renderer.cols) * cellWidth)
+        var metrics: [String: Any] = ["columns": renderer.cols, "rows": renderer.rows,
+            "proposedColumns": max(1, Int((view.bounds.width - scrollbar) / cellWidth)), "proposedRows": max(1, Int(view.bounds.height / cellHeight)),
+            "viewportWidth": view.bounds.width, "viewportHeight": view.bounds.height, "backingScale": scale,
+            "cellWidth": cellWidth, "cellHeight": cellHeight, "reservedScrollbarWidth": scrollbar,
+            "optimalWidth": optimal.width, "optimalHeight": optimal.height]
+        metrics["receivedFrames"] = terminal.qaReceivedFrames; metrics["renderedFrames"] = terminal.qaRenderedFrames; metrics["acknowledgedFrames"] = terminal.qaAcknowledgedFrames
+        metrics["visibleText"] = visibleTerminalText(terminal); metrics["displayRow"] = renderer.buffer.yDisp
+        metrics["hostColumns"] = terminal.qaHostGrid["columns"] ?? -1; metrics["hostRows"] = terminal.qaHostGrid["rows"] ?? -1
+        return metrics
+    }
+    private static func rendererSignature(_ value: [String: Any]) -> String {
+        ["columns", "rows", "proposedColumns", "proposedRows", "viewportWidth", "viewportHeight", "backingScale", "cellWidth", "cellHeight", "optimalWidth", "optimalHeight", "receivedFrames", "renderedFrames", "acknowledgedFrames", "hostColumns", "hostRows", "displayRow"].map { String(describing: value[$0] ?? "") }.joined(separator: "/")
+    }
+    private static func settledRenderer(_ terminal: TerminalSession, window: NSWindow, marker: String) async throws -> [String: Any] {
+        var signature = "", stableSince = ProcessInfo.processInfo.systemUptime, result: [String: Any] = [:]
+        try await TerminalSmoke.wait("Actual native renderer settles after window/font changes") {
+            guard terminal.error.isEmpty, !terminal.qaWaitingToRender, terminal.qaReceivedFrames > 0,
+                  terminal.qaReceivedFrames == terminal.qaRenderedFrames, terminal.qaReceivedFrames == terminal.qaAcknowledgedFrames,
+                  let sample = rendererMetrics(terminal, window: window), (sample["visibleText"] as? String)?.contains(marker) == true,
+                  sample["columns"] as? Int == sample["proposedColumns"] as? Int,
+                  sample["rows"] as? Int == sample["proposedRows"] as? Int else { signature = ""; return false }
+            let current = rendererSignature(sample)
+            if current != signature { signature = current; stableSince = ProcessInfo.processInfo.systemUptime; return false }
+            result = sample
+            return ProcessInfo.processInfo.systemUptime - stableSince >= 0.25
+        }
+        return result
+    }
     static func run(model: WorkspaceModel, window: NSWindow, openSettings: () -> NativeSettingsWindow, openFile: (URL, String) async throws -> ContentWindow) async {
         guard WorkspaceModel.applicationProfile.personalFixture, let store = try? WorkspaceModel.dataRoot() else { return }
         let root = store.deletingLastPathComponent()
@@ -14,6 +55,7 @@ enum PersonalSmoke {
         let architecture = "x86_64"
         #endif
         var report: [String: Any] = ["platform": "macOS", "architecture": architecture,
+            "captureMethod": TerminalSmoke.captureMethod,
             "system": ProcessInfo.processInfo.operatingSystemVersionString, "phase": phase,
             "sourceHeadSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceHeadSHA") as? String ?? "",
             "testedMergeSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceSHA") as? String ?? "",
@@ -33,6 +75,10 @@ enum PersonalSmoke {
             guard let resources = Bundle.main.resourceURL else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing resources") }
             let parityBytes = try Data(contentsOf: resources.appendingPathComponent("client-ui-parity.json"))
             let parity = try JSONDecoder().decode(JSONValue.self, from: parityBytes)
+            guard case .object(let fixtureFiles) = parity["files"], !fixtureFiles.isEmpty else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing shared fixture files") }
+            let fixturePaths = fixtureFiles.keys.sorted()
+            let fixturePathsJSON = String(decoding: try JSONEncoder().encode(fixturePaths), as: UTF8.self)
+            report["workspaceFixturePaths"] = fixturePaths
             report["uiParityFixtureSHA256"] = SHA256.hash(data: parityBytes).map { String(format: "%02x", $0) }.joined()
             if phase == "initial" {
                 guard await model.mutate("workspace.rename", ["id": .string(model.groupID), "name": parity["workspaceName"]]) else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: model.error) }
@@ -144,6 +190,8 @@ enum PersonalSmoke {
                           button.isEnabled else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Settings section is unavailable") }
                     button.performClick(nil)
                     try await TerminalSmoke.wait("Select actual settings section") { settings.model.section == id }
+                    _ = try await TerminalSmoke.sizeCaptureWindow(window, width: width, height: height)
+                    settings.alignToParent()
                     let attempts = try await TerminalSmoke.sizeCaptureWindow(settings.window, width: width, height: height)
                     if id == "maven" {
                         try await TerminalSmoke.wait("Load standalone global Maven before capture") { !settings.model.maven.busy && !settings.model.maven.values.isEmpty }
@@ -170,7 +218,9 @@ enum PersonalSmoke {
                         "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
                         "width": Int(settings.window.contentView?.bounds.width ?? 0), "height": Int(settings.window.contentView?.bounds.height ?? 0),
                         "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "",
-                        "navigationControlActivated": true, "draftUnchanged": true, "mavenFixtureMatched": id == "maven", "databaseFixtureMatched": id == "database", "javaFixtureMatched": id == "java", "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts])
+                        "navigationControlActivated": true, "draftUnchanged": true, "mavenFixtureMatched": id == "maven", "databaseFixtureMatched": id == "database", "javaFixtureMatched": id == "java", "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts,
+                        "workspaceModal": settings.window.parent === window && !settings.window.styleMask.contains(.titled),
+                        "settingsCard": ["x": Double(settings.model.presentationCardFrame.minX), "y": Double(settings.model.presentationCardFrame.minY), "width": Double(settings.model.presentationCardFrame.width), "height": Double(settings.model.presentationCardFrame.height)]])
                     report["settingsScenes"] = scenes
                     try checkpoint("settings-captured-" + language + "-" + id)
                 }
@@ -196,15 +246,16 @@ enum PersonalSmoke {
                         }
                         try await TerminalSmoke.wait("Fixture files remain readable across settings changes") {
                             model.inspector.error.isEmpty && !model.inspector.busy
-                                && Set(model.inspector.rows.compactMap { $0["path"].string }) == Set(["note.txt", "README.md"])
+                                && Set(model.inspector.rows.compactMap { $0["path"].string }) == Set(fixturePaths)
                         }
                         guard let files = model.inspector.content, files.webView.window === window else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Shared file controls are not mounted in the real inspector") }
-                        try await ContentSmoke.wait(files, "['note.txt','README.md'].every(name => [...document.querySelectorAll('.file-row-name')].some(row => row.textContent.trim() === name)) && document.querySelectorAll('.inspector-tabs [role=tab]').length === 3 && document.querySelectorAll('.inspector-switcher button').length === 4")
+                        try await ContentSmoke.wait(files, "\(fixturePathsJSON).every(name => [...document.querySelectorAll('.file-row-name')].some(row => row.textContent.trim() === name)) && document.querySelectorAll('.inspector-tabs [role=tab]').length === 3 && document.querySelectorAll('.inspector-switcher button').length === 4")
+                        try await ContentSmoke.wait(files, "[...document.querySelectorAll('.inspector-switcher button')].every(button=>{const rect=button.getBoundingClientRect();return rect.width>=22 && rect.height>0 && rect.left>=0 && rect.right<=innerWidth+.5})")
                         let rawStatus = try await bridge.call("git.fileStatus", params: .object(["directory": .string(files.directory.path)]))
                         let normalizedStatus = try ContentFileRoot.normalizingGitRoot(rawStatus)
                         report["workspaceGitRootDiagnostics"] = ["selectedDirectory": files.directory.path, "rawGitRoot": rawStatus["root"].string ?? "", "normalizedGitRoot": normalizedStatus["root"].string ?? ""]
-                        try await ContentSmoke.wait(files, "['note.txt','README.md'].every(path=>[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus==='untracked')")
-                        let gitStateJSON = try await files.webView.evaluateJavaScript("JSON.stringify(Object.fromEntries(['note.txt','README.md'].map(path=>[path,[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus])))")
+                        try await ContentSmoke.wait(files, "\(fixturePathsJSON).every(path=>[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus==='untracked')")
+                        let gitStateJSON = try await files.webView.evaluateJavaScript("JSON.stringify(Object.fromEntries(\(fixturePathsJSON).map(path=>[path,[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus])))")
                         guard let gitStateText = gitStateJSON as? String, let gitStateBytes = gitStateText.data(using: .utf8) else { throw BridgeFailure(code: "PERSONAL_FILE_GIT_STATE", message: "Could not read actual file-row Git states") }
                         let fileGitStates = try JSONDecoder().decode([String: String].self, from: gitStateBytes)
                         try await ContentSmoke.wait(files, "document.querySelector('.file-panel')?.getAttribute('aria-label') === " + (language == "en" ? "'Files panel'" : "'文件面板'"))
@@ -237,8 +288,40 @@ enum PersonalSmoke {
                                 "allWidth": model.sidebarAllButtonFrame.width, "allHeight": model.sidebarAllButtonFrame.height]
                             throw error
                         }
+                        var branchMetrics: [String: Any] = [:]
+                        try await TerminalSmoke.wait("Actual compact branch picker shows the fixture branch") {
+                            guard let content = window.contentView, let button = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-branch-picker" }) as? NSButton,
+                                  button.isEnabled, button.title == (parity["github"]["head"].string ?? "") + " ⌄", let cell = button.cell else { return false }
+                            let icon = cell.imageRect(forBounds: button.bounds), title = cell.titleRect(forBounds: button.bounds)
+                            branchMetrics = ["name": model.branchPicker.current, "height": button.frame.height, "width": button.frame.width,
+                                "fontSize": button.font?.pointSize ?? 0, "captionGap": title.minX - icon.maxX,
+                                "actualAppKitControl": true, "fontName": button.font?.fontName ?? ""]
+                            return abs((button.font?.pointSize ?? 0) - 11) < 0.01 && abs(title.minX - icon.maxX - 5) < 1 && button.frame.width >= 24 && button.frame.height > 20
+                        }
+                        let controls = NativeWindowControls.metrics(window)
+                        guard controls.count == 3, let closeX = controls.first?["x"], abs(closeX - 16) < 1 else { throw BridgeFailure(code: "PERSONAL_WINDOW_CONTROLS", message: "Actual window controls differ from the shared inset") }
                         let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
+                        let rendered: [String: Any]
+                        do { rendered = try await settledRenderer(terminal, window: window, marker: marker) }
+                        catch {
+                            var diagnostic = rendererMetrics(terminal, window: window) ?? [:]
+                            diagnostic["fullBufferContainsMarker"] = terminal.text.contains(marker)
+                            diagnostic["tailText"] = terminal.qaTailText; diagnostic["error"] = terminal.error; diagnostic["replayResets"] = terminal.qaReplayResets
+                            diagnostic["sourceHeadSHA"] = report["sourceHeadSHA"]; diagnostic["testedMergeSHA"] = report["testedMergeSHA"]
+                            report["workspaceTerminalRendererDiagnostics"] = diagnostic
+                            var trace: [String: Any] = ["events": terminal.qaLayoutEvents, "truncated": terminal.qaLayoutTraceTruncated]
+                            trace["sourceHeadSHA"] = report["sourceHeadSHA"]; trace["testedMergeSHA"] = report["testedMergeSHA"]
+                            trace["sessionID"] = terminal.id; trace["generation"] = terminal.generation ?? ""
+                            trace["platform"] = "macOS"; trace["architecture"] = architecture; trace["phase"] = phase
+                            let name = "personal-" + phase + "-terminal-layout-trace.json"
+                            do {
+                                try JSONSerialization.data(withJSONObject: trace, options: [.prettyPrinted, .sortedKeys]).write(to: root.appendingPathComponent(name), options: .atomic)
+                                report["workspaceTerminalLayoutTrace"] = name
+                            } catch { report["workspaceTerminalLayoutTraceWriteError"] = error.localizedDescription }
+                            throw error
+                        }
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
+                        guard let after = rendererMetrics(terminal, window: window), rendererSignature(after) == rendererSignature(rendered) else { throw BridgeFailure(code: "PERSONAL_TERMINAL_RENDERER", message: "The terminal grid changed during capture") }
                         captures.append(name)
                         report["captures"] = captures
                         var captured: [String: Any] = ["screenshot": name, "language": language, "appearance": appearance,
@@ -251,6 +334,8 @@ enum PersonalSmoke {
                             "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""]
                         guard let font = model.selectedTerminal?.view.font, font.fontName == "CascadiaCode-Regular", font.familyName == "Cascadia Code" else { throw BridgeFailure(code: "PERSONAL_FONT", message: "Terminal used a fallback instead of the bundled face") }
                         captured["fontFamily"] = font.familyName ?? ""
+                        captured["branchPicker"] = branchMetrics
+                        captured["windowControls"] = controls
                         for (key, value) in inspectorGeometry { captured[key] = value }
                         captured["sidebarRailLeft"] = model.sidebarRailFrame.minX
                         captured["sidebarRailWidth"] = model.sidebarRailFrame.width
@@ -262,6 +347,7 @@ enum PersonalSmoke {
                         captured["fileGitStates"] = fileGitStates
                         captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
                         captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width
+                        captured["terminalRenderer"] = rendered
                         guard let pane = terminal.view.superview as? NativeTerminalPane else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Actual terminal pane is detached") }
                         let terminalGeometry = pane.measuredGeometry()
                         for key in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop"] {
@@ -326,6 +412,8 @@ enum PersonalSmoke {
             try await QuickParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
             try checkpoint("github")
             try await GitHubParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
+            try checkpoint("run-panels")
+            try await RunPanelParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
             report["captures"] = captures
             try checkpoint("host-shutdown")
             await model.closeSession()
@@ -384,12 +472,18 @@ enum PersonalSmoke {
         try await TerminalSmoke.wait("Hide project children without closing their processes") {
             model.projects.first?["collapsed"].bool == true && !model.busy && row("Terminal 1") == nil && row("Terminal 2") == nil
         }
+        func activeRing() -> NativeResourceRing? {
+            TerminalSmoke.descendants(content).first { $0.identifier?.rawValue == "native-resource-active-p:personal-qa-project" } as? NativeResourceRing
+        }
+        guard let collapsedRing = activeRing(), !collapsedRing.isHiddenOrHasHiddenAncestor, collapsedRing.visibleRect.width > 0 else { throw BridgeFailure(code: "PERSONAL_RESOURCE_RING", message: "Collapsed active project lost its actual ring") }
         let collapsed = "personal-\(phase)-sidebar-collapsed.png"
         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(collapsed))
         report["captures"] = (report["captures"] as? [String] ?? []) + [collapsed]
         guard let disclosure = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-project-disclosure-personal-qa-project" }) as? NSButton else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Project disclosure control is missing") }
         disclosure.performClick(nil)
         try await TerminalSmoke.wait("Expand through the real disclosure control") { row("Terminal 1") != nil && row("Terminal 2") != nil && !model.busy }
+        guard let expandedRing = activeRing(), !expandedRing.isHiddenOrHasHiddenAncestor, expandedRing.visibleRect.width > 0 else { throw BridgeFailure(code: "PERSONAL_RESOURCE_RING", message: "Expanded active project lost its actual ring") }
+        report["nativeProjectActiveRingRetainedOnCollapse"] = true
         try click(projectName, localized("Unpin project", "取消置顶项目"))
         try await TerminalSmoke.wait("Persist unpin through the real sidebar menu") { model.projects.first?["pinned"].bool == false && !model.busy }
         let extraDirectory = root.appendingPathComponent("sidebar-order")

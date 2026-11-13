@@ -4,8 +4,9 @@ cd "$(dirname "$0")/.."
 test "$(uname -s)" = Darwin
 launchctl print "gui/$(id -u)" >/dev/null
 pgrep -x WindowServer >/dev/null
-python3 - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" <<'PY'
+python3 -B - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" <<'PY'
 import json, os, subprocess, sys, tempfile
+from scripts.ui_parity_workbench import validate_workbench_layout
 from pathlib import Path
 app, evidence = map(Path, sys.argv[1:]); evidence.mkdir(parents=True, exist_ok=True)
 report = evidence / 'workspace-panels-native.json'; report.unlink(missing_ok=True)
@@ -29,6 +30,20 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
     for kind, fields in required.items():
         proof = data[kind + 'WorkspacePanelProof']
         for key in ['actualMainWindow', *fields]: assert proof[key] is True, (kind, key)
+    for kind in ['java', 'python']:
+        dock = data[kind + 'DockedRunPanel']
+        for key in ['passed', 'nativeKeyboardResize', 'boundedHomeAndEnd', 'labelledDoubleClickReset', 'actualExpandAndRestore', 'retainedPanelView', 'mainTerminalPresent', 'mainTerminalRetainedAndVisible']:
+            assert dock[key] is True, (kind, key)
+        assert data[kind + 'DockedFileLoaded'] is True
+        assert data[kind + 'DockedFileRetained'] is True
+        assert len(dock['captures']) == 2
+        for name in dock['captures']: assert (evidence / name).stat().st_size > 1000, name
+        hide = data[kind + 'HideConfiguration']
+        for key in ['passed', 'actualHideButton', 'cleanStaleHideRefused', 'dirtyStaleHideRefused', 'draftRetained', 'peerValueRetained', 'explicitFixtureReload', 'savedDraftAfterReload', 'draftInjectedForQA']:
+            assert hide[key] is True, (kind, key)
+        assert hide['failedHideAttempts'] == 2
+        assert hide['screenshot'] == 'native-workspace-' + kind + '-hide-conflict.png'
+        assert hide['screenshot'] in data['captures']
     project = data['nativeProjectMenuRevisionAndWorkspaceMove']
     for key in ['passed', 'actualMenuActions', 'stalePinRejected', 'staleMoveRejected', 'peerSettingRetained', 'terminalGenerationsAndViewsRetained', 'splitLayoutRetainedInReopenedSnapshot', 'movedAndReturned']:
         assert project[key] is True, key
@@ -50,7 +65,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
         assert scene['sourceHeadSHA'] == data['sourceHeadSHA'] and scene['testedMergeSHA'] == data['sourceSHA']
         assert scene['platform'] == 'macOS' and scene['architecture'] == data['architecture'] and scene['system'] == data['system']
         assert scene['height'] == 720 and scene['screenshot'] in data['captures']
-    assert len(data['captures']) == 12
+    files = {'native-workspace-' + kind + suffix + '.png' for kind in ['java', 'python'] for suffix in ['-dock-with-file', '-hide-conflict']}
+    files |= validate_workbench_layout(data, data['sourceHeadSHA'], data['sourceSHA'])
+    assert set(data['captures']) == {scene['screenshot'] for scene in data['scenes']} | files
+    assert len(data['captures']) == 20
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert not subprocess.check_output(['git', 'status', '--porcelain'])

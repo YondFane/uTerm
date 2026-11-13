@@ -12,7 +12,7 @@ final class NativeWorkspaceDocuments: ObservableObject {
     }
     @Published private(set) var documents: [Document] = []
     var terminalFocusRequested: (() -> Void)?
-    var selectionChanged: (() -> Void)?
+    var selectionChanged: ((ContentWindow) -> Void)?
     @Published private var selected: [String: UUID] = [:]
     func visible(in scope: String) -> [Document] { documents.filter { $0.scope == scope } }
     func active(in scope: String) -> Document? { documents.first { $0.scope == scope && $0.id == selected[scope] } }
@@ -24,7 +24,7 @@ final class NativeWorkspaceDocuments: ObservableObject {
         content.presentEmbedded = { [weak self, weak parent, weak content] in
             guard let self, let parent, let content, self.documents.contains(where: { $0.id == id }) else { return }
             guard let item = self.documents.first(where: { $0.id == id }) else { return }
-            self.selectionChanged?()
+            self.selectionChanged?(content)
             self.selected[item.scope] = id
             parent.makeKeyAndOrderFront(nil)
             DispatchQueue.main.async { [weak self, weak parent, weak content] in
@@ -73,18 +73,38 @@ struct NativeWorkspaceDocumentSurface: View {
     @ObservedObject var documents: NativeWorkspaceDocuments
     @ObservedObject var panels: NativeWorkspacePanels
     private var panel: NativeWorkspacePanels.Panel? { panels.active(in: model.inspectorContextKey) }
+    private var hasTabs: Bool { !documents.visible(in: model.inspectorContextKey).isEmpty || !panels.visible(in: model.inspectorContextKey).isEmpty }
     var body: some View {
         VStack(spacing: 0) {
-            if !documents.visible(in: model.inspectorContextKey).isEmpty || !panels.visible(in: model.inspectorContextKey).isEmpty {
+            if hasTabs {
                 NativeWorkspaceDocumentTabs(model: model, documents: documents, panels: panels)
             }
-            ZStack {
-                TerminalCanvas(model: model, hidden: documents.active(in: model.inspectorContextKey) != nil || panel != nil)
-                    .allowsHitTesting(documents.active(in: model.inspectorContextKey) == nil && panel == nil)
-                if let panel { NativeHostedPanel(panel: panel).id(panel.id) }
-                else if let selected = documents.active(in: model.inspectorContextKey) {
-                    NativeEmbeddedDocument(content: selected.content)
-                        .id(selected.id)
+            GeometryReader { geometry in
+                let available = Double(geometry.size.height) + (hasTabs ? Double(NativeWorkspaceDocumentTabs.height) : 0)
+                let viewport = available + CoreChrome.titlebarHeight
+                let run = panel.flatMap { $0.runKind == nil ? nil : $0 }
+                let layout = run.map { panels.runLayout($0, available: available, viewport: viewport) }
+                let expanded = run.map { panels.runExpanded($0.id) } ?? false
+                ZStack(alignment: .bottom) {
+                    ZStack {
+                        TerminalCanvas(model: model, hidden: documents.active(in: model.inspectorContextKey) != nil || (panel != nil && run == nil))
+                            .allowsHitTesting(documents.active(in: model.inspectorContextKey) == nil && (panel == nil || run != nil))
+                        if let panel, run == nil { NativeHostedPanel(panel: panel).id(panel.id) }
+                        else if let selected = documents.active(in: model.inspectorContextKey) {
+                            NativeEmbeddedDocument(content: selected.content).id(selected.id)
+                        }
+                    }
+                    .padding(.bottom, CGFloat(expanded ? 0 : layout?.height ?? 0))
+                    if let run, let layout {
+                        NativeDockedRunPanel(model: model, panels: panels, panel: run, layout: layout, available: available, viewport: viewport)
+                            .frame(height: CGFloat(expanded ? layout.expandedHeight : layout.height))
+                            .onChange(of: available, initial: true) { _, _ in
+                                panels.resizeRun(run.id, requested: layout.height, available: available, viewport: viewport)
+                            }
+                            .onChange(of: run.id) { _, _ in
+                                panels.resizeRun(run.id, requested: layout.height, available: available, viewport: viewport)
+                            }
+                    }
                 }
             }
         }
@@ -134,6 +154,7 @@ final class EmbeddedDocumentHost: NSView {
 
 @MainActor
 private struct NativeWorkspaceDocumentTabs: View {
+    static let height: CGFloat = 29
     @ObservedObject var model: WorkspaceModel
     @ObservedObject var documents: NativeWorkspaceDocuments
     @ObservedObject var panels: NativeWorkspacePanels
@@ -150,7 +171,10 @@ private struct NativeWorkspaceDocumentTabs: View {
                 }
                 ForEach(panels.visible(in: scope)) { item in
                     HStack(spacing: 0) {
-                        tab(item.title, active: panels.active(in: scope)?.id == item.id, icon: nil, identifier: "native-panel-select-" + item.id) { documents.showTerminal(in: scope); panels.select(item.id, scope: scope) }
+                        tab(item.title, active: panels.active(in: scope)?.id == item.id, icon: nil, identifier: "native-panel-select-" + item.id) {
+                            if item.runKind == nil || documents.active(in: scope)?.content.workbenchHost != nil { documents.showTerminal(in: scope) }
+                            panels.select(item.id, scope: scope)
+                        }
                         NativeDocumentAction(title: localized("Close tab", "关闭标签"), identifier: "native-panel-close-" + item.id, image: NativeChromeImages.toolbar(.close), iconOnly: true, active: false, tint: NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)) { panels.close(item.id) }.frame(width: 22, height: 22).padding(.trailing, 4)
                     }
                     .background(color(panels.active(in: scope)?.id == item.id ? "canvas" : "sidebar"))
@@ -170,7 +194,7 @@ private struct NativeWorkspaceDocumentTabs: View {
                 }
             }
         }
-        .frame(height: 29).scrollIndicators(.hidden).buttonStyle(.borderless)
+        .frame(height: Self.height).scrollIndicators(.hidden).buttonStyle(.borderless)
         .background(color("sidebar"))
         .overlay(alignment: .bottom) { color("border").frame(height: 1) }
         .disabled(!model.ready || model.busy || model.settingsPresented || model.gitFavoritesRecoveryPresented || model.worktreeDeletionPresented)
@@ -186,7 +210,7 @@ private struct NativeWorkspaceDocumentTabs: View {
 }
 
 @MainActor
-private struct NativeDocumentAction: NSViewRepresentable {
+struct NativeDocumentAction: NSViewRepresentable {
     let title: String
     let identifier: String
     let image: NSImage?

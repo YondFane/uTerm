@@ -140,6 +140,7 @@
         "pdf-highlights": "PDF",
         "github-pr-draft": "GitHub PR / GitHub 合并请求",
         "quick-ssh-invalid": "Quick SSH / 快速 SSH",
+        "run-panel": "Run panels / 运行面板",
       };
       const allAreas = [...new Set(report.pairs.map((pair) => pair.area))];
       const area = byId("area"),
@@ -165,7 +166,7 @@
         scenes = report.pairs.filter((pair) => !area.value || pair.area === area.value);
         scene.replaceChildren();
         for (const [index, pair] of scenes.entries()) {
-          const label = `${labels[pair.area] || pair.area}${pair.section ? " · " + pair.section : ""} · ${pair.language} · ${pair.appearance} · ${pair.width}×${pair.height}`;
+          const label = `${labels[pair.area] || pair.area}${pair.section ? " · " + pair.section : ""}${pair.kind ? " · " + pair.kind : ""}${pair.state ? " · " + pair.state : ""} · ${pair.language} · ${pair.appearance} · ${pair.width}×${pair.height}`;
           scene.add(new Option(label, String(index)));
         }
         show();

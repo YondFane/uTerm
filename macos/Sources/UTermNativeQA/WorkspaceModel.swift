@@ -43,6 +43,7 @@ final class WorkspaceModel: ObservableObject {
     }
     @Published var nameDraft: NameDraft?
     @Published var nameDraftOwner: NameDraftOwner = .workspace
+    private(set) var qaNameSaveCompletions = 0
     @Published var fullScreen = false
     @Published var sidebarVisible = true
     @Published var sidebarSection = "all"
@@ -56,6 +57,7 @@ final class WorkspaceModel: ObservableObject {
     @Published private(set) var focusRevision = 0
     @Published private(set) var toolbarHeight: CGFloat = 0
     @Published private(set) var toolbarTop: CGFloat = -1
+    @Published private(set) var viewportWidth: CGFloat = 1100
     @Published private(set) var sidebarWidth: CGFloat = 0
     private(set) var sidebarRailFrame: CGRect = .zero
     private(set) var sidebarAllButtonFrame: CGRect = .zero
@@ -86,6 +88,7 @@ final class WorkspaceModel: ObservableObject {
     var revealProjectRunRequested: ((String, JSONValue) -> Void)?
     var openAgentsRequested: (() -> Void)?
     var openSettingsRequested: (() -> Void)?
+    var openJavaToolsRequested: ((JavaRunModel) -> Bool)?
     var openFileRequested: (() -> Void)?
     var performCommandRequested: ((String) -> Void)?
     var commandIsAvailable: ((String) -> Bool)?
@@ -115,7 +118,10 @@ final class WorkspaceModel: ObservableObject {
     lazy var agentNotifications = AgentNotifications(workspace: self)
     lazy var documents: NativeWorkspaceDocuments = {
         let value = NativeWorkspaceDocuments()
-        value.selectionChanged = { [weak self] in guard let self else { return }; self.panels.showTerminal(in: self.inspectorContextKey) }
+        value.selectionChanged = { [weak self] content in
+            guard let self else { return }
+            if content.workbenchHost != nil || self.panels.active(in: self.inspectorContextKey)?.runKind == nil { self.panels.showTerminal(in: self.inspectorContextKey) }
+        }
         value.terminalFocusRequested = { [weak self] in self?.focusRevision += 1 }
         return value
     }()
@@ -164,6 +170,7 @@ final class WorkspaceModel: ObservableObject {
     var projectItems: [NativeListItem] { projects.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var sessionEntries: [CoreSessionEntry] { (state?.sessions ?? []).filter { $0.workspaceId == groupID } }
     func revealSelectedPane() { paneZoomed = false; focusRevision += 1 }
+    func measureViewport(_ width: CGFloat) { if abs(viewportWidth - width) > 0.1 { viewportWidth = width } }
     func measureInspector(_ width: CGFloat) { if abs(inspectorWidth - width) > 0.1 { inspectorWidth = width } }
     func measureSidebar(_ width: CGFloat) { if abs(sidebarWidth - width) > 0.1 { sidebarWidth = width } }
     func measureSidebarRail(_ frame: CGRect) { sidebarRailFrame = frame }
@@ -530,13 +537,17 @@ final class WorkspaceModel: ObservableObject {
     }
 
     var canRemoveWorkspace: Bool {
-        guard groups.count > 1, projects.isEmpty, let group = groups.first(where: { $0["id"].string == groupID }) else { return false }
+        canRemoveWorkspace(groupID)
+    }
+    func canRemoveWorkspace(_ id: String) -> Bool {
+        guard groups.count > 1, !workspace["projects"].array.contains(where: { $0["workspaceId"].string == id }),
+              let group = groups.first(where: { $0["id"].string == id }) else { return false }
         return ["terminals", "chats", "sshConnections", "databaseConnections", "redisConnections"].allSatisfy { group[$0].array.isEmpty }
     }
 
-    func removeWorkspace() {
-        guard canRemoveWorkspace, !busy, let revision = state?.snapshot.revision else { return }
-        let id = groupID
+    func removeWorkspace(id target: String? = nil) {
+        let id = target ?? groupID
+        guard canRemoveWorkspace(id), !busy, let revision = state?.snapshot.revision else { return }
         let alert = NSAlert()
         alert.messageText = localized("Delete empty workspace?", "删除空工作区？")
         alert.informativeText = groups.first(where: { $0["id"].string == id })?["name"].string ?? ""
@@ -623,20 +634,23 @@ final class WorkspaceModel: ObservableObject {
         catch { self.error = localized("Could not refresh Agent availability.", "无法刷新 Agent 可用状态。") }
     }
 
-    func renameWorkspace(owner: NameDraftOwner = .workspace) {
-        guard nameDraft == nil, let state else { return }
+    func renameWorkspace(id target: String? = nil, owner: NameDraftOwner = .workspace) {
+        let id = target ?? groupID
+        guard nameDraft == nil, !busy, let state, let group = groups.first(where: { $0["id"].string == id }) else { return }
         nameDraftOwner = owner
         if owner == .workspace { requestActivation?() }
-        let current = groups.first { $0["id"].string == groupID }?["name"].string ?? ""
-        nameDraft = NameDraft(target: groupID, name: current, revision: state.snapshot.revision)
+        nameDraft = NameDraft(target: id, name: group["name"].string ?? "", revision: state.snapshot.revision)
     }
 
     func saveNameDraft() async {
-        guard let draft = nameDraft else { return }
+        guard !busy, let draft = nameDraft else { return }
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
+        // QA observes the complete naming action, including draft cleanup after the mutation task.
+        // QA 观察完整命名动作，包含写入任务结束后的草稿清理。
+        defer { qaNameSaveCompletions += 1 }
         let method = draft.target == nil ? "workspace.create" : "workspace.rename"
-        if await mutate(method, ["id": .string(draft.target ?? draft.id.uuidString), "name": .string(name), "select": .bool(true)], revision: draft.revision) { nameDraft = nil }
+        if await mutate(method, ["id": .string(draft.target ?? draft.id.uuidString), "name": .string(name), "select": .bool(nameDraftOwner == .workspace)], revision: draft.revision) { nameDraft = nil }
     }
 
     func reloadNameDraft() async {

@@ -3,7 +3,7 @@ title: Native UI parity acceptance / 原生界面一致性验收
 status: active
 type: reference
 created: 2026-11-10
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # Native UI parity acceptance / 原生界面一致性验收
@@ -55,6 +55,14 @@ actual toolbar height/top position and responsive side/tool widths in both appli
 collector rejects stale vectors, titlebar insets or old panel geometry; 0.2.10 captures do not meet
 this new candidate's evidence requirement. Full visual and functional parity remains pending.
 
+Docked Java/Python Hide must save loaded configuration, retain clean or dirty stale drafts on
+conflict, and save only after explicit reload. Actual native Hide-button QA labels injected drafts
+and peer writes, preserving conflict originals; the 16 workspace-smoke originals remain separate
+from the 50 paired scenes. Standalone Save/Discard/Cancel remains. This candidate still needs actual
+Mac execution.
+
+停靠 Java/Python 的隐藏操作须保存已加载配置，未编辑或已编辑的过期草稿遇冲突时保留面板，明确重读后才保存。真实原生隐藏按钮 QA 标注注入草稿及对端写入并保留冲突原图；16张工作区冒烟原图与50组配对场景分开。独立窗口保留保存／放弃／取消。此候选仍须实际 Mac 执行。
+
 Workspace pairing also requires measured full-height inspector/header/viewport/footer geometry in
 both applications. A 44-point nested-titlebar offset or clipped footer fails comparison, even if the
 files themselves are readable.
@@ -67,23 +75,25 @@ files themselves are readable.
 The shared PR form now has a bounded native workspace modal instead of using the narrow tools
 viewport. Native host requests fix the repository/root, reject injected fields and duplicate writes,
 and retain a hidden draft across Command-W/reopen. Cancel/Escape discard; pending writes still block
-close/quit. Linux frontend (475 passed, 11 skipped), nine GitHub/grid checks and three-width CSS
-checks pass. New real Mac modal screenshots and ordinary PR pairs remain required.
+close/quit. The candidate's Linux frontend records 484 passed and 11 skipped, with 14 targeted
+i18n/scene checks and 60 evidence/package/discovery/matrix policies. New current-source real Mac
+windows and the complete paired grid remain required.
 
-共用 PR 表单改为有界的原生工作区模态，不再受窄工具视口限制。原生请求固定仓库／根目录，拒绝注入字段及重复写入；Command-W／重开保留隐藏草稿，取消／Escape 放弃，写入期间仍禁止关闭／退出。Linux 前端 474 通过、11 跳过，22 项专项及三种宽度 CSS 检查通过。新模态仍需真实 Mac 截图及普通版 PR 配对。
+共用 PR 表单改为有界的原生工作区模态，不再受窄工具视口限制。原生请求固定仓库／根目录，拒绝注入字段及重复写入；Command-W／重开保留隐藏草稿，取消／Escape 放弃，写入期间仍禁止关闭／退出。候选的 Linux 前端记录484项通过、11项跳过，另有14项 i18n／场景及60项证据／包／发现／矩阵策略检查；当前源码真实 Mac 窗口及完整配对网格仍待验收。
 
 Two shared PR scenes add English/dark 1100×720 and Chinese/light 640×720. Both real clients operate
 literal fields and Cancel with the same temporary Git repository and simulated CLI, retaining the
 live terminal and saved data; Personal repeats after app replacement. Original screenshots, source
 metadata and CLI logs must show no GitHub write. Twenty-five evidence/fixture and 15 Personal Python
 policies pass, including refusal of external/symlink/reused roots and crushed or stale form proof. A
-real Linux Rust Core process prepares/reads the fixture without an account. The expanded grid is 39
-ordinary captures / 38 pairs / 77 original PNGs including restart. Current-source Mac screenshots
-remain pending; historical 36-pair artifacts do not satisfy this expanded grid.
+real Linux Rust Core process prepares/reads the fixture without an account. Twelve Java/Python
+docked/expanded/file scenes extend the grid to 52 ordinary captures / 50 pairs / 102 original PNGs
+including restart and final run-panel cleanup. Current-source Mac screenshots remain pending;
+historical 36-/38-pair artifacts do not satisfy this expanded grid.
 
 新增两组共用 PR 场景：英文深色 1100×720、中文浅色 640×720。两种真实客户端在同一临时 Git 仓库及模拟 CLI 下输入字面字段并取消，保留实时终端及保存数据；Personal 在应用替换后重复。原始截图、源码元数据及 CLI 日志必须证明未写 GitHub。25 项证据／样例及 15 项 Personal
 Python 策略通过，包含外部／符号链接／复用目录及挤压／过期表单证据拒绝。真实 Linux Rust
-Core 进程通过无需账户的准备／读取。扩大网格为普通版 39 张／38 组／含重启共 77 张原始 PNG；当前源码 Mac 原图仍待生成，历史 36 组不满足新网格。
+Core 进程通过无需账户的准备／读取。新增十二组 Java/Python 停靠／展开／文件共存场景后，网格要求普通版52张／50组配对／含重启及最终运行面板清理共102张原始 PNG；当前源码 Mac 原图仍待生成，历史36／38组不满足新网格。
 
 Head `92bd88e2f0ba0f31d8fd20c02eed45d40229ac7d` / merge `383f762158b9285bd65d70bfbbe3fe1bfcdca018`
 fails ARM compilation: the PR collector passed Double sizes to the Int window-sizing function. Exact
@@ -228,11 +238,11 @@ acceptance.
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
-uploads 72 matching original images, the ordinary restart image, `comparison.md` and
-`comparison.json`. Collection runs on Ubuntu and never replaces a missing native capture with a
-browser render. `comparisonReady` means the images are ready for review; `functionalParityAccepted`
-remains false until all acceptance rows are met. The source-bound results below include actual CI
-execution and inspection of the Java originals.
+uploads 100 matched originals, the ordinary restart and final run-panel-cleanup images,
+`comparison.md` and `comparison.json`. Collection runs on Ubuntu and never replaces a missing native
+capture with a browser render. `comparisonReady` means the images are ready for review;
+`functionalParityAccepted` remains false until all acceptance rows are met. The source-bound results
+below include actual CI execution and inspection of the Java originals.
 
 After downloading and extracting the paired artifact, open `comparison.html` to choose an area and
 scene, move between pairs and open either original PNG at its actual size. The page includes both
@@ -244,7 +254,7 @@ buttons; this verifies the report viewer, not the current application. The new H
 upload in a current-source paired CI artifact.
 
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
-ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 72 张匹配原图、普通版重启原图、`comparison.md`
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传100张匹配原图、普通版重启及最终运行面板清理原图、`comparison.md`
 和 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。下列绑定源码的结果包含实际 CI 执行及 Java 原图核对。

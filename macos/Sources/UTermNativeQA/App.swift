@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var fullSettingsWindow: NativeSettingsWindow?
     private var commandPalette: NativeCommandPalette?
     private let model = WorkspaceModel()
+    private lazy var agentSettings = AgentSettingsModel(workspace: model)
     private var terminating = false
     private var preparingQuit = false
     private var mutatingRepository = false
@@ -49,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.contentView = NSHostingView(rootView: WorkspaceView(model: model))
         window.center()
         self.window = window
+        NativeWindowControls.align(window)
         model.languageChanged = { [weak self] in
             self?.configureMenu()
             self?.sshWindow?.window?.title = localized("SSH connections", "SSH 连接")
@@ -115,6 +117,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
         model.openSettingsRequested = { [weak self] in self?.openFullSettings() }
+        model.openJavaToolsRequested = { [weak self] run in
+            guard let self, !self.model.settingsPresented, !self.model.workspaceModalPresented, self.commandAvailable("settings") else { return false }
+            self.openFullSettings()
+            self.fullSettingsWindow?.didHide = { [weak run] in Task { await run?.detect() } }
+            self.fullSettingsWindow?.model.section = "java"
+            return self.fullSettingsWindow?.window.isVisible == true
+        }
         model.openFileRequested = { [weak self] in self?.openFile() }
         model.performCommandRequested = { [weak self] in self?.performCommand($0) }
         model.commandIsAvailable = { [weak self] in self?.commandAvailable($0) == true }
@@ -280,7 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if let path = WorkspaceModel.argument("--settings-smoke-report") {
                 var report = baseReport()
                 do {
-                    try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, report: &report)
+                    try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, openAgents: { self.openAgents(); return self.agentsWindow! }, report: &report)
                     try await PreferencesSmoke.run(workspace: model, parent: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, report: &report)
                 }
                 catch {
@@ -731,16 +740,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if let next = candidates.min(by: { $0.1 < $1.1 }) { Task { await model.selectSession(next.0) } }
     }
     @objc private func openFullSettings() {
-        if fullSettingsWindow == nil { fullSettingsWindow = NativeSettingsWindow(workspace: model) }
+        if fullSettingsWindow == nil { fullSettingsWindow = NativeSettingsWindow(workspace: model, agents: agentSettings) }
         fullSettingsWindow?.window.appearance = window?.appearance
         model.settingsPresented = true
-        fullSettingsWindow?.window.makeKeyAndOrderFront(nil)
+        if let window { fullSettingsWindow?.present(over: window) }
         NSApp.activate(ignoringOtherApps: true)
     }
     @objc private func openAgents() {
-        if agentsWindow == nil { agentsWindow = AgentSettingsWindow(workspace: model) }
+        if agentsWindow == nil { agentsWindow = AgentSettingsWindow(workspace: model, model: agentSettings) }
         agentsWindow?.window.appearance = window?.appearance
         agentsWindow?.model.visible = true
+        agentSettings.updateUsagePolling()
         agentsWindow?.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -820,7 +830,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     private func presentPanel(_ controller: NSWindowController, id: String, title: String, scope: String) throws {
         guard let parent = window, model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: localized("Workspace changed. Open the panel again.", "工作区已变化，请重新打开面板。")) }
-        model.documents.showTerminal(in: scope)
+        if !(controller is JavaWindow || controller is PythonWindow) || model.documents.active(in: scope)?.content.workbenchHost != nil { model.documents.showTerminal(in: scope) }
         try model.panels.attach(controller, id: id, title: title, scope: scope, parent: parent)
     }
     private func openProfile(kind: String, group: String, id: String) {
@@ -950,7 +960,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
         do {
             _ = try await worker.call("host.configure", params: .object(["helper": .string(resources.appendingPathComponent("bin/utermd-local").path)]))
-            let run = JavaRunModel(directory: root, bridge: worker, settings: model.settings)
+            let run = JavaRunModel(directory: root, bridge: worker, settings: model.settings, catalog: model.settingsCatalog)
             let controller = JavaWindow(model: run)
             controller.didClose = { [weak self, weak controller] in if let controller { self?.model.panels.remove(controller) }; self?.javaWindows.removeValue(forKey: root) }
             javaWindows[root] = controller
@@ -1011,7 +1021,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
         do {
             _ = try await worker.call("host.configure", params: .object(["helper": .string(resources.appendingPathComponent("bin/utermd-local").path)]))
-            let run = PythonRunModel(directory: root, bridge: worker, settings: model.settings)
+            let run = PythonRunModel(directory: root, bridge: worker, settings: model.settings, catalog: model.settingsCatalog)
             let controller = PythonWindow(model: run)
             controller.didClose = { [weak self, weak controller] in if let controller { self?.model.panels.remove(controller) }; self?.pythonWindows.removeValue(forKey: root) }
             pythonWindows[root] = controller
@@ -1567,6 +1577,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func decreaseFont() { adjustFocusedFont(-1) }
 
     func windowDidUpdate(_ notification: Notification) {
+        if let window { NativeWindowControls.align(window) }
         guard let responder = window?.firstResponder else { return }
         DispatchQueue.main.async { [weak self, weak responder] in
             guard let self, let responder, self.window?.firstResponder === responder,
@@ -1582,7 +1593,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return false
     }
     func windowDidEnterFullScreen(_ notification: Notification) { model.fullScreen = true }
-    func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
+    func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false; if let window { NativeWindowControls.align(window) } }
+    func windowDidResize(_ notification: Notification) { if let window { NativeWindowControls.align(window) }; fullSettingsWindow?.alignToParent() }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if let fullSettingsWindow, fullSettingsWindow.model.busy || fullSettingsWindow.model.login.busy {
@@ -1590,9 +1602,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             fullSettingsWindow.window.makeKeyAndOrderFront(nil)
             return .terminateCancel
         }
-        if let agentsWindow, agentsWindow.model.busy {
-            agentsWindow.model.error = localized("Wait for the Agent operation to finish.", "请等待 Agent 操作完成。")
-            agentsWindow.window.makeKeyAndOrderFront(nil)
+        if agentSettings.busy {
+            agentSettings.error = localized("Wait for the Agent operation to finish.", "请等待 Agent 操作完成。")
+            if fullSettingsWindow?.window.isVisible == true { fullSettingsWindow?.window.makeKeyAndOrderFront(nil) }
+            else { agentsWindow?.window.makeKeyAndOrderFront(nil) }
             return .terminateCancel
         }
         if terminating { return .terminateNow }
@@ -1618,7 +1631,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 if let fullSettingsWindow = self.fullSettingsWindow, !(await fullSettingsWindow.prepareForQuit()) {
                     throw BridgeFailure(code: "SETTINGS_QUIT_REFUSED", message: localized("Resolve settings changes before quitting.", "退出前请处理设置修改。"))
                 }
-                if let agentsWindow = self.agentsWindow, !(await agentsWindow.prepareForQuit()) {
+                let agentOwner = self.fullSettingsWindow?.window.isVisible == true ? self.fullSettingsWindow?.window : self.agentsWindow?.window ?? self.window
+                if let agentOwner, !(await self.agentSettings.prepareForQuit(over: agentOwner)) {
                     throw BridgeFailure(code: "AGENT_QUIT_REFUSED", message: localized("Resolve Agent configuration changes before quitting.", "退出前请处理 Agent 配置修改。"))
                 }
                 if let current = self.sshWindow, !(await current.model.prepareForQuit()) { throw BridgeFailure(code: "SSH_QUIT_REFUSED", message: localized("Finish the SSH operation before quitting.", "退出前请完成 SSH 操作。")) }
@@ -1642,7 +1656,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("A file window changed while preparing to quit. Try again.", "准备退出时文件窗口已变化，请重试。"))
                 }
             } catch {
-                self.agentsWindow?.resumeAfterQuit()
+                self.agentSettings.resumeAfterQuit()
                 self.fullSettingsWindow?.resumeAfterQuit()
                 await self.sshWindow?.model.resumeAfterQuit()
                 for content in contents { content.resumeAfterQuit() }
@@ -1673,7 +1687,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         #else
         let architecture = "x86_64"
         #endif
-        return ["captureMethod": "WindowServer screencapture -l", "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
+        return ["captureMethod": TerminalSmoke.captureMethod, "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
          "sourceHeadSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceHeadSHA") ?? "",
          "windowVisible": window?.isVisible == true, "screenCount": NSScreen.screens.count,
          "bundleIdentifier": Bundle.main.bundleIdentifier ?? "", "minimumOS": Bundle.main.object(forInfoDictionaryKey: "LSMinimumSystemVersion") ?? "",

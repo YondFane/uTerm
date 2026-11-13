@@ -17,10 +17,12 @@ import uuid
 from pathlib import Path
 
 from ui_parity_github import validate_pr
+from ui_parity_run_panels import validate_run_panels, validate_native_run_forms
 from macos_disk_image import create_disk_image, verify_disk_image
 from macos_qa_http import LoopbackHTTPServer
 
 IDENTIFIER = "sh.uterm.desktop.personal"
+SMOKE_PHASE_DEADLINE_SECONDS = 300
 
 
 def run(*args, timeout=120):
@@ -60,6 +62,8 @@ def validate_info(info, head, tested):
 
 
 def validate_workspace_scenes(report, head, tested, phase):
+    assert report.get("nativeProjectActiveRingRetainedOnCollapse") is True, "Missing actual active-project ring proof"
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
     project = report.get("nativeProjectMenuRevisionAndWorkspaceMove", {})
     for key in ["passed", "actualMenuActions", "stalePinRejected", "staleMoveRejected", "peerSettingRetained", "terminalGenerationsAndViewsRetained", "splitLayoutRetainedInReopenedSnapshot", "movedAndReturned"]:
         assert project.get(key) is True, key
@@ -79,6 +83,13 @@ def validate_workspace_scenes(report, head, tested, phase):
     assert len(scenes) == len(expected)
     observed = set()
     for scene in scenes:
+        branch = scene.get("branchPicker", {})
+        assert branch.get("actualAppKitControl") is True and branch.get("name")
+        assert abs(branch.get("fontSize", 0) - 11) < 0.01 and abs(branch.get("captionGap", -100) - 5) < 1
+        assert branch.get("width", 0) >= 24 and branch.get("height", 0) > 20 and branch.get("fontName")
+        controls = scene.get("windowControls", [])
+        assert len(controls) == 3 and abs(controls[0].get("x", -100) - 16) < 1
+        assert all(control.get("width", 0) > 0 and control.get("height", 0) > 0 and 0 <= control.get("y", -100) < 44 for control in controls)
         identity = (scene["language"], scene["appearance"], scene["width"])
         assert identity in expected and identity not in observed
         observed.add(identity)
@@ -89,7 +100,7 @@ def validate_workspace_scenes(report, head, tested, phase):
         assert scene["system"] and scene["height"] == 720
         assert scene["scenario"] == "toolbar-sidebar-two-sessions-files"
         assert scene["filesReadable"] is True
-        assert scene.get("fileGitStates") == {"note.txt": "untracked", "README.md": "untracked"}, "Missing actual file Git states"
+        assert scene.get("fileGitStates") == {path: "untracked" for path in fixture["files"]}, "Missing actual file Git states"
     assert observed == expected
 
 
@@ -128,6 +139,24 @@ def validate_sidebar_close(report, head, tested, phase):
     assert proof.get("width", 0) >= 640 and proof.get("height", 0) >= 420
 
 
+def validate_java_run_tools(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(s["language"], s["appearance"], s["width"], s["height"]) for s in fixture["runPanelScenes"]}
+    proofs = report.get("runPanelJavaToolsProof", [])
+    assert len(proofs) == len(expected), "Incomplete Java run tools evidence"
+    seen = set()
+    for proof in proofs:
+        identity = (proof["language"], proof["appearance"], proof["width"], proof["height"])
+        assert identity in expected and identity not in seen, "Missing or duplicate Java tools scenario"
+        seen.add(identity)
+        for key in ["passed", "actualManageToolsButton", "busyStateInjectedForQA", "busyActionRejected", "argumentDraftInjectedForQA", "argumentDraftRetained", "originPanelHiddenByQA", "refreshCompletedWithOriginPanelHidden", "actualRunToolbarRestore", "actualSharedJavaCatalog", "actualCloseControl", "projectDetectionCompletedAfterClose", "runConfigurationAndPanelRetained", "terminalGenerationRetained", "canonicalStateUnchanged"]:
+            assert proof.get(key) is True, "Missing actual Java run tools operation: " + key
+        assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested, "Stale Java tools evidence"
+        assert proof.get("platform") == report["platform"] and proof.get("architecture") == report["architecture"] and proof.get("system") == report["system"]
+        name = f"personal-{phase}-java-tools-{proof['language']}-{proof['appearance']}-{proof['width']}.png"
+        assert proof.get("screenshot") == name and name in report.get("captures", []), "Missing actual Java tools original"
+
+
 def validate_smoke_report(report, head, tested, phase):
     assert report.get("inProgress", False) is False, "An unfinished phase cannot satisfy acceptance"
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
@@ -139,6 +168,17 @@ def validate_smoke_report(report, head, tested, phase):
     validate_pdf_scenes(report, head, tested, phase)
     validate_quick_scenes(report, head, tested, phase)
     validate_github_scenes(report, head, tested, phase)
+    validate_java_run_tools(report, head, tested, phase)
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    validate_run_panels(report.get("runPanelScenes", []), fixture)
+    validate_native_run_forms(report, fixture, head, tested, phase)
+    assert report.get("runPanelActualFileCloseAndHideVerified") is True, "Missing actual run-panel file close/hide"
+    for row in report["runPanelScenes"]:
+        assert row.get("sourceHeadSHA") == head and row.get("testedMergeSHA") == tested, "Stale run-panel scene"
+        assert row.get("platform") == report["platform"] and row.get("architecture") == report["architecture"] and row.get("system") == report["system"]
+        name = f"personal-{phase}-run-{row['kind']}-{row['state']}-{row['language']}-{row['appearance']}-{row['width']}.png"
+        assert row.get("screenshot") == name and name in report["captures"], "Missing actual run-panel original"
+
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}
@@ -372,9 +412,9 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
             try:
                 # The full paired grid runs in each phase; all original operation assertions still apply.
                 # 每个阶段都执行完整配对网格，全部原有操作断言仍须满足。
-                result = process.wait(timeout=180)
+                result = process.wait(timeout=SMOKE_PHASE_DEADLINE_SECONDS)
             except subprocess.TimeoutExpired:
-                failure = "Personal app exceeded the 180-second phase deadline"
+                failure = f"Personal app exceeded the {SMOKE_PHASE_DEADLINE_SECONDS}-second phase deadline"
                 sample_smoke_timeout(process.pid, evidence, phase)
                 raise
             finally:
@@ -415,7 +455,7 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
             run("ditto", source, installed)
     return dict(reports=reports, captures=captures, realWindow=True, manualAppReplacement=True,
                 fixtureBundleIdentifier=identity, qaArgumentsIgnored=True, productionDataAccess=False,
-                phaseDeadlineSeconds=180, phaseDurationsSeconds=phase_durations)
+                phaseDeadlineSeconds=SMOKE_PHASE_DEADLINE_SECONDS, phaseDurationsSeconds=phase_durations)
 
 
 def main():

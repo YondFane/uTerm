@@ -27,11 +27,23 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert report['coreReady'] and not report['productionDataAccess'], report
     for key in ['nativePathSelectionBoundaries', 'nativePythonMenuOpened', 'configurationConflictRetainedDraft', 'realPythonFinalOutputAndExitCode',
                 'windowDetachRetainedTask', 'reopenedSameGenerationAndReplay', 'staleGenerationStopRefused',
-                'forceStopCompleted', 'temporaryEnvironmentNotSaved', 'nativeLogSearchFoundLiteralOutput',
+                'activeTaskStoppedWhileHistorySelected', 'forceStopCompleted', 'temporaryEnvironmentNotSaved', 'nativeLogSearchFoundLiteralOutput',
                 'nativePausedFollowRetainedAnchor', 'nativeFollowResumed', 'reattachRetainedHostPID',
                 'runAgainWaitedForOldExit', 'normalStopRetainedFinalOutputAndCopy']:
         assert report[key], (key, report)
+    dock = report['pythonDockedRunPanel']
+    for field in ['passed', 'nativeKeyboardResize', 'boundedHomeAndEnd', 'labelledDoubleClickReset', 'actualExpandAndRestore', 'retainedPanelView', 'realTaskPresent', 'taskAndFollowRetained']:
+        assert dock[field] is True, (field, dock)
+    assert dock['taskID'] and dock['taskGeneration']
+    assert len(dock['captures']) == 2
+    for name in dock['captures']:
+        assert (evidence / name).stat().st_size > 1000, name
     proof = report['pythonToolbarRunList']
+    assert proof['actualSidebarRunIcon'] is True
+    stopped = report['pythonSidebarStoppedIcon']
+    assert stopped['passed'] is True and stopped['actualRestoredImage'] is True
+    assert (evidence / stopped['screenshot']).stat().st_size > 1000
+    assert dock['taskID'] == proof['taskID'] and dock['taskGeneration'] == proof['taskGeneration']
     for field in ['passed', 'realHostTask', 'actualMenuAction', 'actualToolbarCoordinator', 'appKitActionDispatched', 'staleGenerationRejected', 'scopeRetainedOnRejection', 'sameTaskGeneration', 'actualMainWindow', 'actualToggleButtonRetainedGeneration', 'retainedContentAfterBackingWindowCleared']:
         assert proof[field] is True, (field, proof)
     for name in [proof['screenshot'], report['nativePythonMenuWorkspaceCapture']]:

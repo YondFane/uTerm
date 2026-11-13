@@ -23,7 +23,7 @@ struct WorkspaceView: View {
                     if model.sidebarVisible {
                         VStack(spacing: 0) {
                             NativeSidebarNavigation(model: model)
-                            NativeSidebar(model: model).padding(.horizontal, 2).padding(.top, CGFloat(CoreChrome.sidebarListTop)).padding(.bottom, 10).frame(maxHeight: .infinity)
+                            NativeSidebar(model: model, runs: model.projectRuns).padding(.horizontal, 2).padding(.top, CGFloat(CoreChrome.sidebarListTop)).padding(.bottom, 10).frame(maxHeight: .infinity)
                         }.padding(.horizontal, 10)
                             .frame(width: max(0, CGFloat(sidebarWidth - CoreChrome.sidebarRailWidth)), alignment: .leading)
                     }
@@ -90,6 +90,7 @@ struct WorkspaceView: View {
                     }
                 }
             }
+            .onChange(of: geometry.size.width, initial: true) { _, width in model.measureViewport(width) }
             .onChange(of: model.inspectorVisible) { _, visible in
                 inspectorResizeStart = nil
                 if visible && tools.width <= CoreChrome.panelCollapseWidth + 1 { inspectorRatio = CoreChrome.inspectorDefaultRatio }

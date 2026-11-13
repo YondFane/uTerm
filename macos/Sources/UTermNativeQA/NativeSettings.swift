@@ -11,9 +11,12 @@ final class NativeSettingsModel: ObservableObject {
     let maven: NativeMavenSettingsModel
     let databaseComponents: NativeDatabaseComponentsModel
     let javaComponents: NativeJavaComponentsModel
+    let agentSettings: AgentSettingsModel
     private var mavenChanges: AnyCancellable?
     private var databaseChanges: AnyCancellable?
     private var javaChanges: AnyCancellable?
+    private var loginChanges: AnyCancellable?
+    private var agentChanges: AnyCancellable?
     @Published private(set) var catalog: JSONValue = .null
     @Published private(set) var agents: JSONValue = .null
     @Published var values: [String: JSONValue] = [:]
@@ -29,6 +32,10 @@ final class NativeSettingsModel: ObservableObject {
     @Published var notice = ""
     @Published var section = "general"
     @Published var query = ""
+    @Published var presentationWidth: CGFloat = 760
+    @Published var presentationVisible = false
+    func syncAgentVisibility() { agentSettings.setInlineVisible("full-settings-usage", presentationVisible && section == "usage") }
+    var presentationCardFrame = CGRect.zero
     func matchesSection(_ id: String, title: String) -> Bool {
         let section = catalog["sections"].array.first { $0["id"].string == id } ?? .null
         let value = [id, title, section["labels"]["en"].string ?? "", section["labels"]["zh-Hans"].string ?? "", section["keywords"].string ?? ""].joined(separator: " ").precomposedStringWithCompatibilityMapping.lowercased()
@@ -38,6 +45,7 @@ final class NativeSettingsModel: ObservableObject {
     private var baseline: [String: JSONValue] = [:]
     private var baselineNumbers: [String: String] = [:]
     private var baselineShortcuts: [String: String] = [:]
+    func lastSavedValue(_ key: String) -> JSONValue { baseline[key] ?? .null }
     private var bridge: CoreBridge? { workspace.sshBridge ?? workspace.bridge }
     var dirty: Bool { values != baseline || numbers != baselineNumbers || shortcuts != baselineShortcuts }
     var commands: [JSONValue] { catalog["commands"].array }
@@ -46,13 +54,16 @@ final class NativeSettingsModel: ObservableObject {
         let enabled = Set((values["enabledAgents"]?.array ?? []).compactMap(\.string))
         return agents["available"].array.compactMap(\.string).filter { enabled.contains($0) }
     }
-    init(workspace: WorkspaceModel) {
+    init(workspace: WorkspaceModel, agents: AgentSettingsModel? = nil) {
         self.workspace = workspace; maven = NativeMavenSettingsModel()
+        agentSettings = agents ?? AgentSettingsModel(workspace: workspace)
         databaseComponents = NativeDatabaseComponentsModel(workspace: workspace)
         javaComponents = NativeJavaComponentsModel()
         mavenChanges = maven.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         databaseChanges = databaseComponents.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         javaChanges = javaComponents.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        loginChanges = login.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        agentChanges = agentSettings.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
     private func object(_ value: JSONValue) -> [String: JSONValue] { if case .object(let entries) = value { return entries }; return [:] }
     private func numberStrings(_ entries: [String: JSONValue]) -> [String: String] {
@@ -254,24 +265,29 @@ struct NativeSettingsView: View {
         }
     }
     private var general: some View {
-        Form {
+        NativeSettingsForm {
             choice("language", "Language", "语言", [("system", "System default", "系统默认"), ("en", "English", "English"), ("zh-Hans", "简体中文", "简体中文")])
             NativeLoginItemsView(model: model.login).id(NativeLocale.preference)
             number("fileTabLimit", "File tab limit", "文件标签数量上限")
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
             number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）").disabled(model.values["breakReminder"]?.bool != true)
-            NativeLegacyExportButton(model: model).frame(height: 28)
-        }.formStyle(.grouped)
+            Divider().padding(.top, 16)
+            if model.presentationWidth <= 650 { VStack(alignment: .leading, spacing: 8) { generalActions } }
+            else { HStack(spacing: 0) { generalActions } }
+        }
+    }
+    @ViewBuilder private var generalActions: some View {
+        NativeLegacyExportButton(model: model).fixedSize(horizontal: true, vertical: false).frame(height: 28)
+        Button(localized("Reset interface and terminal settings", "恢复界面与终端默认设置")) { confirmReset = true }
+            .font(.system(size: 11)).controlSize(.small)
+            .disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
     }
     private var appearance: some View {
         ScrollView {
           VStack(alignment: .leading, spacing: 16) {
             NativeInterfaceThemes(model: model)
             Divider()
-            HStack {
-                Text(localized("Active icon color (hex, optional)", "活跃图标颜色（十六进制，可选）")); Spacer()
-                NativeSettingsField(model: model, key: "activeIconColor", numeric: false, label: localized("Highlight color value", "高亮颜色值")).frame(width: 160, height: 24)
-            }
+            NativeIconColor(model: model)
             choice("appearance", "Color mode", "颜色模式", [("system", "System default", "系统默认"), ("dark", "Dark", "深色"), ("light", "Light", "浅色")])
             ForEach(["darkTheme", "lightTheme"], id: \.self) { key in
                 Picker(key == "darkTheme" ? localized("Dark terminal theme", "深色终端主题") : localized("Light terminal theme", "浅色终端主题"), selection: text(key)) {
@@ -295,55 +311,53 @@ struct NativeSettingsView: View {
         }
     }
     private var terminal: some View {
-        Form {
+        NativeSettingsForm {
             choice("cursorStyle", "Cursor", "光标", [("block", "Block", "方块"), ("bar", "Bar", "竖线"), ("underline", "Underline", "下划线")])
             Toggle(localized("Blink cursor", "光标闪烁"), isOn: flag("cursorBlink"))
             number("scrollback", "Scrollback lines", "回滚行数")
             Toggle(localized("Copy on selection", "选中即复制"), isOn: flag("copyOnSelect"))
-        }.formStyle(.grouped)
+        }
     }
     private var workspaceSection: some View {
-        Form {
-            Section(localized("Manage workspaces", "管理工作区")) {
+        NativeSettingsForm {
+            VStack(alignment: .leading, spacing: 12) {
                 ForEach(workspace.groupItems) { group in
-                    Button { Task { await workspace.mutate("workspace.switch", ["id": .string(group.id)]) } } label: {
-                        HStack { Text(group.name); Spacer(); if group.id == workspace.groupID { Image(systemName: "checkmark") } }
-                    }.disabled(workspace.busy)
+                    HStack {
+                        Text(group.name + (group.id == workspace.groupID ? localized(" (current)", "（当前）") : ""))
+                            .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                        NativeWorkspaceSettingsAction(workspace: workspace, action: .rename, id: group.id).frame(width: 54, height: 28)
+                        NativeWorkspaceSettingsAction(workspace: workspace, action: .remove, id: group.id).frame(width: 62, height: 28)
+                    }
                 }
-                HStack {
-                    Button(localized("New workspace…", "新建工作区…")) { workspace.newWorkspace(owner: .settings) }
-                    Button(localized("Rename workspace…", "重命名工作区…")) { workspace.renameWorkspace(owner: .settings) }
-                    Button(localized("Delete workspace…", "删除工作区…")) { workspace.removeWorkspace() }.disabled(!workspace.canRemoveWorkspace)
-                }
+                NativeWorkspaceSettingsAction(workspace: workspace, action: .add).frame(width: 132, height: 28)
                 Text(localized("Only empty workspaces can be deleted. Keep at least one workspace.", "仅可删除空工作区，至少保留一个工作区。")).font(.caption).foregroundStyle(.secondary)
             }
             choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
             NativeDefaultAgentPicker(model: model)
-            Section(localized("Sidebar", "侧栏")) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(localized("Sidebar", "侧栏")).font(.headline)
                 Toggle(localized("Show SSH connections", "显示 SSH 连接"), isOn: flag("showSshConnections"))
                 Toggle(localized("Show Redis connections", "显示 Redis 连接"), isOn: flag("showRedisConnections"))
                 Toggle(localized("Show database connections", "显示数据库连接"), isOn: flag("showDatabaseConnections"))
             }
             choice("inspectorPosition", "Inspector position", "检查器位置", [("left", "Left", "左侧"), ("right", "Right", "右侧")])
             choice("sidebarStyle", "Sidebar style", "侧栏样式", [("navigation", "Navigation", "导航")])
-        }.formStyle(.grouped)
+        }
     }
     private var agents: some View {
-        Form {
-            Section(localized("Agents", "Agent")) {
-                Button(localized("Agent commands, hooks and notifications…", "Agent 命令、Hooks 与通知…")) { workspace.openAgentsRequested?() }
-            }
-        }.formStyle(.grouped)
+        AgentSettingsView(model: model.agentSettings, workspace: workspace, scope: .commands)
     }
     private var usage: some View {
-        Form {
+        VStack(alignment: .leading, spacing: 0) {
+          VStack(alignment: .leading, spacing: 12) {
             Toggle(localized("Read remote usage", "读取远程用量"), isOn: flag("usageRemote"))
             number("usageRefreshInterval", "Usage refresh interval (seconds)", "用量刷新间隔（秒）")
-            Button(localized("Agent usage and account quota…", "Agent 用量与账户额度…")) { workspace.openAgentsRequested?() }
-        }.formStyle(.grouped)
+          }.padding(.horizontal, 28).padding(.top, 16)
+          AgentSettingsView(model: model.agentSettings, workspace: workspace, scope: .usage)
+        }
     }
     private var control: some View {
-        Form {
+        NativeSettingsForm {
             LocalControlCheckbox(model: workspace)
             if let directory = workspace.controlStatus["directory"].string {
                 Text(localized("CLI data directory: ", "CLI 数据目录：") + directory).font(.caption).textSelection(.enabled)
@@ -352,18 +366,18 @@ struct NativeSettingsView: View {
                 Text(workspace.controlError).foregroundStyle(.red)
                 Button(localized("Retry control service", "重试控制服务")) { Task { await workspace.startControl() } }.disabled(workspace.controlBusy)
             }
-        }.formStyle(.grouped)
+        }
     }
     private var updates: some View {
-        Form {
+        NativeSettingsForm {
             if workspace.updates.controlsVisible {
                 Toggle(WorkspaceModel.applicationProfile.mode == .personal ? localized("Automatically check and download updates", "自动检查并下载更新") : localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
             }
             NativeUpdateStatus(model: workspace.updates).id(NativeLocale.preference)
-        }.formStyle(.grouped)
+        }
     }
     private var keyboard: some View {
-        Form {
+        NativeSettingsForm {
             Text(localized("Click a shortcut and press the new keys. Escape cancels.", "点击快捷键后按下新组合键，Escape 取消。"))
             ForEach(Array(model.commands.enumerated()), id: \.offset) { _, command in
                 let id = command["id"].string ?? ""
@@ -375,16 +389,17 @@ struct NativeSettingsView: View {
                     Button(localized("Default", "默认")) { model.shortcuts[id] = nil; model.saveAutomatically(["shortcuts"]) }
                 }
             }
-        }.formStyle(.grouped)
+            NativeShortcutResetButton(model: model).fixedSize(horizontal: true, vertical: false).frame(height: 28)
+        }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if model.catalog == .null || model.values.isEmpty { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
             else {
                 HStack(spacing: 0) {
-                    ScrollView {
-                        VStack(spacing: 4) {
-                            NativeSettingsSearch(model: model).frame(height: 28)
+                    ScrollView(.vertical) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            NativeSettingsSearch(model: model).frame(height: 40)
                             if !model.catalog["sections"].array.contains(where: { model.matchesSection($0["id"].string ?? "", title: model.title($0)) }) { Text(localized("No matching items.", "没有匹配的条目。")).font(.caption).foregroundStyle(.secondary) }
                             navigation("general", "gearshape", "General", "通用")
                             navigation("appearance", "paintpalette", "Appearance", "外观")
@@ -398,23 +413,29 @@ struct NativeSettingsView: View {
                             navigation("maven", "shippingbox", "Maven settings", "Maven 设置")
                             navigation("java", "cup.and.saucer", "Java development tools", "Java 开发环境")
                             navigation("updates", "arrow.down.circle", "Software updates", "软件更新")
-                        }.padding(8)
-                    }.frame(width: 160).background(.bar).disabled(model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
+                        }.frame(width: 133).padding(.horizontal, 8).padding(.vertical, 12)
+                    }.scrollIndicators(.hidden).frame(width: 149).background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(workspace.settings, catalog: model.catalog)["sidebar"], fallback: .controlBackgroundColor))).disabled(model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
                     Divider()
-                    selectedSection.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(model.title(model.catalog["sections"].array.first { $0["id"].string == model.section } ?? .null)).font(.system(size: 16, weight: .semibold)).padding(.horizontal, 28).padding(.top, 24)
+                        selectedSection.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || workspace.busy)
             }
             if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).padding(.horizontal) }
-            if !model.notice.isEmpty { Text(model.notice).textSelection(.enabled).padding(.horizontal) }
+            if !model.notice.isEmpty && model.dirty { Text(model.notice).textSelection(.enabled).padding(.horizontal) }
+            if model.dirty || !model.error.isEmpty {
             HStack {
-                Button(localized("Restore defaults…", "恢复默认值…")) { confirmReset = true }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
                 if model.busy { ProgressView().controlSize(.small) }
                 Spacer()
                 if model.dirty { Text(localized("Unsaved changes", "有未保存修改")).foregroundStyle(.secondary) }
                 Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
                 Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.disabled(!model.dirty || model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
             }.padding()
-        }.frame(minWidth: 640, minHeight: 480).task { await model.reload() }
+            }
+        }.task { await model.reload() }
+        .onChange(of: model.section, initial: true) { _, _ in model.syncAgentVisibility() }
+        .onChange(of: model.presentationVisible) { _, _ in model.syncAgentVisibility() }
         .sheet(item: Binding(get: { workspace.nameDraftOwner == .settings ? workspace.nameDraft : nil }, set: { if workspace.nameDraftOwner == .settings { workspace.nameDraft = $0 } })) { _ in NameEditorView(model: workspace) }
         .confirmationDialog(localized("Replace this draft with default settings?", "用默认设置替换当前草稿？"), isPresented: $confirmReset) {
             Button(localized("Restore defaults", "恢复默认值")) { model.resetDraft(); model.saveAutomatically(Set(model.values.keys).union(["shortcuts"])) }
@@ -428,8 +449,7 @@ struct NativeSettingsView: View {
     private func navigation(_ id: String, _ symbol: String, _ en: String, _ zh: String) -> some View {
         Group {
             if model.matchesSection(id, title: localized(en, zh)) {
-                NativeSettingsNavigation(model: model, id: id, symbol: symbol, title: model.title(model.catalog["sections"].array.first { $0["id"].string == id } ?? .null)).frame(height: 32)
-                    .background(model.section == id ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                NativeSettingsNavigation(model: model, id: id, symbol: symbol, title: model.title(model.catalog["sections"].array.first { $0["id"].string == id } ?? .null)).frame(maxWidth: .infinity, minHeight: 32)
                     .accessibilityIdentifier("native-settings-section-" + id)
             }
         }
@@ -460,16 +480,40 @@ private struct NativeSettingsNavigation: NSViewRepresentable {
     let symbol: String
     let title: String
     func makeCoordinator() -> Coordinator { Coordinator(model: model, id: id) }
-    func makeNSView(context: Context) -> NSButton {
-        let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.select))
+    func makeNSView(context: Context) -> NavigationButton {
+        let button = NavigationButton(title: title, target: context.coordinator, action: #selector(Coordinator.select))
         button.identifier = NSUserInterfaceItemIdentifier("native-settings-section-" + id)
         button.setAccessibilityIdentifier("native-settings-section-" + id)
         button.isBordered = false; button.alignment = .left; button.imagePosition = .noImage
+        button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return button
     }
-    func updateNSView(_ button: NSButton, context: Context) {
+    func updateNSView(_ button: NavigationButton, context: Context) {
         button.title = title; button.isEnabled = context.environment.isEnabled
-        button.contentTintColor = model.section == id ? .controlAccentColor : .labelColor
+        button.font = .systemFont(ofSize: 13, weight: .medium)
+        button.palette = NativePreferences.interfacePalette(model.workspace.settings, catalog: model.catalog)
+        button.selected = model.section == id; button.needsDisplay = true
+        button.setAccessibilityLabel(title)
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NavigationButton, context: Context) -> CGSize? {
+        let width = proposal.width ?? 133
+        let text = (title as NSString).boundingRect(with: NSSize(width: max(1, width - 16), height: 200), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: nsView.font ?? .systemFont(ofSize: 13)])
+        return CGSize(width: width, height: max(32, ceil(text.height) + 16))
+    }
+    @MainActor final class NavigationButton: NSButton {
+        var palette: JSONValue = .null
+        var selected = false
+        override var isFlipped: Bool { true }
+        override var acceptsFirstResponder: Bool { isEnabled }
+        override func becomeFirstResponder() -> Bool { needsDisplay = true; return super.becomeFirstResponder() }
+        override func resignFirstResponder() -> Bool { needsDisplay = true; return super.resignFirstResponder() }
+        override func draw(_ dirtyRect: NSRect) {
+            if selected || isHighlighted { NativePreferences.color(palette["hover"], fallback: .controlBackgroundColor).setFill(); NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4).fill() }
+            let style = NSMutableParagraphStyle(); style.lineBreakMode = .byWordWrapping
+            let color = NativePreferences.color(palette["text"]).withAlphaComponent(isEnabled ? 1 : 0.45)
+            (title as NSString).draw(in: bounds.insetBy(dx: 8, dy: 8), withAttributes: [.font: font ?? .systemFont(ofSize: 13), .foregroundColor: color, .paragraphStyle: style])
+            if window?.firstResponder === self { NativePreferences.color(palette["accent"], fallback: .controlAccentColor).setStroke(); let ring = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4); ring.lineWidth = 2; ring.stroke() }
+        }
     }
     @MainActor final class Coordinator: NSObject {
         let model: NativeSettingsModel
@@ -504,26 +548,27 @@ private struct NativeShortcutCapture: NSViewRepresentable {
     func makeNSView(context: Context) -> CaptureButton {
         let button = CaptureButton(); button.identifier = NSUserInterfaceItemIdentifier("native-shortcut-" + id); return button
     }
-    func updateNSView(_ view: CaptureButton, context: Context) { view.value = value; view.changed = changed; view.refresh() }
+    func updateNSView(_ view: CaptureButton, context: Context) { view.value = value; view.changed = changed; view.isEnabled = context.environment.isEnabled; view.refresh() }
     final class CaptureButton: NSButton {
         var value = ""
         var changed: ((String) -> Void)?
         private var recording = false
-        override var acceptsFirstResponder: Bool { true }
+        override var acceptsFirstResponder: Bool { isEnabled }
         init() { super.init(frame: .zero); bezelStyle = .rounded; target = self; action = #selector(beginCapture) }
         required init?(coder: NSCoder) { fatalError("Not supported") }
         func refresh() {
             if recording { title = localized("Press shortcut…", "按下快捷键…"); return }
             title = value.isEmpty ? localized("Unassigned", "未设置") : NativeCommandKey.label(value)
         }
-        @objc private func beginCapture() { recording = true; window?.makeFirstResponder(self); refresh() }
+        @objc private func beginCapture() { guard isEnabled else { return }; recording = true; window?.makeFirstResponder(self); refresh() }
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
-            guard recording else { return super.performKeyEquivalent(with: event) }
+            guard recording, isEnabled else { return super.performKeyEquivalent(with: event) }
             keyDown(with: event); return true
         }
         override func keyDown(with event: NSEvent) {
-            guard recording else { super.keyDown(with: event); return }
+            guard recording, isEnabled else { super.keyDown(with: event); return }
             if event.keyCode == 53 { recording = false; refresh(); return }
+            if event.keyCode == 51 { recording = false; value = ""; changed?(value); refresh(); return }
             let codes: [UInt16: String] = [0:"KeyA",1:"KeyS",2:"KeyD",3:"KeyF",4:"KeyH",5:"KeyG",6:"KeyZ",7:"KeyX",8:"KeyC",9:"KeyV",11:"KeyB",12:"KeyQ",13:"KeyW",14:"KeyE",15:"KeyR",16:"KeyY",17:"KeyT",18:"Digit1",19:"Digit2",20:"Digit3",21:"Digit4",22:"Digit6",23:"Digit5",24:"Equal",25:"Digit9",26:"Digit7",27:"Minus",28:"Digit8",29:"Digit0",30:"BracketRight",31:"KeyO",32:"KeyU",33:"BracketLeft",34:"KeyI",35:"KeyP",36:"Enter",37:"KeyL",38:"KeyJ",40:"KeyK",42:"Backslash",43:"Comma",44:"Slash",45:"KeyN",46:"KeyM",47:"Period",123:"ArrowLeft",124:"ArrowRight",125:"ArrowDown",126:"ArrowUp"]
             guard event.modifierFlags.contains(.command), !event.modifierFlags.contains(.control), let code = codes[event.keyCode] else { NSSound.beep(); return }
             let result = "Mod+" + (event.modifierFlags.contains(.option) ? "Alt+" : "") + (event.modifierFlags.contains(.shift) ? "Shift+" : "") + code
@@ -535,20 +580,39 @@ private struct NativeShortcutCapture: NSViewRepresentable {
 
 @MainActor
 final class NativeSettingsWindow: NSObject, NSWindowDelegate {
+    var didHide: (() -> Void)?
     let model: NativeSettingsModel
     let window: NSWindow
-    init(workspace: WorkspaceModel) {
-        model = NativeSettingsModel(workspace: workspace)
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 620), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
+    private weak var previousResponder: NSView?
+    init(workspace: WorkspaceModel, agents: AgentSettingsModel? = nil) {
+        model = NativeSettingsModel(workspace: workspace, agents: agents)
+        window = NativeSettingsOverlayWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 620), styleMask: [.borderless, .resizable], backing: .buffered, defer: false)
         super.init()
         window.identifier = NSUserInterfaceItemIdentifier("native-full-settings")
         window.title = localized("Settings", "设置"); window.isReleasedWhenClosed = false; window.delegate = self
-        window.contentView = NSHostingView(rootView: NativeSettingsView(model: model, workspace: workspace)); window.center()
+        window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = false
+        window.collectionBehavior.insert(.fullScreenAuxiliary)
+        (window as? NativeSettingsOverlayWindow)?.closeRequested = { [weak self] in if let self { _ = self.windowShouldClose(self.window) } }
+        window.contentView = NSHostingView(rootView: NativeSettingsOverlay(model: model, workspace: workspace, close: { [weak self] in self?.window.performClose(nil) })); window.center()
+    }
+    func present(over parent: NSWindow) {
+        model.presentationVisible = true; model.syncAgentVisibility()
+        if !window.isVisible { previousResponder = parent.firstResponder as? NSView }
+        parent.orderFront(nil)
+        if window.parent !== parent { window.parent?.removeChildWindow(window); parent.addChildWindow(window, ordered: .above) }
+        window.setFrame(parent.frame, display: true); window.makeKeyAndOrderFront(nil)
+    }
+    func alignToParent() {
+        if window.isVisible, let parent = window.parent { window.setFrame(parent.frame, display: true) }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard !model.busy, !model.automaticSaving, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.javaComponents.pending, !model.javaComponents.mutating, !model.frozen else { return false }
-        sender.orderOut(nil)
+        guard !model.busy, !model.automaticSaving, !model.agentSettings.busy, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.javaComponents.pending, !model.javaComponents.mutating, !model.frozen else { return false }
+        model.presentationVisible = false; model.syncAgentVisibility()
+        let parent = sender.parent; parent?.removeChildWindow(sender); sender.orderOut(nil)
         model.workspace.settingsPresented = false
+        parent?.makeKeyAndOrderFront(nil)
+        if let previousResponder, previousResponder.window === parent { parent?.makeFirstResponder(previousResponder) }
+        let completion = didHide; didHide = nil; completion?()
         return false
     }
     func prepareForQuit() async -> Bool {

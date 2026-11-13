@@ -8,14 +8,19 @@ struct JavaEnvironment: Identifiable { let id = UUID(); var key = ""; var value 
 
 @MainActor
 final class JavaRunModel: ObservableObject {
+    @Published var workspaceDocked = false
     let directory: String
     let bridge: CoreBridge
     private(set) var settings: JSONValue
+    private(set) var settingsCatalog: JSONValue
     @Published var config: CoreJavaProjectConfig?
-    @Published var arguments: [JavaArgument] = []
-    @Published var environment: [JavaEnvironment] = []
+    @Published var argumentInput = ""
+    @Published var arguments: [JavaArgument] = [] { didSet { if !editingArgumentInput { argumentInput = RunPanelInput.formatArguments(arguments.map(\.text)) } } }
+    @Published var environmentInput = ""
+    @Published var environment: [JavaEnvironment] = [] { didSet { if !editingEnvironmentInput { environmentInput = environment.map { $0.key + "=" + $0.value }.joined(separator: "\n") } } }
     @Published var global: CoreJavaMavenConfig?
-    @Published var vmArguments: [JavaArgument] = []
+    @Published var vmArgumentInput = ""
+    @Published var vmArguments: [JavaArgument] = [] { didSet { if !editingArgumentInput { vmArgumentInput = RunPanelInput.formatArguments(vmArguments.map(\.text)) } } }
     @Published var action = "run"
     @Published var error = ""
     @Published var feedback = ""
@@ -25,10 +30,13 @@ final class JavaRunModel: ObservableObject {
     @Published var tasks: [JSONValue] = []
     @Published var jdks: [JSONValue] = []
     @Published var modules: [JSONValue] = []
+    private(set) var qaCompletedDetections = 0
     @Published var selectedID = ""
     @Published var search = ""
     @Published var searchSummary = ""
     @Published private(set) var terminal: TerminalSession?
+    private var editingArgumentInput = false
+    private var editingEnvironmentInput = false
     private var revision = ""
     private var polling: Task<Void, Never>?
     private var frames: Task<Void, Never>?
@@ -38,11 +46,11 @@ final class JavaRunModel: ObservableObject {
     var selectedTask: JSONValue { tasks.first { $0["spec"]["id"].string == selectedID } ?? .null }
     var running: Bool { tasks.contains { $0["running"].bool == true } }
 
-    init(directory: String, bridge: CoreBridge, settings: JSONValue) {
-        self.directory = directory; self.bridge = bridge; self.settings = settings
+    init(directory: String, bridge: CoreBridge, settings: JSONValue, catalog: JSONValue = .null) {
+        self.directory = directory; self.bridge = bridge; self.settings = settings; self.settingsCatalog = catalog
     }
     func applySettings(_ value: JSONValue, catalog: JSONValue) {
-        if settings != value { objectWillChange.send(); settings = value }
+        if settings != value || settingsCatalog != catalog { objectWillChange.send(); settings = value; settingsCatalog = catalog }
         terminal?.apply(settings: value, catalog: catalog)
     }
     func start() async {
@@ -82,12 +90,16 @@ final class JavaRunModel: ObservableObject {
             await refreshTasks()
         } catch { self.error = error.localizedDescription }
     }
-    private func apply(_ response: JSONValue) throws {
+    private func apply(_ response: JSONValue, preservingArgumentInput: Bool = false) throws {
         let loaded = try JSONDecoder().decode(CoreJavaConfiguration.self, from: JSONEncoder().encode(response))
+        let retainedInput = preservingArgumentInput ? argumentInput : nil
+        let retainedVM = preservingArgumentInput ? vmArgumentInput : nil
         config = loaded.project; revision = loaded.revision
         arguments = (loaded.project.arguments ?? []).map { JavaArgument(text: $0) }
+        argumentInput = RunPanelInput.formatArguments(loaded.project.arguments ?? [], retaining: retainedInput)
         global = loaded.global
         vmArguments = (loaded.project.vm_arguments ?? []).map { JavaArgument(text: $0) }
+        vmArgumentInput = RunPanelInput.formatArguments(loaded.project.vm_arguments ?? [], retaining: retainedVM)
         dirty = false
     }
     private func detectValues() async throws {
@@ -95,34 +107,47 @@ final class JavaRunModel: ObservableObject {
         modules = try await bridge.call("java.project", params: .object(["directory": .string(directory)]))["modules"].array
     }
     func detect() async {
-        guard !busy, !prepared else { return }
+        guard !busy, !prepared, !closed else { return }
         busy = true; error = ""
         defer { busy = false }
-        do { try await detectValues() } catch { self.error = error.localizedDescription }
+        do { try await detectValues(); qaCompletedDetections += 1 } catch { self.error = error.localizedDescription }
+    }
+    func editArguments(_ text: String, vm: Bool = false) {
+        guard !busy, !prepared else { return }
+        editingArgumentInput = true; defer { editingArgumentInput = false }
+        if vm {
+            vmArgumentInput = text
+            if let values = try? RunPanelInput.arguments(text) { vmArguments = values.map { JavaArgument(text: $0) } }
+        } else {
+            argumentInput = text
+            if let values = try? RunPanelInput.arguments(text) { arguments = values.map { JavaArgument(text: $0) } }
+        }
+        dirty = true
+    }
+    func editEnvironment(_ text: String) {
+        guard !busy, !prepared else { return }
+        editingEnvironmentInput = true; defer { editingEnvironmentInput = false }
+        environmentInput = text
+        if let values = try? RunPanelInput.environment(text) { environment = values.sorted { $0.key < $1.key }.map { JavaEnvironment(key: $0.key, value: $0.value) } }
     }
     private func formConfig() throws -> CoreJavaProjectConfig {
         guard var result = config else {
             throw BridgeFailure(code: "JAVA_CONFIG_INVALID", message: localized("Load Java configuration first.", "请先读取 Java 配置。"))
         }
-        result.arguments = arguments.map(\.text); result.vm_arguments = vmArguments.map(\.text)
+        do { result.arguments = try RunPanelInput.arguments(argumentInput); result.vm_arguments = try RunPanelInput.arguments(vmArgumentInput) }
+        catch { throw BridgeFailure(code: "JAVA_ARGUMENTS_INVALID", message: localized("Complete argument quotes and remove unsupported control characters.", "请补全参数引号并移除不支持的控制字符。")) }
         return result
     }
     private func persist() async throws {
         let response = try await bridge.call("java.saveConfiguration", params: .object([
             "directory": .string(directory), "revision": .string(revision), "project": try value(formConfig()), "global": try value(global)
         ]))
-        try apply(response)
+        try apply(response, preservingArgumentInput: true)
         feedback = localized("Configuration saved.", "配置已保存。")
     }
     private func environmentValues() throws -> [String: JSONValue] {
-        var values: [String: JSONValue] = [:]
-        for row in environment {
-            guard values[row.key] == nil else {
-                throw BridgeFailure(code: "JAVA_ENVIRONMENT_INVALID", message: localized("Environment names must be unique.", "环境变量名称不能重复。"))
-            }
-            values[row.key] = .string(row.value)
-        }
-        return values
+        do { return try RunPanelInput.environment(environmentInput).mapValues { .string($0) } }
+        catch { throw BridgeFailure(code: "JAVA_ENVIRONMENT_INVALID", message: localized("Use one NAME=value per line with unique names; UTERM_ names are reserved.", "每行填写一个 NAME=value，名称不能重复；UTERM_ 前缀为保留名称。")) }
     }
     private func startSaved(environment: [String: JSONValue]) async throws {
         let task = try await bridge.call("java.start", params: .object([
@@ -230,7 +255,7 @@ final class JavaRunModel: ObservableObject {
         } else { error = localized("Could not copy retained output.", "无法复制保留的输出。") }
     }
     func stop(force: Bool) async {
-        let task = selectedTask
+        let task = tasks.first { $0["running"].bool == true } ?? .null
         guard !busy, !prepared, task["running"].bool == true,
               let id = task["spec"]["id"].string, let generation = task["generation"].string else { return }
         busy = true; error = ""
@@ -292,6 +317,19 @@ final class JavaRunModel: ObservableObject {
 struct JavaRunView: View {
     @ObservedObject var model: JavaRunModel
     let reload: () -> Void
+    @State private var viewportWidth: CGFloat = 1100
+    @State private var configurationExpanded = true
+    @State private var advancedExpanded = false
+    @State private var mavenPresented = false
+    @State private var buildGoal = "build"
+    private var palette: JSONValue { NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog) }
+    private var blocked: Bool { model.busy || model.prepared || model.config == nil }
+    private var columns: [GridItem] { Array(repeating: GridItem(.flexible(minimum: 0), spacing: 12, alignment: .top), count: RunPanelLayout.formColumns(viewportWidth: Double(viewportWidth))) }
+    private var selectedModule: JSONValue { model.modules.first { $0["path"].string == model.config?.module } ?? .null }
+    private var mainClasses: [String] { selectedModule["main_classes"].array.compactMap { $0["name"].string } }
+    private func input(_ title: String, _ key: WritableKeyPath<CoreJavaProjectConfig, String?>, id: String, completions: [String]? = nil) -> some View {
+        NativeRunTextField(text: text(key), label: title, id: "native-java-" + id, palette: palette, completions: completions).frame(height: 28)
+    }
     func text(_ key: WritableKeyPath<CoreJavaProjectConfig, String?>) -> Binding<String> {
         Binding(get: { model.config?[keyPath: key] ?? "" }, set: { model.config?[keyPath: key] = $0; model.dirty = true })
     }
@@ -304,18 +342,6 @@ struct JavaRunView: View {
             else { model.global?[keyPath: key] = $0 }
             model.dirty = true
         })
-    }
-    func argumentRows(_ rows: Binding<[JavaArgument]>, title: String) -> some View {
-        VStack(alignment: .leading) {
-            Text(title).font(.caption)
-            ForEach(rows) { row in
-                HStack {
-                    TextField(title, text: row.text).onChange(of: row.wrappedValue.text) { _, _ in model.dirty = true }
-                    Button("−") { let id = row.wrappedValue.id; rows.wrappedValue.removeAll { $0.id == id }; model.dirty = true }
-                }
-            }
-            Button(localized("Add argument", "添加参数")) { rows.wrappedValue.append(JavaArgument(text: "")); model.dirty = true }
-        }
     }
     var mavenFields: some View {
         GroupBox(localized("Maven configuration", "Maven 配置")) {
@@ -336,116 +362,185 @@ struct JavaRunView: View {
             }
         }
     }
-    var configuration: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Picker(localized("Module", "模块"), selection: Binding(get: { model.config?.module ?? "." }, set: {
-                if model.config?.module != $0 { model.config?.main_class = "" }
-                text(\.module).wrappedValue = $0
-            })) {
-                ForEach(Array(model.modules.enumerated()), id: \.offset) { _, module in
-                    Text((module["name"].string ?? "") + " · " + (module["path"].string ?? "")).tag(module["path"].string ?? ".")
-                }
+    private var selectedJavaHome: String {
+        if let home = model.config?.java_home, !home.isEmpty { return home }
+        return model.jdks.first { UInt32(exactly: $0["version"].number ?? 0) == model.config?.java_version && $0["available"].bool != false }?["home"].string ?? ""
+    }
+    private var versionSelection: Binding<String> {
+        Binding(get: {
+            if let home = model.config?.java_home, model.jdks.contains(where: { $0["home"].string == home && $0["registered"].bool == true }) { return "home:" + home }
+            return String(model.config?.java_version ?? 21)
+        }, set: { value in
+            if let jdk = model.jdks.first(where: { "home:" + ($0["home"].string ?? "") == value }) {
+                model.config?.java_home = jdk["home"].string; model.config?.java_version = UInt32(exactly: jdk["version"].number ?? 21) ?? 21
+            } else { model.config?.java_version = UInt32(value) ?? 21; model.config?.java_home = "" }
+            model.dirty = true
+        })
+    }
+    private var primaryFields: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+            NativeRunFormField(localized("Target module", "目标模块"), id: "native-java-field-module") {
+                Picker(localized("Target module", "目标模块"), selection: Binding(get: { model.config?.module ?? "." }, set: {
+                    if model.config?.module != $0 { model.config?.main_class = ""; model.config?.jar = "" }
+                    text(\.module).wrappedValue = $0
+                })) {
+                    ForEach(Array(model.modules.enumerated()), id: \.offset) { _, module in Text(module["name"].string ?? ".").tag(module["path"].string ?? ".") }
+                }.labelsHidden().frame(height: 28)
             }
-            HStack {
-                Picker(localized("Java version", "Java 版本"), selection: Binding(get: { model.config?.java_version ?? 21 }, set: { model.config?.java_version = $0; model.dirty = true })) {
-                    ForEach([UInt32(8), 11, 17, 21], id: \.self) { Text(String($0)).tag($0) }
-                }
-                TextField(localized("JDK home (automatic when empty)", "JDK 目录（留空自动检测）"), text: text(\.java_home))
-                Button(localized("Choose…", "选择…")) { model.choosePath("jdk") }
-                Menu(localized("Detected JDKs", "已检测 JDK")) {
-                    ForEach(Array(model.jdks.enumerated()), id: \.offset) { _, jdk in
-                        Button((jdk["home"].string ?? "") + (jdk["available"].bool == true ? "" : localized(" · Unavailable", " · 不可用"))) { text(\.java_home).wrappedValue = jdk["home"].string ?? "" }
+            NativeRunFormField(localized("Launch mode", "启动方式"), id: "native-java-field-mode") {
+                Picker(localized("Launch mode", "启动方式"), selection: text(\.mode)) {
+                    Text(localized("Development run", "开发启动")).tag("development"); Text(localized("JAR run", "JAR 启动")).tag("jar")
+                }.labelsHidden().frame(height: 28)
+            }
+            NativeRunFormField(localized("JDK version", "JDK 版本"), id: "native-java-field-version") {
+                Picker(localized("JDK version", "JDK 版本"), selection: versionSelection) {
+                    ForEach([UInt32(8), 11, 17, 21], id: \.self) { version in
+                        Text("Java \(version) · " + (model.jdks.contains { UInt32(exactly: $0["version"].number ?? 0) == version && $0["available"].bool != false } ? localized("Detected", "已检测到") : localized("Choose or install", "需选择或安装"))).tag(String(version))
                     }
-                }
+                    ForEach(Array(model.jdks.filter { $0["registered"].bool == true }.enumerated()), id: \.offset) { _, jdk in
+                        Text("Java \(Int(jdk["version"].number ?? 0)) · " + (jdk["home"].string ?? "")).tag("home:" + (jdk["home"].string ?? "")).disabled(jdk["available"].bool == false)
+                    }
+                }.labelsHidden().frame(height: 28)
+                if !selectedJavaHome.isEmpty { Text(selectedJavaHome).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(selectedJavaHome).textSelection(.enabled) }
             }
+        }.padding(.top, 7).background(NativeRunPanelFrame(identifier: "native-java-primary-grid"))
+    }
+    private var mainClassField: some View {
+        VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Button(localized("Check again", "重新检测")) { Task { await model.detect() } }
-                Button(localized("Register JDK", "注册 JDK")) { Task { await model.registerJDK() } }
-                Button(localized("Remove registration", "移除注册")) { Task { await model.registerJDK(remove: true) } }
-            }
-            Picker(localized("Run mode", "运行方式"), selection: text(\.mode)) {
-                Text(localized("Development run", "开发启动")).tag("development"); Text(localized("JAR run", "JAR 启动")).tag("jar")
-            }
+                Text(model.config?.mode == "jar" ? localized("Existing JAR", "已有 JAR") : localized("Main class", "启动主类")).foregroundStyle(.secondary)
+                Spacer()
+                NativeRunAction(title: localized("Check again", "重新检测"), id: "native-java-redetect", palette: palette, height: 20) { Task { await model.detect() } }.fixedSize()
+            }.font(.system(size: 11))
             if model.config?.mode == "jar" {
-                HStack {
-                    TextField(localized("Existing JAR (empty to package first)", "已有 JAR（留空先打包）"), text: text(\.jar))
-                    Button(localized("Choose…", "选择…")) { model.choosePath("jar") }
+                HStack(spacing: 5) {
+                    input(localized("Existing JAR (empty to package first)", "已有 JAR（留空先打包）"), \.jar, id: "jar")
+                    NativeRunAction(title: localized("Choose JAR", "选择 JAR"), id: "native-java-choose-jar", palette: palette, icon: .folder, iconOnly: true) { model.choosePath("jar") }.fixedSize()
                 }
             } else {
+                input(localized("Main class (automatic when empty)", "启动主类（留空自动选择）"), \.main_class, id: "main-class", completions: mainClasses)
+                if mainClasses.isEmpty { Text(localized("No main class detected. Enter one manually, or leave blank for the Maven plugin to find it.", "未检测到主类，可手动填写，或留空由 Maven 插件选择。")).foregroundStyle(.secondary).font(.system(size: 11)) }
+            }
+        }
+    }
+    private var mavenSummary: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    TextField(localized("Main class (automatic when empty)", "启动主类（留空自动选择）"), text: text(\.main_class))
-                    Menu(localized("Detected main classes", "已检测主类")) {
-                        ForEach(Array((model.modules.first { $0["path"].string == model.config?.module }?["main_classes"].array ?? []).enumerated()), id: \.offset) { _, entry in
-                            Button(entry["name"].string ?? "") { text(\.main_class).wrappedValue = entry["name"].string ?? "" }
-                        }
+                    Text(localized("Maven configuration", "Maven 配置")).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Button(localized("Settings", "设置")) { mavenPresented = true }.controlSize(.mini)
+                        .popover(isPresented: $mavenPresented) { mavenPopover }
+                }
+                Picker(localized("Maven configuration", "Maven 配置"), selection: Binding(get: { model.config?.maven_scope ?? "global" }, set: { model.setScope($0) })) {
+                    Text(localized("System-wide configuration", "系统全局配置")).tag("global"); Text(localized("Project configuration", "项目独立配置")).tag("project")
+                }.labelsHidden().frame(height: 28)
+            }
+            NativeRunFormField(localized("Maven profile", "Maven Profile")) { input(localized("Maven profile", "Maven Profile"), \.maven_profiles, id: "maven-profiles") }
+            NativeRunFormField(localized("Spring profile", "Spring Profile")) { input(localized("Spring profile", "Spring Profile"), \.spring_profiles, id: "spring-profiles") }
+        }
+    }
+    private var mavenPopover: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            mavenFields
+            if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled) }
+            HStack {
+                Spacer()
+                NativeRunAction(title: localized("Save configuration", "保存配置"), id: "native-java-maven-save", palette: palette, height: 28) {
+                    Task { if await model.save() { mavenPresented = false } }
+                }.fixedSize()
+            }
+        }.padding(12).frame(width: 480).disabled(blocked)
+    }
+    private var advancedFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
+                NativeRunFormField(localized("Full JDK home", "完整 JDK 主目录")) {
+                    HStack(spacing: 5) {
+                        input(localized("JDK home", "JDK 目录"), \.java_home, id: "jdk-home", completions: model.jdks.compactMap { $0["home"].string })
+                        NativeRunAction(title: localized("Choose JDK", "选择 JDK"), id: "native-java-choose-jdk", palette: palette, icon: .folder, iconOnly: true) { model.choosePath("jdk") }.fixedSize()
                     }
                 }
+                NativeRunFormField(localized("JVM arguments", "JVM 参数")) {
+                    NativeRunTextField(text: Binding(get: { model.vmArgumentInput }, set: { model.editArguments($0, vm: true) }), label: localized("JVM arguments", "JVM 参数"), id: "native-java-vm-arguments", palette: palette).frame(height: 28)
+                }
+                NativeRunFormField(localized("Application arguments", "应用参数")) {
+                    NativeRunTextField(text: Binding(get: { model.argumentInput }, set: { model.editArguments($0) }), label: localized("Application arguments", "应用参数"), id: "native-java-arguments", palette: palette).frame(height: 28)
+                }
+                NativeRunFormField(localized("Environment variables", "环境变量")) {
+                    NativeRunTextArea(text: Binding(get: { model.environmentInput }, set: { model.editEnvironment($0) }), label: localized("Environment variables", "环境变量"), id: "native-java-environment", palette: palette).frame(height: 40)
+                    Text(localized("Only for this run; environment values are not saved.", "仅用于本次运行，不保存环境变量。")).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
             }
-            DisclosureGroup(localized("Advanced settings", "高级设置")) {
-                VStack(alignment: .leading, spacing: 8) {
-                    mavenFields
-                    TextField(localized("Maven profiles", "Maven Profile"), text: text(\.maven_profiles))
-                    TextField(localized("Spring profiles", "Spring Profile"), text: text(\.spring_profiles))
-                    argumentRows($model.vmArguments, title: localized("Literal JVM argument", "字面 JVM 参数"))
-                    argumentRows($model.arguments, title: localized("Literal application argument", "字面应用参数"))
-                    ForEach($model.environment) { $row in
-                        HStack {
-                            TextField(localized("Environment name", "环境变量名称"), text: $row.key)
-                            TextField(localized("Temporary value", "临时值"), text: $row.value)
-                            Button("−") { model.environment.removeAll { $0.id == row.id } }
-                        }
-                    }
-                    Button(localized("Add temporary environment", "添加临时环境变量")) { model.environment.append(JavaEnvironment()) }
-                    HStack { Toggle(localized("Skip tests", "跳过测试"), isOn: flag(\.skip_tests)); Toggle(localized("Maven offline", "Maven 离线"), isOn: flag(\.offline)) }
-                }.padding(.top, 5)
+            HStack { Toggle(localized("Skip tests", "跳过测试"), isOn: flag(\.skip_tests)); Toggle(localized("Maven offline", "Maven 离线"), isOn: flag(\.offline)) }
+            HStack {
+                Spacer()
+                NativeRunAction(title: localized("Save configuration", "保存配置"), id: "native-java-save-configuration", palette: palette, height: 28) { Task { _ = await model.save() } }.fixedSize()
             }
-            HStack { Spacer(); Button(localized("Save configuration", "保存配置")) { Task { _ = await model.save() } }.controlSize(.small) }
+        }.padding(.top, 7)
+    }
+    private var configuration: some View {
+        NativeRunDisclosure(localized("Run configuration", "运行配置"), id: "native-java-configuration-toggle", expanded: $configurationExpanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                primaryFields; mainClassField; mavenSummary
+                NativeRunDisclosure(localized("Advanced settings", "高级设置"), id: "native-java-advanced-toggle", expanded: $advancedExpanded) { advancedFields }
+            }
+        }.font(.system(size: 11))
+    }
+    private var taskToolbar: some View {
+        NativeRunToolbarLayout() {
+            NativeRunTaskState(running: model.running, busy: model.busy, selected: model.selectedTask, successLabel: true)
+            Spacer(minLength: 0).layoutValue(key: NativeRunToolbarSpace.self, value: true)
+            Menu {
+                Button(localized("Reload saved configuration", "重新读取已保存的配置"), action: reload)
+                Button(localized("Run again", "重新运行")) { Task { await model.runAgain() } }.disabled(model.tasks.isEmpty)
+                Button(localized("Force stop", "强制停止")) { Task { await model.stop(force: true) } }.disabled(!model.running)
+            } label: { Image(systemName: "ellipsis") }.fixedSize().help(localized("More actions", "更多操作"))
+            Picker(localized("Maven build goal", "Maven 构建目标"), selection: $buildGoal) {
+                Text(localized("Package", "打包 package")).tag("build"); Text(localized("Test", "测试 test")).tag("test"); Text(localized("Install", "安装 install")).tag("install")
+            }.labelsHidden().frame(width: 82).disabled(model.running)
+            NativeRunAction(title: localized("Build", "构建"), id: "native-java-build", palette: palette) {
+                Task { guard !model.busy, !model.prepared else { return }; model.action = buildGoal; await model.run() }
+            }.fixedSize().disabled(model.running || model.modules.isEmpty)
+            NativeRunAction(title: model.running ? localized("Run again", "重新运行") : localized("Run", "运行"), id: "native-java-run", palette: palette) {
+                Task { guard !model.busy, !model.prepared else { return }; model.action = "run"; if model.running { await model.runAgain() } else { await model.run() } }
+            }.fixedSize().disabled(model.modules.isEmpty || selectedModule["packaging"].string == "pom")
+            NativeRunAction(title: localized("Stop", "停止"), id: "native-java-stop", palette: palette) { Task { await model.stop(force: false) } }.fixedSize().disabled(!model.running)
+        }.disabled(model.busy || model.prepared).padding(.horizontal, 12).padding(.vertical, 6)
+            .overlay(alignment: .top) { border }.overlay(alignment: .bottom) { border }
+    }
+    private var border: some View { Color(nsColor: NativePreferences.color(palette["border"], fallback: .separatorColor)).frame(height: 1) }
+    private var output: some View {
+        Group {
+            if let terminal = model.terminal {
+                NativeRunLogToolbar(terminal: terminal, search: $model.search, summary: model.searchSummary, taskName: model.selectedTask["task"]["name"].string ?? "", find: { model.find(previous: $0) }, copy: { model.copyOutput() })
+                JavaLogCanvas(terminal: terminal).id(terminal.attachment).frame(minHeight: model.workspaceDocked ? 0 : 160, maxHeight: .infinity)
+                if !terminal.error.isEmpty { Text(terminal.error).foregroundStyle(.red).padding(8) }
+            } else {
+                Text(localized("Select a module and build or run. Output appears here.", "选择模块后构建或运行，输出将在此显示。"))
+                    .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(12)
+            }
         }
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(model.directory).font(.caption).textSelection(.enabled)
-            ScrollView { configuration.padding(2) }.frame(maxHeight: 310).disabled(model.busy || model.prepared || model.config == nil)
-            if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled) }
-            if !model.feedback.isEmpty { Text(model.feedback).font(.caption) }
-            HStack {
-                Button(localized("Reload saved configuration", "重新读取已保存的配置"), action: reload)
-                Picker(localized("Task", "任务"), selection: $model.action) {
-                    Text(localized("Run", "运行")).tag("run"); Text(localized("Package", "打包")).tag("build")
-                    Text(localized("Test", "测试")).tag("test"); Text(localized("Install", "安装")).tag("install")
-                }.frame(maxWidth: 160)
-                Spacer()
-                Button(localized("Start", "启动")) { Task { await model.run() } }.disabled(model.running)
-                Button(localized("Run again", "重新运行")) { Task { await model.runAgain() } }.disabled(model.tasks.isEmpty)
-                Button(localized("Stop", "停止")) { Task { await model.stop(force: false) } }.disabled(model.selectedTask["running"].bool != true)
-                Button(localized("Force stop", "强制停止")) { Task { await model.stop(force: true) } }.disabled(model.selectedTask["running"].bool != true)
-            }.disabled(model.busy || model.prepared)
-            if !model.tasks.isEmpty {
-                Picker(localized("Task history", "任务历史"), selection: $model.selectedID) {
-                    ForEach(Array(model.tasks.enumerated()), id: \.offset) { _, task in
-                        Text((task["task"]["name"].string ?? "") + (task["running"].bool == true ? localized(" · Running", " · 运行中") : " · \(Int(task["code"].number ?? 0))")).tag(task["spec"]["id"].string ?? "")
-                    }
-                }.onChange(of: model.selectedID) { _, _ in Task { await model.selectTask() } }.disabled(model.busy || model.prepared)
-            }
-            if let terminal = model.terminal {
-                HStack {
-                    TextField(localized("Search output", "搜索输出"), text: $model.search).onSubmit { model.find() }
-                        .onChange(of: model.search) { _, value in if value.isEmpty { model.find() } }
-                    Button("↑") { model.find(previous: true) }.accessibilityLabel(localized("Previous match", "上一个匹配"))
-                    Button("↓") { model.find() }.accessibilityLabel(localized("Next match", "下一个匹配"))
-                    Text(model.searchSummary).font(.caption)
-                    Toggle(localized("Auto follow", "自动跟随"), isOn: Binding(get: { terminal.taskLogFollowsOutput }, set: { terminal.followTaskLog($0) })).toggleStyle(.checkbox)
+        GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 0) {
+                if !model.workspaceDocked { Text(model.directory).font(.system(size: 11)).textSelection(.enabled).padding(8) }
+                NativeRunConfiguration(maximumHeight: max(0, geometry.size.height * 0.48)) { configuration }.disabled(blocked)
+                taskToolbar
+                if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).padding(8) }
+                if !model.feedback.isEmpty { Text(model.feedback).foregroundStyle(.secondary).padding(8) }
+                if model.tasks.count > 1 {
+                    Picker(localized("Task history", "任务历史"), selection: $model.selectedID) {
+                        ForEach(Array(model.tasks.enumerated()), id: \.offset) { _, task in Text(task["task"]["name"].string ?? "").tag(task["spec"]["id"].string ?? "") }
+                    }.onChange(of: model.selectedID) { _, _ in Task { await model.selectTask() } }.disabled(model.busy || model.prepared).padding(.horizontal, 12)
                 }
-                JavaLogCanvas(terminal: terminal).id(terminal.attachment).frame(minHeight: 160)
-                HStack {
-                    Text(terminal.error).foregroundStyle(.red)
-                    Spacer()
-                    Button(localized("Copy retained output", "复制保留的输出")) {
-                        model.copyOutput()
-                    }
-                }
-            } else { Text(localized("No task output yet.", "尚无任务输出。")).frame(maxWidth: .infinity, maxHeight: .infinity) }
-        }.padding(12)
+                output
+            }.font(.system(size: 12)).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .foregroundStyle(Color(nsColor: NativePreferences.color(palette["text"], fallback: .labelColor)))
+                .background(Color(nsColor: NativePreferences.color(palette["canvas"], fallback: .windowBackgroundColor)))
+                .background(NativeRunViewport(width: $viewportWidth))
+        }
     }
 }
 
@@ -460,6 +555,7 @@ private struct JavaLogCanvas: NSViewRepresentable {
 final class JavaWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePanelContent {
     let model: JavaRunModel
     private(set) var workspacePanelView: NSView?
+    func workspaceEmbeddingChanged(_ embedded: Bool) { model.workspaceDocked = embedded }
     var didClose: (() -> Void)?
     private var closing = false
     init(model: JavaRunModel) {
@@ -497,7 +593,12 @@ final class JavaWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePan
     }
     func prepareForQuit() async -> Bool {
         guard !model.busy else { model.error = localized("Wait for the Java operation to finish.", "请等待 Java 操作完成。"); return false }
-        if model.dirty {
+        if model.prepared { return true }
+        // Docked panels save loaded configuration on hide, including clean stale snapshots.
+        // 停靠面板隐藏时保存已加载配置，包括未编辑但修订已过期的快照。
+        if model.workspaceDocked, model.config != nil {
+            guard await model.save() else { return false }
+        } else if model.dirty {
             switch discardChoice() {
             case .alertSecondButtonReturn: break
             case .alertThirdButtonReturn: guard await model.save() else { return false }

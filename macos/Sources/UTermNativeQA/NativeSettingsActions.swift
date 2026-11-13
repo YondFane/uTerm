@@ -3,17 +3,92 @@ import SwiftUI
 import UTermBridge
 
 @MainActor
-struct NativeLegacyExportButton: NSViewRepresentable {
-    @ObservedObject var model: NativeSettingsModel
-    func makeCoordinator() -> Coordinator { Coordinator(model) }
+struct NativeWorkspaceSettingsAction: NSViewRepresentable {
+    enum Action: String { case add, rename, remove }
+    @ObservedObject var workspace: WorkspaceModel
+    let action: Action
+    var id = ""
+    func makeCoordinator() -> Coordinator { Coordinator(workspace) }
     func makeNSView(context: Context) -> NSButton {
-        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.export(_:)))
-        button.identifier = .init("native-settings-legacy-export"); button.bezelStyle = .rounded
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.applyWorkspaceAction(_:)))
+        button.bezelStyle = .rounded
         return button
     }
     func updateNSView(_ button: NSButton, context: Context) {
-        button.title = localized("Export legacy-compatible data", "导出旧版兼容数据")
+        context.coordinator.action = action; context.coordinator.id = id
+        button.identifier = .init("native-settings-workspace-" + action.rawValue + (id.isEmpty ? "" : "-" + id))
+        switch action {
+        case .add: button.title = localized("Add workspace", "新增工作区")
+        case .rename: button.title = localized("Edit", "编辑")
+        case .remove: button.title = localized("Delete", "删除")
+        }
+        button.isEnabled = context.environment.isEnabled && workspace.ready && !workspace.busy && workspace.nameDraft == nil &&
+            (action != .remove || workspace.canRemoveWorkspace(id))
+    }
+    @MainActor final class Coordinator: NSObject {
+        let workspace: WorkspaceModel
+        var action = Action.add
+        var id = ""
+        init(_ workspace: WorkspaceModel) { self.workspace = workspace }
+        @objc func applyWorkspaceAction(_ button: NSButton) {
+            guard button.isEnabled, !workspace.busy, workspace.nameDraft == nil else { return }
+            switch action {
+            case .add: workspace.newWorkspace(owner: .settings)
+            case .rename: workspace.renameWorkspace(id: id, owner: .settings)
+            case .remove: workspace.removeWorkspace(id: id)
+            }
+        }
+    }
+}
+
+@MainActor
+struct NativeShortcutResetButton: NSViewRepresentable {
+    @ObservedObject var model: NativeSettingsModel
+    func makeCoordinator() -> Coordinator { Coordinator(model) }
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.reset))
+        button.identifier = .init("native-settings-shortcuts-reset"); button.bezelStyle = .rounded
+        return button
+    }
+    func updateNSView(_ button: NSButton, context: Context) {
+        button.title = localized("Restore default shortcuts", "恢复默认快捷键")
         button.isEnabled = context.environment.isEnabled && !model.busy && !model.automaticSaving && !model.frozen
+    }
+    @MainActor final class Coordinator: NSObject {
+        let model: NativeSettingsModel
+        init(_ model: NativeSettingsModel) { self.model = model }
+        @objc func reset() {
+            guard !model.busy, !model.automaticSaving, !model.frozen else { return }
+            model.shortcuts = [:]; model.saveAutomatically(["shortcuts"])
+        }
+    }
+}
+
+@MainActor
+struct NativeLegacyExportButton: NSViewRepresentable {
+    @ObservedObject var model: NativeSettingsModel
+    func makeCoordinator() -> Coordinator { Coordinator(model) }
+    func makeNSView(context: Context) -> Container {
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.export(_:)))
+        button.identifier = .init("native-settings-legacy-export"); button.bezelStyle = .rounded
+        return Container(button: button)
+    }
+    func updateNSView(_ container: Container, context: Context) {
+        let button = container.button
+        button.title = localized("Export legacy-compatible data", "导出旧版兼容数据")
+        button.font = .systemFont(ofSize: 11)
+        button.isEnabled = context.environment.isEnabled && !model.busy && !model.automaticSaving && !model.frozen
+        container.needsLayout = true
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: Container, context: Context) -> CGSize? { CGSize(width: nsView.button.intrinsicContentSize.width, height: 28) }
+    @MainActor final class Container: NSView {
+        let button: NSButton
+        init(button: NSButton) {
+            self.button = button; super.init(frame: .zero)
+            button.autoresizingMask = [.width, .height]; addSubview(button)
+        }
+        required init?(coder: NSCoder) { fatalError("Use programmatic construction") }
+        override func layout() { super.layout(); button.frame = bounds }
     }
     @MainActor final class Coordinator: NSObject {
         let model: NativeSettingsModel

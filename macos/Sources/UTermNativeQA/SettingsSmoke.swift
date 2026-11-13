@@ -35,6 +35,26 @@ enum SettingsSmoke {
             }
         }
     }
+    @MainActor private final class WorkspaceDeletionResponse {
+        let title: String
+        private var timer: Timer?
+        private let deadline = Date().addingTimeInterval(5)
+        private(set) var clicked = false
+        init(_ title: String) { self.title = title }
+        func start() {
+            let timer = Timer(timeInterval: 0.04, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
+            self.timer = timer; RunLoop.main.add(timer, forMode: .modalPanel)
+        }
+        func stop() { timer?.invalidate(); timer = nil }
+        private func tick() {
+            if Date() > deadline { stop(); if NSApp.modalWindow != nil { NSApp.stopModal(withCode: .abort) }; return }
+            guard let modal = NSApp.modalWindow, let root = modal.contentView else { return }
+            let contents = TerminalSmoke.descendants(root)
+            guard contents.contains(where: { ($0 as? NSTextField)?.stringValue == "Delete empty workspace?" }),
+                  let button = contents.compactMap({ $0 as? NSButton }).first(where: { $0.title == title && $0.isEnabled }) else { return }
+            clicked = true; button.performClick(nil); stop()
+        }
+    }
     private static func key(_ window: NSWindow, code: UInt16, characters: String) throws {
         guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) else { throw BridgeFailure(code: "SETTINGS_QA_EVENT", message: "Could not construct native key input") }
         NSApp.sendEvent(event)
@@ -81,10 +101,12 @@ enum SettingsSmoke {
         model.numbers["fontSize"] = original; model.section = "general"; settings.window.makeFirstResponder(nil)
         report["nativeSettingsSearchProof"] = ["actualAppKitInput": true, "filteredNavigation": true, "matchingCategoryClickable": true, "draftRetained": true, "escapeClearsWithoutClosing": true, "savedBytesUnchanged": true, "capture": name]
     }
-    static func run(workspace: WorkspaceModel, open: () -> NativeSettingsWindow, report: inout [String: Any]) async throws {
+    static func run(workspace: WorkspaceModel, open: () -> NativeSettingsWindow, openAgents: () -> AgentSettingsWindow, report: inout [String: Any]) async throws {
         readRetries = 0; peerWriteRetries = 0
         guard workspace.ready, let bridge = workspace.bridge, let path = WorkspaceModel.argument("--settings-smoke-report") else { throw BridgeFailure(code: "SETTINGS_QA_CONTEXT", message: "Missing isolated settings context") }
         let root = try WorkspaceModel.dataRoot()
+        await workspace.patchSettings(["usageRemote": .bool(false)])
+        guard workspace.settings["usageRemote"].bool == false else { throw BridgeFailure(code: "SETTINGS_QA_USAGE", message: "Could not isolate automatic usage reads") }
         guard !workspace.updates.available, workspace.updates.controller == nil else { throw BridgeFailure(code: "UPDATE_DEFAULT", message: "Unconfigured QA build unexpectedly initialized network updates") }
         report["unconfiguredNativeUpdatesHaveNoSDKControllerOrNetworkChecks"] = true
         let snapshotFile = root.appendingPathComponent("snapshot-v1.json")
@@ -118,8 +140,10 @@ enum SettingsSmoke {
         try await save(model)
         guard model.error.isEmpty, !model.dirty, workspace.settings["fontSize"].number == 17 else { throw BridgeFailure(code: "SETTINGS_QA_SAVE", message: "Native settings did not save") }
         try await verifyAutomaticSave(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
+        try await verifyIconColor(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         try await verifyLegacyExport(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         try await verifyDefaultAgent(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
+        try await verifyInlineAgents(settings: current, open: open, openAgents: openAgents, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         let other = try await CoreBridge.open(root: root)
         do {
             model.numbers["fileFontSize"] = "19"
@@ -172,7 +196,11 @@ enum SettingsSmoke {
             guard let unshifted = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "k", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: unshifted) == false else { throw BridgeFailure(code: "SETTINGS_QA_SHIFT", message: "A shifted shortcut accepted the unshifted event") }
             let paletteMenu = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.representedObject as? String == "palette" })
             report["paletteRefreshDiagnostics"] = ["draftShortcut": model.shortcuts["palette"] ?? "", "workspaceShortcut": workspace.settings["shortcuts"]["palette"].string ?? "", "resolvedShortcut": workspace.commandItems.first(where: { $0["id"].string == "palette" })?["shortcut"].string ?? "", "workspaceErrorCode": String(workspace.error.split(separator: ":", maxSplits: 1).first ?? "")]
-            report["paletteMenuBinding"] = ["key": paletteMenu?.keyEquivalent ?? "", "modifiers": paletteMenu?.keyEquivalentModifierMask.rawValue ?? 0, "enabled": paletteMenu?.isEnabled == true]
+            var menuBinding: [String: Any] = [:]
+            menuBinding["key"] = paletteMenu?.keyEquivalent ?? ""
+            menuBinding["modifiers"] = paletteMenu?.keyEquivalentModifierMask.rawValue ?? 0
+            menuBinding["enabled"] = paletteMenu?.isEnabled == true
+            report["paletteMenuBinding"] = menuBinding
             guard paletteMenu?.keyEquivalent == "K", paletteMenu?.keyEquivalentModifierMask == [.command, .shift], let paletteEvent = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "K", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: paletteEvent) == true else { throw BridgeFailure(code: "SETTINGS_QA_MENU_BINDING", message: "Saved semantic shortcut did not update the system menu") }
             try await TerminalSmoke.wait("Open palette through the actual menu shortcut") { NSApp.keyWindow?.identifier?.rawValue == "native-command-palette" }
             guard let palette = NSApp.keyWindow else { throw BridgeFailure(code: "SETTINGS_QA_PALETTE", message: "Palette did not open") }
@@ -203,6 +231,7 @@ enum SettingsSmoke {
             try key(palette, code: 36, characters: "\r")
             try await TerminalSmoke.wait("Execute selected settings command with Return") { !palette.isVisible && current.window.isKeyWindow }
             report["nativeDynamicMenuPaletteKeyboardAndFocusReturn"] = true
+            try await verifyShortcutActions(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
             let beforeImport = try Data(contentsOf: snapshotFile), draftBeforeImport = model.values
             await model.importTheme(source: "background=invalid-private-color", name: "QA")
             guard !model.error.isEmpty, model.values == draftBeforeImport, try Data(contentsOf: snapshotFile) == beforeImport else { throw BridgeFailure(code: "SETTINGS_QA_THEME_ERROR", message: "Invalid theme changed settings or the draft") }
@@ -241,8 +270,24 @@ enum SettingsSmoke {
             try await Task.sleep(for: .milliseconds(200))
             try await TerminalSmoke.capture(window: terminalWindow, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(terminalCapture))
             report["nativeThemeImportDraftFailureAndTerminalEffects"] = true
-            await workspace.closeSession()
-            guard workspace.state?.sessions.isEmpty == true else { throw BridgeFailure(code: "SETTINGS_QA_CLOSE", message: "Settings QA session was not closed") }
+            try await verifyWorkspaceManagement(settings: current, peer: other, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
+            try await TerminalSmoke.wait("Complete workspace actions before closing the retained QA terminal") { !workspace.busy && workspace.selectedID == terminal.id }
+            await workspace.closeSession(id: terminal.id)
+            guard workspace.state?.sessions.isEmpty == true else {
+                let canonical = try? await readSnapshot(bridge)
+                var diagnostics: [String: Any] = [:]
+                diagnostics["busy"] = workspace.busy
+                diagnostics["selectedID"] = workspace.selectedID ?? ""
+                diagnostics["expectedSessionID"] = terminal.id
+                let retained: [String] = workspace.state?.sessions.map(\.sessionID) ?? []
+                diagnostics["retainedSessionIDs"] = retained
+                diagnostics["workspaceErrorCode"] = String(workspace.error.split(separator: ":", maxSplits: 1).first ?? "")
+                diagnostics["cachedRevision"] = workspace.state?.snapshot.revision ?? ""
+                diagnostics["canonicalRevision"] = canonical?.revision ?? ""
+                report["nativeSettingsCloseDiagnostics"] = diagnostics
+                throw BridgeFailure(code: "SETTINGS_QA_CLOSE", message: "Settings QA session was not closed: " + workspace.error)
+            }
+            report["nativeSettingsActualRetainedSessionClosed"] = true
             _ = try await bridge.call("host.shutdownIdle")
             let resetBefore = try Data(contentsOf: snapshotFile)
             model.resetDraft()
@@ -263,7 +308,7 @@ enum SettingsSmoke {
             report["simulatedLoginItemOptInApprovalFailureAndDisable"] = true
             report["actualOSLoginRegistrationExecuted"] = false
             var captures: [String] = [paletteCapture, terminalCapture, fontCapture]
-            captures.append(try await verifyGlobalMaven(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
+            captures.append(try await verifyGlobalMaven(settings: current, open: open, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             captures.append(try await verifyDatabaseComponents(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             captures.append(try await verifyJavaComponents(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             current.window.makeKeyAndOrderFront(nil)
@@ -279,12 +324,27 @@ enum SettingsSmoke {
             report["captures"] = captures
             await other.close()
         } catch { await other.close(); throw error }
+        guard let parent = current.window.parent, !current.window.styleMask.contains(.titled) else { throw BridgeFailure(code: "SETTINGS_QA_OVERLAY", message: "Settings is not attached over the actual workspace") }
+        try await TerminalSmoke.wait("Render the actual overlay close control") { (view(current.window, id: "native-settings-close") as? NSButton)?.isEnabled == true }
+        guard let close = view(current.window, id: "native-settings-close") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_OVERLAY", message: "Missing settings close control") }
+        let parentSize = parent.contentView?.bounds.size ?? NSSize(width: 1100, height: 720)
+        _ = try await TerminalSmoke.sizeCaptureWindow(parent, width: 640, height: 420)
+        current.alignToParent()
+        try await TerminalSmoke.wait("Settings overlay fits the minimum actual workspace window") { abs((current.window.contentView?.bounds.height ?? 0) - 420) < 1 && current.model.presentationCardFrame.height > 0 && current.model.presentationCardFrame.maxY <= 420 }
+        let overlayCapture = "native-settings-workspace-overlay.png"
+        try await TerminalSmoke.capture(window: current.window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(overlayCapture))
+        close.performClick(nil)
+        try await TerminalSmoke.wait("Actual close control restores the underlying workspace") { !current.window.isVisible && !workspace.settingsPresented && parent.isVisible && parent.isKeyWindow }
+        parent.setContentSize(parentSize)
+        guard open() === current else { throw BridgeFailure(code: "SETTINGS_QA_OVERLAY", message: "Reopening settings replaced its retained model") }
+        try await TerminalSmoke.wait("Reopening attaches the same settings window to the workspace") { current.window.isVisible && current.window.parent === parent && workspace.settingsPresented }
+        report["nativeSettingsOverlayProof"] = ["realWorkspaceChildWindow": true, "actualCloseButton": true, "workspaceFocusRestored": true, "sameCachedWindowReopened": true, "minimumWindow640x420": true, "capture": overlayCapture]
         report["manualAcceptance"] = "waived by user"
         report["settingsQAReadOnlyRetryCount"] = readRetries
         report["settingsQAPeerWriteRetryCount"] = peerWriteRetries
         report["nativeSettingsFeatureAcceptanceComplete"] = false
         report["remaining"] = ["Automatic update effects remain tracked in #45; preference/file/search/inspector/swap/zoom and GitHub have separate reports; actual OS login approval uses the authorized simulation boundary"]
-        current.window.orderOut(nil)
+        current.window.performClose(nil)
     }
 
     private static func verifyLegacyExport(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
@@ -293,8 +353,15 @@ enum SettingsSmoke {
         let before = try await readSnapshot(bridge), file = root.appendingPathComponent("snapshot-v1.json")
         let bytes = try Data(contentsOf: file), original = model.numbers["fontSize"]
         model.numbers["fontSize"] = "999"; model.section = "general"
-        try await TerminalSmoke.wait("Render actual compatibility export entry") { (view(settings.window, id: "native-settings-legacy-export") as? NSButton)?.isEnabled == true }
+        try await TerminalSmoke.wait("Render actual compatibility export entry") {
+            guard let button = view(settings.window, id: "native-settings-legacy-export") as? NSButton else { return false }
+            settings.window.contentView?.layoutSubtreeIfNeeded()
+            return button.isEnabled && button.window === settings.window && button.bounds.width > 0 && button.bounds.height > 0
+        }
         guard let button = view(settings.window, id: "native-settings-legacy-export") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Missing export control") }
+        _ = button.scrollToVisible(button.bounds)
+        report["nativeLegacyExportControlFrame"] = ["width": button.bounds.width, "height": button.bounds.height]
+        guard button.bounds.width > 100, button.bounds.width < 320, abs(button.bounds.height - 28) < 1 else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "The export action did not retain its compact 28-point target") }
         button.performClick(nil)
         try await TerminalSmoke.wait("Actual export entry opens its native save sheet") { settings.window.attachedSheet is NSSavePanel && model.busy }
         guard let panel = settings.window.attachedSheet as? NSSavePanel else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "The actual export sheet is missing") }
@@ -324,6 +391,303 @@ enum SettingsSmoke {
         model.numbers["fontSize"] = original; await model.reload()
         guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Explicit reload did not recover export feedback") }
         report["nativeLegacyExportProof"] = ["actualSavePanelCancellation": true, "busyCloseGuard": true, "committedDataExported": true, "storeUnchanged": true, "draftRetained": true, "failedWriteRetainsPreviousExport": true, "capture": capture, "exportFile": name]
+    }
+
+    private static func verifyShortcutActions(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Missing isolated settings bridge") }
+        model.section = "keyboard"
+        let originalNumber = model.numbers["scrollback"]
+        let draft = originalNumber == "2400" ? "2300" : "2400"
+        model.numbers["scrollback"] = draft
+        var attempts: [[String: Any]] = []
+        func operate(_ phase: String, before: CoreSnapshot, action: () throws -> Void) async throws -> CoreSnapshot {
+            for attempt in 1...3 {
+                try action()
+                try await TerminalSmoke.wait("Finish the explicit shortcut control save") { !model.busy && !model.automaticSaving }
+                let after = try await readSnapshot(bridge)
+                let busy = model.errorCode == "WRITER_BUSY"
+                attempts.append(["phase": phase, "attempt": attempt, "writerBusy": busy, "unrelatedDraftRetained": model.numbers["scrollback"] == draft])
+                guard model.numbers["scrollback"] == draft else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "A shortcut action discarded an unrelated numeric draft") }
+                if !busy {
+                    guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "The explicit shortcut action failed") }
+                    return after
+                }
+                guard after.document.settings == before.document.settings, attempt < 3 else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Writer-busy changed saved settings or exhausted explicit shortcut actions") }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Shortcut action did not finish")
+        }
+        let before = try await readSnapshot(bridge)
+        try await TerminalSmoke.wait("Render the actual shortcut recording control") { (view(settings.window, id: "native-shortcut-palette") as? NSButton)?.isEnabled == true }
+        guard let frozenCapture = view(settings.window, id: "native-shortcut-palette") as? NSButton else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Shortcut recording control is missing") }
+        model.frozen = true
+        try await TerminalSmoke.wait("Frozen settings disable the actual recording control") { !frozenCapture.isEnabled }
+        frozenCapture.performClick(nil)
+        guard let frozenEvent = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: settings.window.windowNumber, context: nil, characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51), !frozenCapture.performKeyEquivalent(with: frozenEvent), (try await readSnapshot(bridge)).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Frozen recording accepted a key or changed settings") }
+        model.frozen = false
+        try await TerminalSmoke.wait("Resume the actual shortcut recording control") { frozenCapture.isEnabled }
+        let cleared = try await operate("backspace", before: before) {
+            guard let capture = view(settings.window, id: "native-shortcut-palette") as? NSButton else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Shortcut recording control is missing") }
+            settings.window.makeKeyAndOrderFront(nil); capture.performClick(nil)
+            try key(settings.window, code: 51, characters: "\u{7f}")
+        }
+        guard case .object(var expected) = before.document.settings, case .object(var shortcuts) = expected["shortcuts"] ?? .null else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Invalid isolated shortcut snapshot") }
+        shortcuts["palette"] = .string(""); expected["shortcuts"] = .object(shortcuts)
+        guard cleared.document.settings == .object(expected), model.shortcuts["palette"] == "" else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Backspace did not clear only the recorded shortcut") }
+        try await TerminalSmoke.wait("Render the actual reset-all-shortcuts action") { (view(settings.window, id: "native-settings-shortcuts-reset") as? NSButton)?.isEnabled == true }
+        let reset = try await operate("reset-all", before: cleared) {
+            guard let button = view(settings.window, id: "native-settings-shortcuts-reset") as? NSButton else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Reset-all-shortcuts action is missing") }
+            _ = button.scrollToVisible(button.bounds); button.performClick(nil)
+        }
+        expected["shortcuts"] = .object([:])
+        guard reset.document.settings == .object(expected), model.shortcuts.isEmpty else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Reset-all changed other preferences or retained shortcut overrides") }
+        let capture = "native-settings-shortcuts-reset.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        model.numbers["scrollback"] = originalNumber
+        guard !model.dirty else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "The shortcut actions left an unexpected settings draft") }
+        report["nativeShortcutActionsProof"] = ["actualBackspaceEvent": true, "actualResetButton": true, "frozenRecorderDisabled": true, "scopedPersistence": true, "unrelatedDraftRetained": true, "preferencesPreserved": true, "capture": capture] as [String: Any]
+        report["nativeShortcutActionAttempts"] = attempts
+    }
+
+    private static func verifyAgentCatalog(settings: NativeSettingsWindow, snapshotFile: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let agents = settings.model.agentSettings, selected = settings.model.agentSettings.selected
+        let draft = agents.program, before = try Data(contentsOf: snapshotFile)
+        try await TerminalSmoke.wait("Render actual Agent catalog search and filters") {
+            (view(settings.window, id: "native-agent-search") as? NSSearchField)?.isEnabled == true &&
+                (view(settings.window, id: "native-agent-filter") as? NSPopUpButton)?.isEnabled == true
+        }
+        guard let search = view(settings.window, id: "native-agent-search") as? NSSearchField,
+              let filter = view(settings.window, id: "native-agent-filter") as? NSPopUpButton,
+              let choices = view(settings.window, id: "native-agent-selection") as? NSPopUpButton else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Actual Agent catalog controls are missing") }
+        func ids() -> [String] { choices.itemArray.compactMap { $0.representedObject as? String } }
+        func searchFor(_ text: String) async throws {
+            _ = search.scrollToVisible(search.bounds)
+            settings.window.makeKeyAndOrderFront(nil); settings.window.makeFirstResponder(search)
+            guard let editor = search.currentEditor() as? NSTextView else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Agent search field has no editor") }
+            editor.insertText(text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+            try await TerminalSmoke.wait("Filter Agent choices through the actual search field") { agents.query == text && ids() == agents.visibleIdentifiers }
+        }
+        try await searchFor(selected.uppercased())
+        guard ids().contains(selected), agents.selected == selected, agents.program == draft, agents.dirty else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Case-insensitive search lost the selected command draft") }
+        try await searchFor("uterm-no-matching-agent-qa")
+        guard ids().isEmpty, !choices.isEnabled, agents.selected == selected, agents.program == draft else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Empty Agent results selected another command") }
+        let capture = "native-settings-agent-search-empty.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        try key(settings.window, code: 53, characters: "\u{1b}")
+        try await TerminalSmoke.wait("Escape clears Agent search without closing settings") { agents.query.isEmpty && settings.window.isVisible && ids() == agents.identifiers }
+        settings.window.makeFirstResponder(nil)
+        for value in ["available", "enabled", "all"] {
+            guard let item = filter.itemArray.first(where: { $0.representedObject as? String == value }), let action = filter.action else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Agent filter option is missing") }
+            filter.select(item)
+            guard NSApp.sendAction(action, to: filter.target, from: filter) else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Agent filter action was not delivered") }
+            let expected = agents.identifiers.filter { id in
+                value == "all" || (value == "available" ? agents.catalog["available"].array : agents.workspace.settings["enabledAgents"].array).contains(.string(id))
+            }
+            try await TerminalSmoke.wait("Match Agent filter options to the actual catalog") { agents.filter == value && ids() == expected }
+            guard agents.selected == selected, agents.program == draft, agents.dirty else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Filtering discarded the command draft") }
+        }
+        agents.frozen = true
+        try await TerminalSmoke.wait("Freeze disables actual Agent catalog controls") { !search.isEnabled && !filter.isEnabled && !choices.isEnabled }
+        agents.frozen = false
+        try await TerminalSmoke.wait("Resume actual Agent catalog controls") { search.isEnabled && filter.isEnabled && choices.isEnabled }
+        guard try Data(contentsOf: snapshotFile) == before else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Filtering changed saved data") }
+        report["nativeAgentCatalogProof"] = ["actualSearchField": true, "actualFilterActions": true, "caseInsensitive": true, "emptyResultsDoNotSelect": true, "availableAndEnabledMatchCatalog": true, "escapeClearsWithoutClosing": true, "frozenControlsDisabled": true, "commandDraftRetained": true, "savedDataUnchanged": true, "capture": capture] as [String: Any]
+    }
+
+    private static func verifyInlineAgents(settings: NativeSettingsWindow, open: () -> NativeSettingsWindow, openAgents: () -> AgentSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model, agents = model.agentSettings
+        let previousRemote = model.values["usageRemote"] ?? .bool(true)
+        model.values["usageRemote"] = .bool(false)
+        try await save(model)
+        guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Could not select isolated local usage") }
+        let snapshotFile = root.appendingPathComponent("snapshot-v1.json")
+        let before = try Data(contentsOf: snapshotFile)
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Missing isolated Core bridge") }
+        let commandsBefore = try await bridge.call("agent.catalog")["definitions"]
+        model.section = "agents"
+        try await TerminalSmoke.wait("Load inline Agent commands in the settings workspace") { agents.catalog != .null && !agents.busy && view(settings.window, id: "native-agent-field-program") != nil }
+        let program = agents.program, commandAgent = agents.selected
+        func editProgram(_ text: String) throws {
+            guard let field = view(settings.window, id: "native-agent-field-program") as? NSTextField else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Inline Agent command field is missing") }
+            _ = field.scrollToVisible(field.bounds)
+            settings.window.makeKeyAndOrderFront(nil); settings.window.makeFirstResponder(field)
+            guard let editor = field.currentEditor() as? NSTextView else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Inline Agent field editor is missing") }
+            editor.insertText(text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+            settings.window.makeFirstResponder(nil)
+        }
+        let draft = "/tmp/uterm-qa-retained-command"
+        try editProgram(draft)
+        guard agents.program == draft, agents.dirty, settings.window.parent?.isVisible == true else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual inline Agent editing did not retain a draft in the workspace") }
+        try await verifyAgentCatalog(settings: settings, snapshotFile: snapshotFile, evidence: evidence, report: &report)
+        let commandsCapture = "native-settings-inline-agent-command.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(commandsCapture))
+        guard let usage = view(settings.window, id: "native-settings-section-usage") as? NSButton else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual Usage category is missing") }
+        let reads = agents.qaUsageReads
+        usage.performClick(nil)
+        try await TerminalSmoke.wait("Read local usage inside the same settings overlay") { model.section == "usage" && agents.inlineVisible && agents.qaUsageReads > reads && agents.usage(for: agents.usageSelected) != .null && !agents.busy }
+        let firstUsageAgent = agents.usageSelected, firstUsage = agents.usage(for: agents.usageSelected)
+        let nextAgent = firstUsageAgent == "kimi" ? "grok" : "kimi"
+        let nextReads = agents.qaUsageReadsByAgent[nextAgent] ?? 0
+        report["nativeUsageTabAction"] = ["phase": "waiting-for-control", "requestedAgent": nextAgent, "selectedAgent": agents.usageSelected, "modelBusy": agents.busy, "workspaceBusy": model.workspace.busy, "controlEnabled": (view(settings.window, id: "native-agent-usage-tabs") as? NSSegmentedControl)?.isEnabled == true] as [String: Any]
+        try await TerminalSmoke.wait("Actual Usage Agent tabs are enabled after the local read") {
+            guard let tabs = view(settings.window, id: "native-agent-usage-tabs") as? NSSegmentedControl else { return false }
+            return tabs.window === settings.window && !tabs.isHiddenOrHasHiddenAncestor && tabs.isEnabled && !agents.busy && !agents.frozen && !model.workspace.busy
+        }
+        guard let tabs = view(settings.window, id: "native-agent-usage-tabs") as? NSSegmentedControl, tabs.isEnabled else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual Usage Agent tabs are missing or disabled") }
+        tabs.selectedSegment = AgentSettingsModel.usageAgents.firstIndex(of: nextAgent)!
+        let delivered = tabs.action.map { NSApp.sendAction($0, to: tabs.target, from: tabs) } ?? false
+        report["nativeUsageTabAction"] = ["phase": "action-delivered", "requestedAgent": nextAgent, "selectedAgent": agents.usageSelected, "modelBusy": agents.busy, "workspaceBusy": model.workspace.busy, "controlEnabled": tabs.isEnabled, "delivered": delivered, "selectedSegment": tabs.selectedSegment] as [String: Any]
+        guard delivered, agents.usageSelected == nextAgent else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Enabled Usage Agent tab action did not select \(nextAgent)") }
+        try await TerminalSmoke.wait("Usage Agent tabs refresh independently of an unsaved command") { agents.usageSelected == nextAgent && (agents.qaUsageReadsByAgent[nextAgent] ?? 0) > nextReads && agents.usage(for: nextAgent) != .null && !agents.busy }
+        guard agents.selected == commandAgent, agents.program == draft, agents.dirty, agents.usage(for: firstUsageAgent) == firstUsage else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Changing usage Agent discarded a command or another Agent's result") }
+        guard !agents.qaUsageLastRemote, !agents.qaUsageLastKeychain, agents.program == draft else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Inline usage lost the command draft or requested account access") }
+        let usageCapture = "native-settings-inline-agent-usage.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(usageCapture))
+        settings.window.performClose(nil)
+        try await TerminalSmoke.wait("Closing settings stops inline usage polling") { !settings.window.isVisible && !agents.inlineVisible && !agents.busy }
+        let standalone = openAgents()
+        try await TerminalSmoke.wait("The menu Agent window uses the same retained command model") { standalone.model === agents && !agents.busy }
+        guard agents.program == draft, agents.dirty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "The existing menu window replaced the inline Agent draft") }
+        standalone.window.performClose(nil)
+        try await TerminalSmoke.wait("Hide the existing Agent window after its reads finish") { !standalone.window.isVisible && !agents.visible && !agents.busy }
+        let catalogReadsBeforeReopen = agents.qaCatalogReads
+        model.section = "agents"
+        guard open() === settings else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Opening settings replaced its cached window") }
+        try await TerminalSmoke.wait("Reopen the actual inline Agent editor after its catalog read completes") {
+            (view(settings.window, id: "native-agent-field-program") as? NSTextField)?.stringValue == draft &&
+                agents.qaCatalogReads > catalogReadsBeforeReopen && !agents.busy && !model.busy && !model.automaticSaving &&
+                !model.maven.busy && !model.databaseComponents.working && !model.javaComponents.pending && !model.javaComponents.mutating && !model.login.busy
+        }
+        NSApp.terminate(nil)
+        do {
+            try await TerminalSmoke.wait("Quit protects the shared Agent draft even when its separate window is hidden") { settings.window.attachedSheet != nil }
+        } catch {
+            report["inlineAgentQuitDiagnostics"] = ["catalogReadsBeforeReopen": catalogReadsBeforeReopen, "catalogReads": agents.qaCatalogReads,
+                "agentBusy": agents.busy, "agentDirty": agents.dirty, "agentFrozen": agents.frozen, "agentErrorVisible": !agents.error.isEmpty,
+                "settingsBusy": model.busy, "settingsAutomaticSaving": model.automaticSaving, "settingsFrozen": model.frozen,
+                "settingsDirty": model.dirty, "settingsErrorVisible": !model.error.isEmpty, "settingsVisible": settings.window.isVisible,
+                "workspaceBusy": model.workspace.busy, "workspaceErrorCode": model.workspace.error.split(separator: ":").first.map(String.init) ?? "",
+                "standaloneVisible": standalone.window.isVisible, "standaloneHasSheet": standalone.window.attachedSheet != nil,
+                "hasModalWindow": NSApp.modalWindow != nil] as [String: Any]
+            throw error
+        }
+        if let sheet = settings.window.attachedSheet { settings.window.endSheet(sheet, returnCode: .alertSecondButtonReturn) }
+        try await TerminalSmoke.wait("Cancelled quit resumes inline settings and Agent operations") { !model.frozen && !agents.frozen && settings.window.attachedSheet == nil }
+        guard agents.program == draft, agents.dirty, try Data(contentsOf: snapshotFile) == before, try await bridge.call("agent.catalog")["definitions"] == commandsBefore else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Navigation, window hiding or cancelled quit changed the saved Agent command or discarded the draft") }
+        try editProgram(program)
+        guard !agents.dirty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Could not restore the isolated command draft") }
+        model.values["usageRemote"] = previousRemote
+        try await save(model)
+        guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Could not restore the saved usage preference") }
+        report["nativeInlineAgentSettingsProof"] = ["actualFieldEditor": true, "actualCategorySelection": true, "sameWorkspaceOverlay": true, "sameCachedModelAcrossMenuWindow": true, "inlineLocalUsage": true, "independentUsageAgentTabs": true, "perAgentResultsRetained": true, "automaticKeychainAllowed": agents.qaUsageLastKeychain, "hiddenPollingStopped": true, "reopenedCatalogReadCompletedBeforeQuit": true, "cancelledQuitRetainsDraft": true, "savedDataUnchanged": true, "preferencesRestored": true, "captures": [commandsCapture, usageCapture]] as [String: Any]
+        model.section = "general"
+    }
+
+    private static func verifyWorkspaceManagement(settings: NativeSettingsWindow, peer: CoreBridge, evidence: URL, report: inout [String: Any]) async throws {
+        let workspace = settings.model.workspace
+        guard let bridge = workspace.bridge, let terminal = workspace.selectedTerminal, let generation = terminal.generation else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Missing live workspace fixture") }
+        let original = try await readSnapshot(bridge), selected = workspace.groupID, session = workspace.selectedID
+        let viewBefore = terminal.view
+        let initialIDs = Set(workspace.groupItems.map(\.id))
+        settings.model.section = "workspace"; settings.window.makeKeyAndOrderFront(nil)
+        func button(_ action: String, _ id: String = "") async throws -> NSButton {
+            let identifier = "native-settings-workspace-" + action + (id.isEmpty ? "" : "-" + id)
+            try await TerminalSmoke.wait("Render workspace settings action " + action) { (view(settings.window, id: identifier) as? NSButton)?.isEnabled == true }
+            guard let button = view(settings.window, id: identifier) as? NSButton else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace action is unavailable") }
+            _ = button.scrollToVisible(button.bounds); return button
+        }
+        func editName(_ name: String) async throws -> NSWindow {
+            try await TerminalSmoke.wait("Present workspace naming in settings") { settings.window.attachedSheet != nil && workspace.nameDraftOwner == .settings }
+            guard let sheet = settings.window.attachedSheet, let root = sheet.contentView,
+                  let field = TerminalSmoke.descendants(root).compactMap({ $0 as? NSTextField }).first(where: { $0.isEditable }),
+                  sheet.makeFirstResponder(field), let editor = field.currentEditor() as? NSTextView else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace name editor is unavailable") }
+            editor.insertText(name, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+            try await TerminalSmoke.wait("Edit the actual workspace name field") { workspace.nameDraft?.name == name }
+            return sheet
+        }
+        var attempts: [[String: Any]] = []
+        func submit(_ sheet: NSWindow, phase: String) async throws {
+            let before = try await readSnapshot(bridge)
+            for attempt in 1...3 {
+                let completedBefore = workspace.qaNameSaveCompletions
+                try key(sheet, code: 36, characters: "\r")
+                try await TerminalSmoke.wait("Complete the explicit workspace name action and draft cleanup") { workspace.qaNameSaveCompletions > completedBefore && !workspace.busy }
+                let saved = workspace.nameDraft == nil, busy = workspace.error.hasPrefix("WRITER_BUSY:")
+                let after = try await readSnapshot(bridge)
+                let retained = after.revision == before.revision && after.document.workspace == before.document.workspace
+                attempts.append(["phase": phase, "attempt": attempt, "saved": saved, "completedAction": true, "errorCode": String(workspace.error.split(separator: ":", maxSplits: 1).first ?? ""), "writerBusy": busy, "unchangedOnBusy": !busy || retained])
+                report["nativeWorkspaceManagementAttempts"] = attempts
+                if saved { return }
+                guard busy, retained, attempt < 3 else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace naming failed; no uncertain operation was repeated") }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        func retainedActive() throws {
+            guard workspace.groupID == selected, workspace.selectedID == session, workspace.selectedTerminal === terminal,
+                  terminal.generation == generation, terminal.view === viewBefore else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Managing another workspace changed the active terminal") }
+        }
+        let add = try await button("add"); add.performClick(nil)
+        var sheet = try await editName("Workspace settings 中文")
+        try await submit(sheet, phase: "add")
+        guard let created = workspace.groupItems.first(where: { !initialIDs.contains($0.id) }), created.name == "Workspace settings 中文" else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Adding a workspace did not persist the new row") }
+        try retainedActive()
+        let rename = try await button("rename", created.id); rename.performClick(nil)
+        sheet = try await editName("Inactive renamed 中文")
+        try await submit(sheet, phase: "rename")
+        guard workspace.groupItems.first(where: { $0.id == created.id })?.name == "Inactive renamed 中文" else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "The inactive row did not keep its target") }
+        try retainedActive()
+        let staleRename = try await button("rename", created.id); staleRename.performClick(nil)
+        sheet = try await editName("Retained workspace draft")
+        let state = try await readSnapshot(peer)
+        report["nativeWorkspaceManagementPhase"] = "peer-rename"
+        for attempt in 1...3 {
+            do {
+                _ = try await peer.call("workspace.rename", params: .object(["id": .string(created.id), "name": .string("Peer workspace name"), "expectedRevision": .string(state.revision)]))
+                attempts.append(["phase": "peer-rename", "attempt": attempt, "saved": true])
+                report["nativeWorkspaceManagementAttempts"] = attempts
+                break
+            } catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" {
+                let after = try await readSnapshot(peer)
+                let unchanged = after.revision == state.revision && after.document.workspace == state.document.workspace && after.document.settings == state.document.settings
+                attempts.append(["phase": "peer-rename", "attempt": attempt, "saved": false, "writerBusy": true, "unchangedOnBusy": unchanged])
+                report["nativeWorkspaceManagementAttempts"] = attempts
+                // Repeat only this fixture's peer operation after proving no canonical write occurred.
+                // 仅在确认规范数据未写入后，有限重试此测试样例的外部操作。
+                guard attempt < 3, unchanged else { throw failure }
+                peerWriteRetries += 1
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        report["nativeWorkspaceManagementPhase"] = "stale-rename"
+        try key(sheet, code: 36, characters: "\r")
+        try await TerminalSmoke.wait("Reject the actual stale workspace rename") { !workspace.busy && workspace.error.hasPrefix("CONFLICT:") }
+        guard workspace.nameDraft?.target == created.id, workspace.nameDraft?.name == "Retained workspace draft",
+              (try await readSnapshot(peer)).document.workspace["groups"].array.first(where: { $0["id"].string == created.id })?["name"].string == "Peer workspace name" else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "A stale rename lost its draft or overwrote the peer") }
+        try key(sheet, code: 53, characters: "\u{1b}")
+        try await TerminalSmoke.wait("Cancel the retained rename draft") { workspace.nameDraft == nil && settings.window.attachedSheet == nil }
+        await workspace.reload(clearOperationError: true)
+        try await TerminalSmoke.wait("Disable deletion of the occupied active workspace") { (view(settings.window, id: "native-settings-workspace-remove-" + selected) as? NSButton)?.isEnabled == false }
+        let capture = "native-settings-workspace-inactive-row.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        for title in ["Cancel", "Delete workspace"] {
+            let remove = try await button("remove", created.id)
+            let response = WorkspaceDeletionResponse(title); response.start()
+            remove.performClick(nil); response.stop()
+            guard response.clicked else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace delete confirmation was not activated") }
+            if title == "Cancel" {
+                guard (try await readSnapshot(bridge)).document.workspace["groups"].array.contains(where: { $0["id"].string == created.id }) else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Cancelling deletion removed the inactive workspace") }
+            } else { try await TerminalSmoke.wait("Remove the explicitly confirmed inactive workspace") { !workspace.groupItems.contains(where: { $0.id == created.id }) } }
+            try retainedActive()
+        }
+        // Observing a removed row precedes completion of the shared model's mutation and reload.
+        // 行被移除的可见状态早于共享模型写入与重载完成。
+        try await TerminalSmoke.wait("Finish the actual workspace management operation") { !workspace.busy }
+        let final = try await readSnapshot(bridge)
+        guard final.document.workspace == original.document.workspace, final.document.settings == original.document.settings else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace management changed unrelated saved data") }
+        report["nativeWorkspaceManagementAttempts"] = attempts
+        report["nativeWorkspaceManagementProof"] = ["actualAddEditDeleteControls": true, "actualNameField": true, "inactiveRename": true, "stalePeerRenameRetainsDraft": true, "cancelledDeletionPreservedRow": true, "occupiedWorkspaceDeleteDisabled": true, "activeWorkspaceSessionAndGenerationRetained": true, "savedDataRestored": true, "capture": capture]
+        settings.model.section = "general"
     }
 
     private static func verifyDefaultAgent(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
@@ -374,6 +738,72 @@ enum SettingsSmoke {
         try await TerminalSmoke.wait("Complete native field commit") { !settings.model.automaticSaving && !settings.model.busy }
     }
 
+    private static func verifyIconColor(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Missing settings bridge") }
+        let before = try await readSnapshot(bridge)
+        model.section = "appearance"
+        try await TerminalSmoke.wait("Render actual native highlight mode") { (view(settings.window, id: "native-settings-icon-color-mode") as? NSPopUpButton)?.isEnabled == true }
+        guard let mode = view(settings.window, id: "native-settings-icon-color-mode") as? NSPopUpButton else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Missing actual highlight mode control") }
+        guard (try await readSnapshot(bridge)).document.settings == before.document.settings else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Rendering highlight controls wrote preferences") }
+        var attempts: [[String: Any]] = []
+        func check(_ value: String) async throws {
+            guard case .object(var expected) = before.document.settings else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Missing preferences") }
+            expected["activeIconColor"] = .string(value)
+            guard model.error.isEmpty, (try await readSnapshot(bridge)).document.settings == .object(expected) else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Highlight selection did not save its field or changed another preference") }
+        }
+        func commit(_ control: NSControl) async throws {
+            let previous = (try await readSnapshot(bridge)).document.settings["activeIconColor"]
+            for attempt in 0..<3 {
+                try await TerminalSmoke.wait("Actual highlight control is ready") { control.isEnabled }
+                guard let action = control.action, NSApp.sendAction(action, to: control.target, from: control) else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Actual highlight control action was not delivered") }
+                let draft = model.values["activeIconColor"]
+                try await TerminalSmoke.wait("Complete highlight control save") { !model.automaticSaving && !model.busy }
+                attempts.append(["control": control.identifier?.rawValue ?? "", "attempt": attempt + 1, "errorCode": model.errorCode])
+                guard model.errorCode == "WRITER_BUSY", attempt < 2 else { return }
+                guard model.values["activeIconColor"] == draft, (try await readSnapshot(bridge)).document.settings["activeIconColor"] == previous else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Contention lost the color draft or changed committed data") }
+                // Retry by explicitly using the control, without replaying a failed write inside the app.
+                // 通过明确操作控件重试，应用内部不重放失败写入。
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        do {
+            mode.selectItem(at: 1); try await commit(mode)
+            let accent = NativePreferences.interfacePalette(model.workspace.settings, catalog: model.catalog)["accent"].string ?? "#62d98a"
+            try await check(accent)
+            try await TerminalSmoke.wait("Render actual color well and hex editor") { (view(settings.window, id: "native-settings-icon-color-well") as? NSColorWell)?.isEnabled == true }
+            guard let well = view(settings.window, id: "native-settings-icon-color-well") as? NSColorWell else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Missing actual native color well") }
+            well.color = NSColor(srgbRed: 18.0 / 255, green: 52.0 / 255, blue: 86.0 / 255, alpha: 1)
+            try await commit(well); try await check("#123456")
+            let selected = "native-settings-icon-color-custom.png"
+            try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(selected))
+            try await editField(settings, key: "activeIconColor", text: "#xyz")
+            guard model.errorCode == "INVALID_SETTINGS", model.values["activeIconColor"] == .string("#xyz"), (try await readSnapshot(bridge)).document.settings["activeIconColor"] == .string("#123456") else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Invalid highlight input lost its draft or changed the saved color") }
+            try await TerminalSmoke.wait("Invalid text keeps the committed swatch color") {
+                guard let color = well.color.usingColorSpace(.sRGB) else { return false }
+                return abs(color.redComponent - 18.0 / 255) < 0.001 && abs(color.greenComponent - 52.0 / 255) < 0.001 && abs(color.blueComponent - 86.0 / 255) < 0.001
+            }
+            let invalid = "native-settings-icon-color-invalid.png"
+            try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(invalid))
+            mode.selectItem(at: 0); try await commit(mode); try await check("")
+            try await TerminalSmoke.wait("Follow theme removes custom controls") { view(settings.window, id: "native-settings-icon-color-well") == nil }
+            if let original = before.document.settings["activeIconColor"].string, !original.isEmpty {
+                mode.selectItem(at: 1); try await commit(mode)
+                try await editField(settings, key: "activeIconColor", text: original, enter: true)
+                try await check(original)
+            }
+            await model.reload()
+            guard model.error.isEmpty, !model.dirty, (try await readSnapshot(bridge)).document.settings == before.document.settings else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Highlight QA did not restore preferences") }
+            var proof: [String: Any] = ["actualModePicker": true, "renderDoesNotWrite": true, "customStartsWithThemeAccent": true,
+                "actualColorWellAction": true, "fieldScopedPersistence": true, "invalidDraftAndSavedColorRetained": true,
+                "followThemeRestored": true, "preferencesRestored": true]
+            proof["captures"] = [selected, invalid]
+            proof["input"] = "Actual AppKit control action; no physical system color-panel gesture claim"
+            report["nativeIconColorProof"] = proof
+            report["nativeIconColorAttempts"] = attempts
+        } catch { report["nativeIconColorAttempts"] = attempts; throw error }
+    }
+
     private static func verifyAutomaticSave(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
         let model = settings.model, peer = try await CoreBridge.open(root: root)
         do {
@@ -385,10 +815,29 @@ enum SettingsSmoke {
             let limit = before.document.settings["fileTabLimit"].number == 7 ? 8 : 7
             let scrollback = model.numbers["scrollback"], scrollbackDraft = model.numbers["scrollback"] == "4999" ? "4998" : "4999"
             model.numbers["scrollback"] = scrollbackDraft
-            try await editField(settings, key: "fileTabLimit", text: String(limit), enter: true)
-            let entered = try await readSnapshot(peer)
-            guard model.error.isEmpty, entered.document.settings["fileTabLimit"].number == Double(limit),
-                  entered.document.settings["scrollback"] == before.document.settings["scrollback"], model.numbers["scrollback"] == scrollbackDraft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Return failed to save its field or saved an unrelated draft") }
+            report["nativeSettingsAutomaticSaveStage"] = "enter-field-save"
+            var entered = before, enterAttempts: [[String: Any]] = []
+            for attempt in 1...3 {
+                let baseline = try await readSnapshot(peer)
+                try await editField(settings, key: "fileTabLimit", text: String(limit), enter: true)
+                entered = try await readSnapshot(peer)
+                let unchanged = entered.revision == baseline.revision && entered.document.workspace == baseline.document.workspace && entered.document.settings == baseline.document.settings
+                var entry: [String: Any] = ["attempt": attempt, "error": model.error, "errorCode": model.errorCode]
+                entry["expectedLimit"] = limit; entry["savedLimit"] = entered.document.settings["fileTabLimit"].number ?? -1
+                entry["retainedLimit"] = model.numbers["fileTabLimit"] ?? ""; entry["retainedScrollback"] = model.numbers["scrollback"] ?? ""
+                entry["expectedScrollbackDraft"] = scrollbackDraft; entry["savedScrollback"] = entered.document.settings["scrollback"].number ?? -1
+                entry["baselineRevision"] = baseline.revision; entry["observedRevision"] = entered.revision; entry["storeUnchanged"] = unchanged
+                enterAttempts.append(entry); report["nativeSettingsAutomaticEnterAttempts"] = enterAttempts
+                guard model.errorCode == "WRITER_BUSY", attempt < 3 else { break }
+                guard !model.error.isEmpty, unchanged, model.numbers["fileTabLimit"] == String(limit), model.numbers["scrollback"] == scrollbackDraft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Busy Return save lost a draft, hid its error or changed the original store") }
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent("native-settings-enter-busy-\(attempt).png"))
+                // Repeat actual Return only after proving a rejected write retained the complete original store and drafts.
+                // 仅在确认拒写保留完整原存储和草稿后，才明确再次执行实际回车动作。
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            guard case .object(var expectedEntered) = before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Original settings are missing") }
+            expectedEntered["fileTabLimit"] = .number(Double(limit))
+            guard model.error.isEmpty, entered.document.settings == .object(expectedEntered), model.numbers["scrollback"] == scrollbackDraft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Return failed to save only its field or lost an unrelated draft; see nativeSettingsAutomaticEnterAttempts") }
             model.numbers["scrollback"] = scrollback
             let draft = before.document.settings["fontSize"].number == 18 ? "19" : "18"
             let peerSize = before.document.settings["fontSize"].number == 20 ? 21.0 : 20.0
@@ -518,19 +967,39 @@ enum SettingsSmoke {
             let before = try await readSnapshot(bridge)
             model.values[key] = .string(custom); model.section = section
             let identifier = "native-settings-font-" + key
-            try await TerminalSmoke.wait("Render native custom font selection") { (view(settings.window, id: identifier) as? NSPopUpButton)?.selectedItem?.representedObject as? String == custom }
-            guard let picker = view(settings.window, id: identifier) as? NSPopUpButton,
-                  let font = model.catalog["fonts"][key].array.dropFirst().first?["value"].string,
-                  let option = picker.itemArray.first(where: { $0.representedObject as? String == font }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Shared font presets or custom selection are missing") }
+            try await TerminalSmoke.wait("Render enabled native custom font selection") {
+                guard let picker = view(settings.window, id: identifier) as? NSPopUpButton else { return false }
+                return picker.isEnabled && !model.busy && !model.automaticSaving && !model.frozen && picker.selectedItem?.representedObject as? String == custom
+            }
             guard (try await readSnapshot(bridge)).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_FONT_DRAFT", message: "Rendering a custom font changed saved settings") }
             if key == "interfaceFont" {
                 capture = "native-settings-custom-font.png"
                 try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
             }
-            picker.select(option)
-            guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker), model.values[key] == .string(font) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_ACTION", message: "Native font picker did not retain the shared preset value") }
-            try await TerminalSmoke.wait("Persist the actual font selection automatically") { !model.automaticSaving && !model.busy }
-            guard model.error.isEmpty, (try await readSnapshot(bridge)).document.settings[key].string == font else { throw BridgeFailure(code: "SETTINGS_QA_FONT_SAVE", message: "Selected font preset was not saved automatically") }
+            guard let font = model.catalog["fonts"][key].array.dropFirst().compactMap({ $0["value"].string }).first(where: { $0 != before.document.settings[key].string }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Different shared preset is missing: " + key) }
+            let baseline = model.lastSavedValue(key)
+            for attempt in 1...3 {
+                try await TerminalSmoke.wait("Enable the actual font picker before explicit selection") { (view(settings.window, id: identifier) as? NSPopUpButton)?.isEnabled == true && !model.automaticSaving && !model.busy && !model.frozen }
+                guard let picker = view(settings.window, id: identifier) as? NSPopUpButton,
+                      let option = picker.itemArray.first(where: { $0.representedObject as? String == font }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Current shared font preset is missing: " + key) }
+                picker.select(option)
+                guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker), model.values[key] == .string(font) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_ACTION", message: "Native font picker did not retain the shared preset value") }
+                try await TerminalSmoke.wait("Finish the explicit font selection") { !model.automaticSaving && !model.busy }
+                let observed = try await readSnapshot(bridge)
+                var attempts = report["nativeFontPickerSaveAttempts"] as? [[String: Any]] ?? []
+                attempts.append(["key": key, "attempt": attempt, "maximumExplicitSelections": 3, "expectedFont": font, "savedFont": observed.document.settings[key].string ?? "", "draftFont": model.values[key]?.string ?? "", "error": model.error, "errorCode": model.errorCode, "pickerEnabled": picker.isEnabled, "busy": model.busy, "automaticSaving": model.automaticSaving, "frozen": model.frozen])
+                report["nativeFontPickerSaveAttempts"] = attempts
+                if model.errorCode != "WRITER_BUSY" { break }
+                guard !model.error.isEmpty, observed.revision == before.revision, observed.document.workspace == before.document.workspace,
+                      observed.document.settings == before.document.settings, model.values[key] == .string(font),
+                      model.lastSavedValue(key) == baseline, model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_FONT_BUSY", message: "Busy font selection changed storage or discarded the original draft/baseline") }
+                let name = "native-settings-font-busy-\(key)-\(attempt).png"
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(name))
+                var busyCaptures = report["nativeFontPickerBusyCaptures"] as? [String] ?? []; busyCaptures.append(name); report["nativeFontPickerBusyCaptures"] = busyCaptures
+                if attempt < 3 { try await Task.sleep(for: .milliseconds(100)) }
+            }
+            let persisted = try await readSnapshot(bridge)
+            guard model.error.isEmpty, persisted.document.settings[key].string == font else { throw BridgeFailure(code: "SETTINGS_QA_FONT_SAVE", message: "Selected font preset was not saved automatically: " + key + "; see nativeFontPickerSaveAttempts") }
             selected[key] = .string(font)
         }
         try await save(model)
@@ -601,7 +1070,7 @@ enum SettingsSmoke {
         return capture
     }
 
-    private static func verifyGlobalMaven(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
+    private static func verifyGlobalMaven(settings: NativeSettingsWindow, open: () -> NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
         let maven = settings.model.maven
         settings.window.makeKeyAndOrderFront(nil)
         try await TerminalSmoke.wait("Render the Maven settings navigation button") { (view(settings.window, id: "native-settings-section-maven") as? NSButton)?.isEnabled == true }
@@ -640,7 +1109,8 @@ enum SettingsSmoke {
             guard maven.dirty, maven.values["home"]?.string == literal + " local draft", configuration["global"] == .object(peerGlobal), configuration["project"] == .object(project) else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Conflict lost a Maven draft or peer/project settings") }
             settings.window.performClose(nil)
             guard !settings.window.isVisible, maven.dirty else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Hiding settings lost the Maven draft") }
-            settings.window.makeKeyAndOrderFront(nil)
+            guard open() === settings, settings.window.parent != nil else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "The actual settings entry did not reattach the retained overlay") }
+            guard maven.dirty, maven.values["home"]?.string == literal + " local draft" else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Reopening the actual settings overlay lost the Maven draft") }
             let capture = "native-settings-maven-conflict.png"
             try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
             report["mavenConflictScreenshot"] = capture

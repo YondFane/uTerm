@@ -90,10 +90,12 @@
   margin: 0;
   padding: 0;
 }
-.python-form-actions {
+.python-form-actions,
+.run-save-actions {
   justify-content: flex-end;
 }
-.python-form-actions > button {
+.python-form-actions > button,
+.run-save-actions > button {
   flex: 0 0 auto;
   height: 28px;
   padding: 4px 10px;
@@ -3097,7 +3099,8 @@ select:focus-visible {
 .inspector-switcher {
   display: flex;
   align-items: center;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
   gap: 4px;
 }
 .sidebar-footer-actions,
@@ -3126,9 +3129,11 @@ select:focus-visible {
   background: transparent;
 }
 .inspector-switcher .toolbar-icon-button {
+  flex: 0 1 30px;
+  min-width: 22px;
   width: 30px;
   height: 30px;
-  padding: 7px;
+  padding: 7px 3px;
   border-radius: 50%;
   background: transparent;
   color: var(--ui-muted);
@@ -4688,6 +4693,11 @@ textarea:focus-visible {
   gap: 6px;
   padding: 4px 8px 8px;
 }
+.ssh-sidebar-tools > button {
+  min-height: 28px;
+  line-height: max(18px, 1.4em);
+  white-space: normal;
+}
 .ssh-quick-dialog {
   width: min(540px, calc(100vw - 32px));
 }
@@ -4702,6 +4712,7 @@ textarea:focus-visible {
   line-height: 1.6;
 }
 .ssh-sidebar-tools input {
+  height: 36px;
   width: 100%;
   min-width: 0;
 }

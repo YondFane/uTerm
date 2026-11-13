@@ -22,6 +22,7 @@ import { databaseNames } from "../lib/database";
 import { runAgents } from "./agents";
 import { performanceSettings, runPerformance } from "./performance";
 import { runUpdates } from "./updates";
+import { runPanelParity } from "./run-panel-parity";
 import { writeFavoriteFixture, type FavoriteFixtureAttempt } from "./git-favorite-fixture";
 import type {
   CoreEditorDraftEntry,
@@ -102,6 +103,21 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
   };
   githubScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
   quickScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
+  runFormInput: {
+    arguments: string;
+    argumentValues: string[];
+    vmArguments: string;
+    vmArgumentValues: string[];
+    environment: string;
+    invalidArguments: string;
+  };
+  runPanelKinds: string[];
+  runPanelScenes: {
+    language: "en" | "zh-Hans";
+    appearance: string;
+    width: number;
+    height: number;
+  }[];
 };
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";
@@ -436,6 +452,21 @@ async function runUiParity() {
           .querySelector(".app-shell > .file-panel")
           ?.getBoundingClientRect().width;
         const inspector = document.querySelector(".app-shell > .file-panel")!;
+        const switcherBounds = inspector.getBoundingClientRect();
+        const switcherControls = [...inspector.querySelectorAll(".inspector-switcher button")];
+        assert(
+          switcherControls.length === 4 &&
+            switcherControls.every((button) => {
+              const rect = button.getBoundingClientRect();
+              return (
+                rect.width >= 22 &&
+                rect.height > 0 &&
+                rect.left >= switcherBounds.left &&
+                rect.right <= switcherBounds.right + 0.5
+              );
+            }),
+          "Actual inspector controls clip outside the tool panel",
+        );
         const inspectorGeometry = {
           inspectorTop: inspector.getBoundingClientRect().top,
           inspectorHeight: inspector.getBoundingClientRect().height,
@@ -559,8 +590,61 @@ async function runUiParity() {
           () => Object.values(fileGitStates()).every((state) => state === "untracked"),
           "actual file Git state decorations",
         );
+        const branch = document.querySelector<HTMLElement>(".workspace-branch");
+        const trigger = branch?.querySelector<HTMLButtonElement>(".branch-trigger");
+        const branchIcon = branch?.querySelector("svg");
+        assert(branch && trigger && branchIcon, "Missing actual ordinary branch picker");
+        const branchBounds = branch.getBoundingClientRect();
+        const branchStyle = getComputedStyle(branch);
+        const branchMetrics = {
+          name: trigger.textContent?.trim().replace(/\s+⌄$/u, "") ?? "",
+          height: branchBounds.height,
+          width: branchBounds.width,
+          fontSize: Number.parseFloat(branchStyle.fontSize),
+          captionGap:
+            trigger.getBoundingClientRect().left - branchIcon.getBoundingClientRect().right,
+          actualDOMControl: true,
+          fontName: branchStyle.fontFamily,
+        };
+        assert(
+          branchMetrics.name === parityFixture.github.head &&
+            Math.abs(branchMetrics.fontSize - 11) < 0.01 &&
+            Math.abs(branchMetrics.captionGap - 5) < 1,
+          "Incorrect actual ordinary branch geometry",
+        );
+        let gridSignature = "",
+          gridStableSince = 0;
+        const renderer = await until(() => {
+          const sample = terminalPerformanceSnapshot("ui-parity-0", true, true);
+          const viewport = sample?.viewport;
+          if (
+            !sample ||
+            !viewport ||
+            sample.columns !== viewport.proposedColumns ||
+            sample.rows !== viewport.proposedRows ||
+            viewport.proposedColumns < 1 ||
+            viewport.proposedRows < 1
+          ) {
+            gridSignature = "";
+            return null;
+          }
+          const signature = JSON.stringify(viewport);
+          if (signature !== gridSignature) {
+            gridSignature = signature;
+            gridStableSince = performance.now();
+            return null;
+          }
+          return performance.now() - gridStableSince >= 250 ? sample : null;
+        }, "actual fitted terminal grid settles after window/font changes");
+        assert(renderer.viewport, "Missing fitted ordinary terminal measurement");
+        const terminalRenderer = {
+          columns: renderer.columns,
+          rows: renderer.rows,
+          ...renderer.viewport,
+        };
         await scene(`workspace-${language}-${appearance}-${width}`, {
           chromeContractSHA256,
+          branchPicker: branchMetrics,
           toolbarHeight,
           toolbarTop,
           sidebarWidth,
@@ -580,11 +664,19 @@ async function runUiParity() {
           fontFace: "CascadiaCode-Regular",
           fontSourceSHA256: fontManifest.files["CascadiaCode-Regular.ttf"],
           fontCharacterWidth: fontContext.measureText("M").width,
+          terminalRenderer,
           ...sidebarGeometry,
           ...sidebarRailGeometry,
           projectName: parityFixture.projectName,
           workspaceName: parityFixture.workspaceName,
         });
+        const afterCapture = terminalPerformanceSnapshot("ui-parity-0", true, true);
+        assert(
+          JSON.stringify(afterCapture?.viewport) === gridSignature &&
+            afterCapture?.columns === renderer.columns &&
+            afterCapture?.rows === renderer.rows,
+          "Terminal grid changed during workspace capture",
+        );
       }
     }
   }
@@ -699,6 +791,8 @@ async function runUiParity() {
       const draftUnchanged = !document.querySelector(
         `[aria-label="${translate(sceneFixture.language, "未保存的设置")}"], [role="alert"].settings-error, .settings-content .java-error`,
       );
+      const settingsDialog = document.querySelector<HTMLDialogElement>(".settings-dialog")!;
+      const settingsCard = settingsDialog.getBoundingClientRect();
       await scene(
         `settings-${section.id}-${sceneFixture.language}-${sceneFixture.appearance}-${sceneFixture.width}`,
         {
@@ -710,6 +804,13 @@ async function runUiParity() {
           databaseFixtureMatched: section.id === "database",
           javaFixtureMatched: section.id === "java",
           automaticUpdates: (await settings()).automaticUpdates,
+          workspaceModal: settingsDialog.open && settingsDialog.matches(":modal"),
+          settingsCard: {
+            x: settingsCard.x,
+            y: settingsCard.y,
+            width: settingsCard.width,
+            height: settingsCard.height,
+          },
         },
       );
       assert(draftUnchanged, "Settings capture shows unsaved values or an error");
@@ -1175,6 +1276,36 @@ async function runUiParity() {
     await until(() => !dialog.open, "actual PR cancel");
     await unchangedQuick();
   }
+  await runPanelParity(
+    parityFixture,
+    async (runScene) => {
+      await open();
+      await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+      await choose(
+        [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+        runScene.language,
+      );
+      document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+      await open();
+      await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+      await choose(
+        [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+        runScene.appearance,
+      );
+      document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+      await invoke("qa_performance_window", { width: runScene.width, height: runScene.height });
+      await until(
+        () => innerWidth === runScene.width && innerHeight === runScene.height,
+        "actual run-panel capture size",
+      );
+    },
+    async () =>
+      JSON.stringify(
+        ((await observeCore("snapshot.read")) as unknown as CoreSnapshot).document.workspace,
+      ),
+    scene,
+    pdfContext.project,
+  );
   await invoke("qa_request_exit");
 }
 

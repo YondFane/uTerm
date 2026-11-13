@@ -85,11 +85,15 @@ enum PythonSmoke {
         try await TerminalSmoke.wait("Start the disposable long Python task") { run.terminal?.text.contains("BEFORE_PAUSE_119") == true }
         try await ProjectRunSmoke.run(model: model, language: "python", controller: first, task: run.selectedTask, evidence: URL(fileURLWithPath: reportPath).deletingLastPathComponent(), report: &report)
         guard let log = run.terminal else { throw BridgeFailure(code: "PYTHON_QA", message: "No task log for scroll acceptance") }
+        try await ProjectRunSmoke.waitForLogViewport(log, window: first.window)
         log.view.scrollUp(lines: 20)
         guard !log.taskLogFollowsOutput else { throw BridgeFailure(code: "PYTHON_QA", message: "Scrolling up did not pause following") }
         let anchor = log.view.getTerminal().buffer.totalLinesTrimmed + log.view.getTerminal().buffer.yDisp
+        report["pythonPausedFollowBefore"] = ProjectRunSmoke.logViewport(log)
         try Data().write(to: root.appendingPathComponent("qa-continue"))
         try await TerminalSmoke.wait("Consume raw output while follow is paused") { log.text.contains("AFTER_PAUSE_119") }
+        try await ProjectRunSmoke.waitForLogViewport(log, window: first.window)
+        report["pythonPausedFollowAfter"] = ProjectRunSmoke.logViewport(log)
         guard !log.taskLogFollowsOutput, log.view.getTerminal().buffer.totalLinesTrimmed + log.view.getTerminal().buffer.yDisp == anchor else { throw BridgeFailure(code: "PYTHON_QA", message: "New output moved the paused viewport") }
         report["nativePausedFollowRetainedAnchor"] = true
         let paused = "native-python-paused-output-en-dark.png"
@@ -128,8 +132,8 @@ enum PythonSmoke {
         guard NSPasteboard.general.string(forType: .string)?.contains("STOP_CLEANUP") == true else { throw BridgeFailure(code: "PYTHON_QA", message: "Native copy lost retained final output") }
         report["runAgainWaitedForOldExit"] = true
         report["normalStopRetainedFinalOutputAndCopy"] = true
-        reopened.model.selectedID = restartedID
-        await reopened.model.selectTask()
+        let historyID = reopened.model.selectedID
+        guard reopened.model.running, reopened.model.selectedTask["running"].bool == false else { throw BridgeFailure(code: "PYTHON_QA", message: "History selection did not retain a separate active task") }
         await reopened.model.stop(force: true)
         for _ in 0..<100 {
             await reopened.model.refreshTasks()
@@ -137,7 +141,12 @@ enum PythonSmoke {
             try await Task.sleep(for: .milliseconds(50))
         }
         guard !reopened.model.running else { throw BridgeFailure(code: "PYTHON_QA", message: "Force stop did not stop the target Python process") }
+        guard reopened.model.selectedID == historyID else { throw BridgeFailure(code: "PYTHON_QA", message: "Stopping the active task replaced the selected history log") }
+        report["activeTaskStoppedWhileHistorySelected"] = true
+        reopened.model.selectedID = restartedID
+        await reopened.model.selectTask()
         report["forceStopCompleted"] = true
+        try await ProjectRunSmoke.verifyStopped(model: model, root: root.path, language: "python", evidence: URL(fileURLWithPath: reportPath).deletingLastPathComponent(), report: &report)
         report["temporaryEnvironmentNotSaved"] = (try await bridge.call("python.configuration", params: .object(["directory": .string(root.path)])))["project"]["environment"] == .null
         _ = try await bridge.call("host.shutdownIdle")
         await reopened.forceClose()

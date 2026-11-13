@@ -74,6 +74,10 @@ enum WorkspacePanelsSmoke {
                 await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
                 window.setContentSize(NSSize(width: CGFloat(width), height: 720))
                 try await TerminalSmoke.wait("Actual panel window reaches requested width") { abs((window.contentView?.bounds.width ?? 0) - CGFloat(width)) < 1 }
+                if kind == "ssh" { try await WorkbenchLayoutSmoke.ssh(model: model, window: window, language: language, appearance: appearance, width: width, report: &report) }
+                if ["database", "redis"].contains(kind) {
+                    try await WorkbenchLayoutSmoke.connections(model: model, window: window, kind: kind, language: language, appearance: appearance, width: width, evidence: evidence, report: &report, captures: &captures)
+                }
                 let screenshot = "native-workspace-panel-" + kind + "-" + language + "-" + appearance + "-" + String(width) + ".png"
                 try await capture(screenshot)
                 scenes.append(["scenario": kind, "language": language, "appearance": appearance, "width": width, "height": 720, "screenshot": screenshot,
@@ -95,6 +99,27 @@ enum WorkspacePanelsSmoke {
             }
             guard let panel = model.panels.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_VIEW", message: "Missing mounted native panel") }
             let view = panel.view
+            if panel.runKind != nil {
+                report[kind + "DockedRunPanel"] = try await RunPanelSmoke.run(model: model, panel: panel, window: window, prefix: "native-workspace-" + kind, evidence: evidence)
+                guard let openFile = model.openInspectorFile else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing actual file entry point") }
+                try await openFile(root.path, "README.md", 0)
+                try await TerminalSmoke.wait("A real file and the run panel share the main workspace") {
+                    model.documents.active(in: model.inspectorContextKey)?.content.webView.window === window && model.panels.active(in: model.inspectorContextKey)?.id == panel.id && view.window === window
+                }
+                guard let document = model.documents.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing mounted file") }
+                // Mounted WebKit content can still be loading; close only after the actual editor is ready.
+                // 已挂载的 WebKit 仍可能正在加载，实际编辑器就绪后再操作关闭。
+                try await ContentSmoke.wait(document.content, "document.querySelector('.file-editor .cm-content')?.textContent.includes('Workspace fixture') === true && [...document.querySelectorAll('.editor-header button')].some(button => button.textContent === 'Reload' && !button.disabled)")
+                guard !document.content.editorDirty else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "The loaded fixture unexpectedly contains unsaved changes") }
+                report[kind + "DockedFileLoaded"] = true
+                try await capture("native-workspace-" + kind + "-dock-with-file.png")
+                guard let closeFile = button("native-file-close-" + document.id.uuidString) else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing actual file close control") }
+                closeFile.performClick(nil)
+                try await TerminalSmoke.wait("Closing the clean file retains the docked run panel") {
+                    model.documents.active(in: model.inspectorContextKey) == nil && model.panels.active(in: model.inspectorContextKey)?.id == panel.id && view.window === window
+                }
+                report[kind + "DockedFileRetained"] = true
+            }
             try await captureWidths(kind)
             guard let terminalTab = button("native-workspace-terminal-tab") else { throw BridgeFailure(code: "PANELS_TAB", message: "Missing terminal tab") }
             terminalTab.performClick(nil)
@@ -103,8 +128,14 @@ enum WorkspacePanelsSmoke {
             tab.performClick(nil)
             try await TerminalSmoke.wait("Native panel tab restores the same retained view") { model.panels.active(in: model.inspectorContextKey)?.view === view && view.window === window }
             guard model.selectedID == session, model.selectedTerminal?.generation == generation else { throw BridgeFailure(code: "PANELS_PTY", message: "Panel switching changed the terminal identity") }
-            guard let close = button("native-panel-close-" + panel.id) else { throw BridgeFailure(code: "PANELS_CLOSE", message: "Missing native panel close control") }
-            close.performClick(nil)
+            if panel.runKind != nil {
+                let proof = try await RunPanelHideSmoke.run(model: model, panel: panel, window: window, evidence: evidence)
+                report[kind + "HideConfiguration"] = proof
+                if let image = proof["screenshot"] as? String { captures.append(image) }
+            } else {
+                guard let close = button("native-panel-close-" + panel.id) else { throw BridgeFailure(code: "PANELS_CLOSE", message: "Missing native panel close control") }
+                close.performClick(nil)
+            }
             try await TerminalSmoke.wait("Actual close button routes through the native panel close guard") { !model.panels.panels.contains { $0.id == panel.id } }
             report[kind + "WorkspacePanelProof"] = ["actualMainWindow": true, "retainedViewAfterTabSwitch": true, "terminalGenerationRetained": true, "actualCloseButton": true]
         }

@@ -23,6 +23,18 @@ const scenes = [
   ...fixture.githubScenes.map(
     (scene) => `github-pr-draft-${scene.language}-${scene.appearance}-${scene.width}`,
   ),
+  ...fixture.runPanelScenes.flatMap((scene) =>
+    fixture.runPanelKinds.flatMap((kind) =>
+      fixture.runPanelStates.map(
+        (state) => `run-${kind}-${state}-${scene.language}-${scene.appearance}-${scene.width}`,
+      ),
+    ),
+  ),
+  ...fixture.runPanelScenes.flatMap((scene) =>
+    fixture.runPanelKinds.map(
+      (kind) => `run-form-${kind}-${scene.language}-${scene.appearance}-${scene.width}`,
+    ),
+  ),
   ...fixture.ordinaryOperations,
   ...fixture.contentScenes.map(
     (scene) => `pdf-highlights-${scene.language}-${scene.appearance}-${scene.width}`,
@@ -91,11 +103,82 @@ const prEvidence = fixture.githubScenes.map((scene) => ({
     modalTop: (scene.height - 500) / 2,
   },
 }));
+const formEvidence = fixture.runPanelScenes.flatMap((scene) =>
+  fixture.runPanelKinds.map((kind) => ({
+    scenario: `run-form-${kind}-${scene.language}-${scene.appearance}-${scene.width}`,
+    checks: {
+      ...scene,
+      kind,
+      passed: true,
+      actualAdvancedToggle: true,
+      actualTextEditorInput: true,
+      invalidArgumentRetainedWithoutWrite: true,
+      literalArgumentsSaved: true,
+      validArgumentTextRetained: true,
+      temporaryEnvironmentRetainedWithoutPersistence: true,
+      actualSaveButtonAndFeedback: true,
+      compactRightAlignedSave: true,
+      canonicalStateAndSessionRetained: true,
+      fixtureArguments: fixture.runFormInput.arguments,
+      fixtureEnvironment: fixture.runFormInput.environment,
+      savedArguments: fixture.runFormInput.argumentValues,
+      saveWidth: 100,
+      saveHeight: 28,
+      saveRightInset: 12,
+      saveVisibleWidth: 100,
+      saveVisibleHeight: 28,
+    },
+  })),
+);
+const runEvidence = fixture.runPanelScenes.flatMap((item) =>
+  fixture.runPanelKinds.flatMap((kind) =>
+    fixture.runPanelStates.map((state) => ({
+      scenario: `run-${kind}-${state}-${item.language}-${item.appearance}-${item.width}`,
+      checks: {
+        ...item,
+        kind,
+        state,
+        passed: true,
+        actualToolbarButton: true,
+        actualExpandAndRestore: true,
+        retainedPanelView: true,
+        terminalGenerationRetained: true,
+        canonicalWorkspaceRetained: true,
+        fileVisible: state === "file",
+        panelLeft: 100,
+        panelTop: 240,
+        panelWidth: item.width - 200,
+        panelHeight: 480,
+        panelHeaderHeight: 36,
+      },
+    })),
+  ),
+);
+const runCleanup = {
+  scenario: "run-panels-complete",
+  checks: {
+    passed: true,
+    actualFileCloseAndHideVerified: true,
+    terminalGenerationRetained: true,
+    canonicalWorkspaceRetained: true,
+  },
+};
 const assertOperations = (records) =>
-  assertParityOperations([...records, ...pdfEvidence, ...quickEvidence, ...prEvidence], fixture);
+  assertParityOperations(
+    [
+      ...records,
+      ...pdfEvidence,
+      ...quickEvidence,
+      ...prEvidence,
+      ...formEvidence,
+      ...runEvidence,
+      runCleanup,
+    ],
+    fixture,
+  );
 
 test("the complete grid and required restart accept file-system enumeration order", () => {
-  assert.equal(scenes.length, 39);
+  assert.equal(scenes.length, 56);
   assert.doesNotThrow(() => assertParityScenes([...scenes].reverse(), fixture));
 });
 
@@ -134,17 +217,54 @@ test("PDF proof rejects missing, duplicate, stale data and unexecuted controls",
       restartedGeneration: "b",
     },
   };
+  assert.doesNotThrow(() =>
+    assertParityOperations(
+      [
+        restart,
+        ...pdfEvidence,
+        ...quickEvidence,
+        ...prEvidence,
+        ...formEvidence,
+        ...runEvidence,
+        runCleanup,
+      ],
+      fixture,
+    ),
+  );
   for (const key of Object.keys(pdfEvidence[0].checks)) {
     const rows = structuredClone(pdfEvidence);
     rows[0].checks[key] = null;
     assert.throws(
-      () => assertParityOperations([restart, ...rows, ...quickEvidence, ...prEvidence], fixture),
+      () =>
+        assertParityOperations(
+          [
+            restart,
+            ...rows,
+            ...quickEvidence,
+            ...prEvidence,
+            ...formEvidence,
+            ...runEvidence,
+            runCleanup,
+          ],
+          fixture,
+        ),
       key,
     );
   }
   for (const rows of [[], pdfEvidence.slice(1), [pdfEvidence[0], pdfEvidence[0]]])
     assert.throws(() =>
-      assertParityOperations([restart, ...rows, ...quickEvidence, ...prEvidence], fixture),
+      assertParityOperations(
+        [
+          restart,
+          ...rows,
+          ...quickEvidence,
+          ...prEvidence,
+          ...formEvidence,
+          ...runEvidence,
+          runCleanup,
+        ],
+        fixture,
+      ),
     );
 });
 
@@ -161,13 +281,55 @@ test("Quick SSH pairing rejects missing controls, data changes and stale fixture
       restartedGeneration: "b",
     },
   };
+  assert.doesNotThrow(() =>
+    assertParityOperations(
+      [
+        restart,
+        ...pdfEvidence,
+        ...quickEvidence,
+        ...prEvidence,
+        ...formEvidence,
+        ...runEvidence,
+        runCleanup,
+      ],
+      fixture,
+    ),
+  );
   for (const key of Object.keys(quickEvidence[0].checks)) {
     const rows = structuredClone(quickEvidence);
     rows[0].checks[key] = null;
-    assert.throws(() => assertParityOperations([restart, ...pdfEvidence, ...rows], fixture), key);
+    assert.throws(
+      () =>
+        assertParityOperations(
+          [
+            restart,
+            ...pdfEvidence,
+            ...rows,
+            ...prEvidence,
+            ...formEvidence,
+            ...runEvidence,
+            runCleanup,
+          ],
+          fixture,
+        ),
+      key,
+    );
   }
   for (const rows of [[], quickEvidence.slice(1), [quickEvidence[0], quickEvidence[0]]])
-    assert.throws(() => assertParityOperations([restart, ...pdfEvidence, ...rows], fixture));
+    assert.throws(() =>
+      assertParityOperations(
+        [
+          restart,
+          ...pdfEvidence,
+          ...rows,
+          ...prEvidence,
+          ...formEvidence,
+          ...runEvidence,
+          runCleanup,
+        ],
+        fixture,
+      ),
+    );
 });
 
 test("three-scene fallback, missing, duplicate, substituted and extra captures fail", () => {
@@ -213,7 +375,18 @@ test("PR scenes reject tool-width forms, changed literals, missing operations an
     },
   };
   const verify = (rows) =>
-    assertParityOperations([restart, ...pdfEvidence, ...quickEvidence, ...rows], fixture);
+    assertParityOperations(
+      [
+        restart,
+        ...pdfEvidence,
+        ...quickEvidence,
+        ...rows,
+        ...formEvidence,
+        ...runEvidence,
+        runCleanup,
+      ],
+      fixture,
+    );
   assert.doesNotThrow(() => verify(prEvidence));
   for (const patch of [
     { modalWidth: 128 },
@@ -230,4 +403,105 @@ test("PR scenes reject tool-width forms, changed literals, missing operations an
   }
   for (const rows of [[], prEvidence.slice(1), [prEvidence[0], prEvidence[0]]])
     assert.throws(() => verify(rows));
+});
+
+test("run-panel proof rejects unexecuted controls, duplicate scenes, invalid frames and missing cleanup", () => {
+  const restart = {
+    scenario: "terminal-restart",
+    checks: {
+      passed: true,
+      actualRestartButton: true,
+      parsedUnicodeOutput: true,
+      canonicalWorkspaceRetained: true,
+      terminalViewRetained: true,
+      generationBeforeRestart: "before",
+      restartedGeneration: "after",
+    },
+  };
+  const verify = (rows, cleanup = runCleanup) =>
+    assertParityOperations(
+      [
+        restart,
+        ...pdfEvidence,
+        ...quickEvidence,
+        ...prEvidence,
+        ...formEvidence,
+        ...rows,
+        ...(cleanup ? [cleanup] : []),
+      ],
+      fixture,
+    );
+  assert.doesNotThrow(() => verify(runEvidence));
+  for (const field of [
+    "actualToolbarButton",
+    "actualExpandAndRestore",
+    "retainedPanelView",
+    "terminalGenerationRetained",
+    "canonicalWorkspaceRetained",
+    "fileVisible",
+    "panelWidth",
+    "panelHeaderHeight",
+  ]) {
+    const rows = structuredClone(runEvidence);
+    rows[0].checks[field] = null;
+    assert.throws(() => verify(rows), field);
+  }
+  assert.throws(() => verify([...runEvidence.slice(1), runEvidence[1]]));
+  assert.throws(() => verify(runEvidence.slice(1)));
+  assert.throws(() => verify(runEvidence, null));
+  const rows = structuredClone(runEvidence);
+  rows[0].checks.panelTop = 900;
+  assert.throws(() => verify(rows));
+});
+
+test("run forms reject unexecuted edits, changed literals and missing or duplicate counterparts", () => {
+  const base = [
+    {
+      scenario: "terminal-restart",
+      checks: {
+        passed: true,
+        actualRestartButton: true,
+        parsedUnicodeOutput: true,
+        canonicalWorkspaceRetained: true,
+        terminalViewRetained: true,
+        generationBeforeRestart: "a",
+        restartedGeneration: "b",
+      },
+    },
+    ...pdfEvidence,
+    ...quickEvidence,
+    ...prEvidence,
+    ...runEvidence,
+    runCleanup,
+  ];
+  const verify = (rows) => assertParityOperations([...base, ...rows], fixture);
+  assert.doesNotThrow(() => verify(formEvidence));
+  for (const key of [
+    "actualTextEditorInput",
+    "invalidArgumentRetainedWithoutWrite",
+    "literalArgumentsSaved",
+    "validArgumentTextRetained",
+    "temporaryEnvironmentRetainedWithoutPersistence",
+    "fixtureArguments",
+    "fixtureEnvironment",
+    "savedArguments",
+    "saveHeight",
+    "saveVisibleWidth",
+    "saveVisibleHeight",
+  ]) {
+    const rows = structuredClone(formEvidence);
+    rows[0].checks[key] = null;
+    assert.throws(() => verify(rows), key);
+  }
+  assert.throws(() => verify(formEvidence.slice(1)));
+  for (const patch of [
+    { saveVisibleHeight: 10 },
+    { saveVisibleWidth: 30 },
+    { saveVisibleHeight: NaN },
+  ]) {
+    const rows = structuredClone(formEvidence);
+    Object.assign(rows[0].checks, patch);
+    assert.throws(() => verify(rows));
+  }
+  assert.throws(() => verify([...formEvidence, formEvidence[0]]));
 });

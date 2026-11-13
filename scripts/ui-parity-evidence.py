@@ -1,6 +1,7 @@
 """Compare source-bound real-window artifacts. 对照绑定源码的真实窗口产物。"""
 
 from ui_parity_github import validate_pr
+from ui_parity_run_panels import validate_run_panels, validate_native_run_forms
 
 import argparse
 import hashlib
@@ -90,6 +91,12 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         for scene in [n, t["checks"]]:
             assert scene.get("fileGitStates") == {path: "untracked" for path in fixture["files"]}, "Missing actual file Git states"
         assert n.get("chromeContractSHA256") == t["checks"].get("chromeContractSHA256") == chrome_digest, "Different or stale chrome contract"
+        for branch, kind in [(n.get("branchPicker", {}), "actualAppKitControl"), (t["checks"].get("branchPicker", {}), "actualDOMControl")]:
+            assert branch.get(kind) is True and branch.get("name") == fixture["github"]["head"], "Missing actual branch control"
+            assert abs(branch.get("fontSize", 0) - 11) < 0.01 and abs(branch.get("captionGap", -100) - 5) < 1, "Incorrect branch font or caption spacing"
+            assert branch.get("width", 0) >= 24 and branch.get("height", 0) > 20 and branch.get("fontName"), "Unmeasured branch control"
+        assert abs(n["branchPicker"]["height"] - t["checks"]["branchPicker"]["height"]) < 1, "Mismatched branch control heights"
+
         assert all(abs(scene.get("toolbarHeight", 0) - chrome["metrics"]["titlebarHeight"]) < 1 for scene in [n, t["checks"]]), "Wrong actual chrome height"
         assert all(abs(scene.get("toolbarTop", -100)) < 1 for scene in [n, t["checks"]]), "Wrong actual chrome position"
         expected_sidebar = min(chrome["metrics"]["sidebarDefaultWidth"], max(chrome["metrics"]["sidebarMinimumWide"], min(chrome["metrics"]["sidebarMaximumWidth"], width * chrome["metrics"]["sidebarMaximumRatio"])))
@@ -115,6 +122,11 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
             assert actual.get("fontSourceSHA256") == font_digest, "Different or stale bundled font"
             assert isinstance(actual.get("fontCharacterWidth"), (int, float)) and 1 < actual["fontCharacterWidth"] < 32, "Missing actual font measurement"
         assert abs(n["fontCharacterWidth"] - t["checks"]["fontCharacterWidth"]) < 0.1, "Different actual terminal character widths"
+        for scene in [n, t["checks"]]:
+            renderer = scene.get("terminalRenderer", {})
+            assert all(type(renderer.get(key)) is int and 0 < renderer[key] <= 10000 for key in ["columns", "rows"]), "Missing actual terminal renderer grid"
+            assert all(type(renderer.get(key)) is int and renderer[key] == renderer[actual] for key, actual in [("proposedColumns", "columns"), ("proposedRows", "rows")]), "Terminal grid has not fitted its current viewport"
+            assert all(type(renderer.get(key)) in [int, float] and math.isfinite(renderer[key]) and 0 < renderer[key] <= 10000 for key in ["viewportWidth", "viewportHeight", "backingScale", "cellWidth", "cellHeight"]), "Missing actual terminal renderer viewport, scale or cell size"
         for metric in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop", "terminalHeaderHeight", "terminalViewportGap"]:
             values = [scene.get(metric) for scene in [n, t["checks"]]]
             assert all(type(value) in [int, float] and 0 <= value < 1000 for value in values), "Missing actual terminal geometry: " + metric
@@ -128,7 +140,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         tfile, tdigest = image(tauri_path.parent, expected_tauri)
         pairs.append(dict(language=language, appearance=appearance, width=width, height=fixture["height"],
                           area="workspace",
-                          native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
+                          native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest,
+                          terminalRenderer=dict(native=n["terminalRenderer"], tauri=t["checks"]["terminalRenderer"])))
     expected_settings = {(section["id"], scene["language"], scene["appearance"], scene["width"], scene["height"])
                          for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]}
     nsettings = native.get("settingsScenes", [])
@@ -145,6 +158,14 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["sourceHeadSHA"] == head and n["testedMergeSHA"] == tested, "Stale settings screenshot"
         assert n["platform"] == native["platform"] and n["architecture"] == native["architecture"] and n["system"] == native["system"], "Wrong settings capture platform"
         assert all(scene.get("navigationControlActivated") is True and scene.get("draftUnchanged") is True for scene in [n, t["checks"]]), "Unverified settings navigation"
+        for scene in [n, t["checks"]]:
+            assert scene.get("workspaceModal") is True, "Settings is not a workspace modal"
+            card = scene.get("settingsCard", {})
+            assert all(type(card.get(key)) in [int, float] for key in ["x", "y", "width", "height"]), "Missing actual settings card geometry"
+            assert card["width"] > 0 and card["height"] > 0 and 0 <= card["x"] < width and 0 <= card["y"] < height, "Invalid settings card geometry"
+            assert card["x"] + card["width"] <= width + 1 and card["y"] + card["height"] <= height + 1, "Settings card extends outside the workspace"
+        for metric in ["x", "y", "width", "height"]:
+            assert abs(n["settingsCard"][metric] - t["checks"]["settingsCard"][metric]) < 1, "Different actual settings card geometry: " + metric
         assert n["automaticUpdates"] == t["checks"]["automaticUpdates"] == fixture["automaticUpdates"], "Different update preference in settings captures"
         if section == "maven":
             assert n["mavenFixtureMatched"] is True and t["checks"]["mavenFixtureMatched"] is True, "Maven controls were not checked against the fixture"
@@ -157,7 +178,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["screenshot"] == expected_native and t["screenshot"] == expected_tauri and expected_native in native["captures"]
         _, ndigest = image(native_path.parent, expected_native, minimum_height=height)
         _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
-        pairs.append(dict(area="settings", section=section, language=language, appearance=appearance, width=width, height=height,
+        pairs.append(dict(area="settings", section=section, language=language, appearance=appearance, width=width, height=height, settingsCard=n["settingsCard"],
                           native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
     expected_pdf = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["contentScenes"]}
     npdf = native.get("contentScenes", [])
@@ -241,17 +262,78 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
         pairs.append(dict(area="github-pr-draft", language=language, appearance=appearance, width=width, height=height,
                           native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
+    validate_native_run_forms(native, fixture, head, tested, 'initial')
+    native_run_forms = []
+    ordinary_forms = [row for row in tauri['scenes'] if row['scenario'].startswith('run-form-')]
+    assert len(ordinary_forms) == len(native['runPanelFormProof']), 'Incomplete ordinary run-form grid'
+    expected_form_names = {f"run-form-{proof['kind']}-{proof['language']}-{proof['appearance']}-{proof['width']}" for proof in native['runPanelFormProof']}
+    assert {row['scenario'] for row in ordinary_forms} == expected_form_names, 'Missing or duplicate ordinary run-form scenes'
+    for proof in native['runPanelFormProof']:
+        name = f"run-form-{proof['kind']}-{proof['language']}-{proof['appearance']}-{proof['width']}"
+        ordinary = next(row for row in ordinary_forms if row['scenario'] == name)
+        actual = ordinary['checks']
+        for key in ['kind', 'language', 'appearance', 'width', 'height', 'fixtureArguments', 'fixtureEnvironment', 'savedArguments']:
+            assert actual.get(key) == proof[key], 'Different actual run-form data: ' + key
+        for key in ['passed', 'actualAdvancedToggle', 'actualTextEditorInput', 'invalidArgumentRetainedWithoutWrite', 'literalArgumentsSaved', 'validArgumentTextRetained', 'temporaryEnvironmentRetainedWithoutPersistence', 'actualSaveButtonAndFeedback', 'compactRightAlignedSave', 'canonicalStateAndSessionRetained']:
+            assert actual.get(key) is True, 'Unverified ordinary run-form action: ' + key
+        for key in ['saveWidth', 'saveHeight', 'saveRightInset', 'saveVisibleWidth', 'saveVisibleHeight']:
+            assert type(actual.get(key)) in [int, float] and math.isfinite(actual[key]), 'Invalid ordinary Save geometry'
+        assert 0 < actual['saveWidth'] < 200 and 0 < actual['saveHeight'] <= 30 and 0 <= actual['saveRightInset'] <= 40, 'Stretched ordinary Save button'
+        assert abs(actual['saveVisibleWidth'] - actual['saveWidth']) <= 0.5 and abs(actual['saveVisibleHeight'] - actual['saveHeight']) <= 0.5, 'Clipped ordinary Save button'
+        expected = 'ui-parity-' + name + '.png'
+        assert ordinary['screenshot'] == expected, 'Substituted ordinary run-form original'
+        _, digest = image(native_path.parent, proof['screenshot'], minimum_height=proof['height'])
+        _, ordinary_digest = image(tauri_path.parent, expected, minimum_height=proof['height'])
+        native_run_forms.append(dict(proof, SHA256=digest))
+        pairs.append(dict(area='run-form', kind=proof['kind'], language=proof['language'], appearance=proof['appearance'], width=proof['width'], height=proof['height'],
+                          native=proof['screenshot'], tauri=expected, nativeSHA256=digest, tauriSHA256=ordinary_digest))
+    native_runs = native.get("runPanelScenes", [])
+    ordinary_runs = [row["checks"] for row in tauri["scenes"] if row["scenario"].startswith("run-") and not row["scenario"].startswith("run-form-") and row["scenario"] != "run-panels-complete"]
+    left_runs = validate_run_panels(native_runs, fixture)
+    right_runs = validate_run_panels(ordinary_runs, fixture)
+    assert native.get("runPanelActualFileCloseAndHideVerified") is True, "Native run-panel close/hide was not executed"
+    completed = [row for row in tauri["scenes"] if row["scenario"] == "run-panels-complete"]
+    assert len(completed) == 1 and completed[0]["checks"].get("actualFileCloseAndHideVerified") is True, "Ordinary run-panel close/hide was not executed"
+    for identity in sorted(left_runs):
+        kind, state, language, appearance, width, height = identity
+        n, t = left_runs[identity], right_runs[identity]
+        assert n.get("sourceHeadSHA") == head and n.get("testedMergeSHA") == tested, "Stale native run-panel scene"
+        assert n.get("platform") == native["platform"] and n.get("architecture") == native["architecture"] and n.get("system") == native["system"]
+        name = f"run-{kind}-{state}-{language}-{appearance}-{width}"
+        ordinary_scene = next(row for row in tauri["scenes"] if row["checks"] is t)
+        assert ordinary_scene["scenario"] == name, "Substituted ordinary run-panel identity"
+        expected_native, expected_tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+        assert n.get("screenshot") == expected_native and expected_native in native["captures"]
+        assert ordinary_scene.get("screenshot") == expected_tauri
+        for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight", "panelHeaderHeight"]:
+            assert abs(n[key] - t[key]) < 1, "Different actual run-panel geometry: " + key
+        _, ndigest = image(native_path.parent, expected_native, minimum_height=height)
+        _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
+        pair = dict(area="run-panel", kind=kind, state=state, language=language, appearance=appearance, width=width, height=height,
+                    native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest,
+                    panelGeometry={key: n[key] for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight", "panelHeaderHeight"]})
+        pairs.append(pair)
+    run_cleanup = completed[0]
+    assert run_cleanup.get("screenshot") == "ui-parity-run-panels-complete.png", "Substituted ordinary run-panel cleanup capture"
+    for key in ["passed", "terminalGenerationRetained", "canonicalWorkspaceRetained"]:
+        assert run_cleanup["checks"].get(key) is True, "Unverified run-panel cleanup: " + key
+    run_cleanup_file, run_cleanup_digest = image(tauri_path.parent, run_cleanup["screenshot"])
     output.mkdir(parents=True, exist_ok=False)
     for pair in pairs:
         shutil.copyfile(native_path.parent / pair["native"], output / pair["native"])
         shutil.copyfile(tauri_path.parent / pair["tauri"], output / pair["tauri"])
     shutil.copyfile(restart_file, output / restart_file.name)
+    shutil.copyfile(run_cleanup_file, output / run_cleanup_file.name)
+    for proof in native_run_forms:
+        shutil.copyfile(native_path.parent / proof['screenshot'], output / proof['screenshot'])
     result = dict(sourceHeadSHA=head, testedMergeSHA=tested, uiParityFixtureSHA256=fixture_digest,
                   chromeContractSHA256=chrome_digest,
                   platform="macOS", architecture="arm64", system=native["system"], pairs=pairs,
                   ordinaryRestart=dict(screenshot=restart_file.name, SHA256=restart_digest, checks=checks),
+                  ordinaryRunPanelsCleanup=dict(screenshot=run_cleanup_file.name, SHA256=run_cleanup_digest, checks=run_cleanup["checks"]),
+                  nativeRunFormEvidence=native_run_forms,
                   comparisonReady=True, functionalParityAccepted=False,
-                  scope="Workspace, settings, PDF, Quick SSH and GitHub PR screenshots. PR uses the isolated simulated CLI, literal form input and actual Cancel; no real GitHub write. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
+                  scope="Workspace, settings, PDF, Quick SSH, GitHub PR and Java/Python advanced-form and docked/expanded/file screenshots. PR uses the isolated simulated CLI, literal form input and actual Cancel; no real GitHub write. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
     (output / "comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     write_viewer(output, result)
     rows = ["# Real-window comparison / 真实窗口对照", "", f"Source head: `{head}`", f"Tested merge: `{tested}`", "",
@@ -259,9 +341,10 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
             "[Open the offline scene viewer / 打开离线场景对照](comparison.html)", "",
             "| Scene / 场景 | Ordinary / 普通版 | Personal / 原生个人版 |", "| --- | --- | --- |"]
     for pair in pairs:
-        label = f"{pair['area']} {pair.get('section', '')} / {pair['language']} / {pair['appearance']} / {pair['width']}×{pair['height']}"
+        label = f"{pair['area']} {pair.get('section', pair.get('kind', ''))} {pair.get('state', '')} / {pair['language']} / {pair['appearance']} / {pair['width']}×{pair['height']}"
         rows.append(f"| {label} | ![ordinary]({pair['tauri']}) | ![personal]({pair['native']}) |")
     rows.extend(["", "Actual ordinary restart / 普通版实际重启", "", f"![restart]({restart_file.name})"])
+    rows.extend(["", "Actual ordinary run-panel cleanup / 普通版运行面板实际清理", "", f"![run-panel cleanup]({run_cleanup_file.name})"])
     (output / "comparison.md").write_text("\n".join(rows) + "\n")
     return result
 

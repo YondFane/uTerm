@@ -15,7 +15,7 @@ struct NativeInterfaceThemes: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(localized("Interface theme", "界面主题")).fontWeight(.semibold)
-            ViewThatFits(in: .horizontal) { grid(3).frame(minWidth: 435); grid(1) }
+            grid(model.presentationWidth <= 650 ? 1 : 3)
             Text(localized("Applies and saves immediately. Terminal colors stay unchanged.", "即时生效并自动保存，不改变终端配色。")).font(.caption).foregroundStyle(.secondary)
         }
     }

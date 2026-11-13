@@ -15,11 +15,135 @@ export function assertParityScenes(actual, fixture) {
     expected.push(`quick-ssh-invalid-${scene.language}-${scene.appearance}-${scene.width}`);
   for (const scene of fixture.githubScenes)
     expected.push(`github-pr-draft-${scene.language}-${scene.appearance}-${scene.width}`);
+  for (const item of fixture.runPanelScenes)
+    for (const kind of fixture.runPanelKinds)
+      for (const state of fixture.runPanelStates)
+        expected.push(`run-${kind}-${state}-${item.language}-${item.appearance}-${item.width}`);
+  for (const item of fixture.runPanelScenes)
+    for (const kind of fixture.runPanelKinds)
+      expected.push(`run-form-${kind}-${item.language}-${item.appearance}-${item.width}`);
   expected.push(...fixture.ordinaryOperations);
   assert.deepEqual([...actual].sort(), expected.sort(), "Incomplete ordinary-client parity grid");
 }
 
 export function assertParityOperations(scenes, fixture) {
+  const runs = scenes.filter(
+    (scene) =>
+      scene.scenario.startsWith("run-") &&
+      !scene.scenario.startsWith("run-form-") &&
+      scene.scenario !== "run-panels-complete",
+  );
+  assert.equal(
+    runs.length,
+    fixture.runPanelScenes.length * fixture.runPanelKinds.length * fixture.runPanelStates.length,
+    "Incomplete run-panel operation grid",
+  );
+  const seenRuns = new Set();
+  for (const { scenario, checks } of runs) {
+    const key = `run-${checks.kind}-${checks.state}-${checks.language}-${checks.appearance}-${checks.width}`;
+    assert.equal(scenario, key, "Substituted run-panel identity");
+    assert.ok(!seenRuns.has(key), "Duplicate run-panel operation");
+    seenRuns.add(key);
+    assert.ok(
+      fixture.runPanelKinds.includes(checks.kind) && fixture.runPanelStates.includes(checks.state),
+    );
+    assert.ok(
+      fixture.runPanelScenes.some((item) =>
+        ["language", "appearance", "width", "height"].every(
+          (field) => checks[field] === item[field],
+        ),
+      ),
+    );
+    for (const field of ["panelLeft", "panelTop", "panelWidth", "panelHeight", "panelHeaderHeight"])
+      assert.ok(
+        Number.isFinite(checks[field]) && checks[field] >= 0,
+        "Invalid actual run-panel geometry: " + field,
+      );
+    assert.ok(checks.panelHeaderHeight > 0 && checks.panelHeaderHeight <= checks.panelHeight);
+    assert.ok(
+      checks.panelWidth > 0 &&
+        checks.panelHeight > 0 &&
+        checks.panelLeft + checks.panelWidth <= checks.width + 0.5 &&
+        checks.panelTop + checks.panelHeight <= checks.height + 0.5,
+    );
+
+    for (const key of [
+      "passed",
+      "actualToolbarButton",
+      "actualExpandAndRestore",
+      "retainedPanelView",
+      "terminalGenerationRetained",
+      "canonicalWorkspaceRetained",
+    ])
+      assert.equal(checks[key], true, `Unverified run-panel control: ${key}`);
+    assert.equal(checks.fileVisible, checks.state === "file");
+  }
+  const forms = scenes.filter((row) => row.scenario.startsWith("run-form-"));
+  const expectedForms = fixture.runPanelScenes.flatMap((scene) =>
+    fixture.runPanelKinds.map(
+      (kind) => `run-form-${kind}-${scene.language}-${scene.appearance}-${scene.width}`,
+    ),
+  );
+  assert.deepEqual(
+    forms.map((row) => row.scenario).sort(),
+    expectedForms.sort(),
+    "Missing or duplicate actual run-form scenes",
+  );
+  for (const { scenario, checks } of forms) {
+    assert.equal(
+      scenario,
+      `run-form-${checks.kind}-${checks.language}-${checks.appearance}-${checks.width}`,
+    );
+    assert.ok(
+      fixture.runPanelScenes.some((scene) =>
+        ["language", "appearance", "width", "height"].every((key) => scene[key] === checks[key]),
+      ),
+    );
+    for (const key of [
+      "passed",
+      "actualAdvancedToggle",
+      "actualTextEditorInput",
+      "invalidArgumentRetainedWithoutWrite",
+      "literalArgumentsSaved",
+      "validArgumentTextRetained",
+      "temporaryEnvironmentRetainedWithoutPersistence",
+      "actualSaveButtonAndFeedback",
+      "compactRightAlignedSave",
+      "canonicalStateAndSessionRetained",
+    ])
+      assert.equal(checks[key], true, "Unverified actual run-form action: " + key);
+    assert.equal(checks.fixtureArguments, fixture.runFormInput.arguments);
+    assert.equal(checks.fixtureEnvironment, fixture.runFormInput.environment);
+    assert.deepEqual(checks.savedArguments, fixture.runFormInput.argumentValues);
+    for (const key of [
+      "saveWidth",
+      "saveHeight",
+      "saveRightInset",
+      "saveVisibleWidth",
+      "saveVisibleHeight",
+    ])
+      assert.ok(Number.isFinite(checks[key]));
+    assert.ok(
+      checks.saveWidth > 0 &&
+        checks.saveWidth < 200 &&
+        checks.saveHeight > 0 &&
+        checks.saveHeight <= 30 &&
+        checks.saveRightInset >= 0 &&
+        checks.saveRightInset <= 40 &&
+        Math.abs(checks.saveVisibleWidth - checks.saveWidth) <= 0.5 &&
+        Math.abs(checks.saveVisibleHeight - checks.saveHeight) <= 0.5,
+    );
+  }
+  const runCleanup = scenes.filter((scene) => scene.scenario === "run-panels-complete");
+  assert.equal(runCleanup.length, 1, "Missing run-panel cleanup proof");
+  for (const key of [
+    "passed",
+    "actualFileCloseAndHideVerified",
+    "terminalGenerationRetained",
+    "canonicalWorkspaceRetained",
+  ])
+    assert.equal(runCleanup[0].checks[key], true, `Unverified run-panel cleanup: ${key}`);
+
   const restarts = scenes.filter((scene) => scene.scenario === "terminal-restart");
   assert.equal(restarts.length, 1, "Missing or duplicate ordinary restart evidence");
   const checks = restarts[0].checks;
