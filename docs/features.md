@@ -300,7 +300,8 @@ configuration** and **Advanced settings** disclosure controls. Java keeps module
 JDK together, followed by the main class and Maven scope/profiles. Python keeps interpreter, launch
 mode and startup target together. Interpreter and target fields retain detected completions and file
 pickers. **Save configuration** stays inside the advanced area on its own right-aligned row at 28px
-height. Java's toolbar separates the build goal, Build and Run; task controls wrap inside narrow
+height. The ordinary Java panel also keeps Save configuration on a separate right-aligned row
+below its checkboxes, using the same compact sizing as Python. Java's toolbar separates the build goal, Build and Run; task controls wrap inside narrow
 panels. **More actions** retains explicit saved-configuration reload, rerun and force stop. Search,
 copy and the adjacent Auto follow checkbox share the log toolbar. Stop and Force stop target the
 active task even while an older task log is selected. The real Java/Python task suites additionally
@@ -376,6 +377,14 @@ shared argument/environment fixtures. Node runs the same parser fixtures for bot
 panels, including CRLF, empty strings, Windows backslashes, Unicode whitespace and reserved
 environment names. New AppKit rendering, input/save operations and source-bound screenshots still
 require macOS CI; Linux does not accept native windows.
+
+The task-log QA waits for the actual restored window, terminal dimensions and output ACKs to remain
+stable for 250ms before pausing and after receiving further output. It retains the exact anchor and
+follow-mode checks and records the before/after viewport, top line, frame counts and replay resets.
+Source `3a621c1441d9882c8a92c74fff9696560aa451bc` / tested merge
+`ec5e9fbe11094cbaa28679feda1b043c4ec6fc59` still fails Java's paused anchor after docking/remount;
+the [actual report14054981144](https://github.com/YondFane/uTerm/actions/runs/43454656732/artifacts/14054981144)
+is retained. The revised readiness and diagnostics require their own actual Mac run.
 
 The
 [ARM performance build artifact](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)
@@ -1076,6 +1085,11 @@ five attempts and recorded geometry. It also executes the project context menu a
 control, checks durable pin/collapse/order, rejects a stale reorder after a settings write and
 verifies the selected terminal generation remains unchanged. Both clients use the same literal
 workspace name as well as matching project data.
+
+The Maven settings hide/reopen QA uses the application's actual settings entry to reattach the
+same overlay over its workspace and checks that the Maven draft remains intact. Directly showing a
+detached underlying window cannot satisfy the child-window acceptance. The [old actual settings failure14030703318](https://github.com/YondFane/uTerm/actions/runs/43395354646/artifacts/14030703318)
+retains the missing-parent failure; the corrected entry still requires current-source Mac validation.
 
 Settings use left-side categories for General, Appearance, Terminal, Workspaces, Shortcuts, Agents,
 Usage, Local control, Database components, Maven settings, Java development tools and Software

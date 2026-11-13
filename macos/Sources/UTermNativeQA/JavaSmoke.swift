@@ -80,11 +80,15 @@ enum JavaSmoke {
         try await TerminalSmoke.wait("Receive long Java task output") { run.terminal?.text.contains("BEFORE_PAUSE_119") == true }
         try await ProjectRunSmoke.run(model: model, language: "java", controller: first, task: run.selectedTask, evidence: URL(fileURLWithPath: reportPath).deletingLastPathComponent(), report: &report)
         guard let log = run.terminal else { throw BridgeFailure(code: "JAVA_QA", message: "Java task log is missing") }
+        try await ProjectRunSmoke.waitForLogViewport(log, window: first.window)
         log.view.scrollUp(lines: 20)
         let anchor = log.view.getTerminal().buffer.totalLinesTrimmed + log.view.getTerminal().buffer.yDisp
+        report["javaPausedFollowBefore"] = ProjectRunSmoke.logViewport(log)
         guard !log.taskLogFollowsOutput else { throw BridgeFailure(code: "JAVA_QA", message: "Java scroll did not pause follow") }
         try Data().write(to: root.appendingPathComponent("qa-continue"))
         try await TerminalSmoke.wait("Consume Java output while paused") { log.text.contains("AFTER_PAUSE_119") }
+        try await ProjectRunSmoke.waitForLogViewport(log, window: first.window)
+        report["javaPausedFollowAfter"] = ProjectRunSmoke.logViewport(log)
         guard !log.taskLogFollowsOutput, log.view.getTerminal().buffer.totalLinesTrimmed + log.view.getTerminal().buffer.yDisp == anchor else { throw BridgeFailure(code: "JAVA_QA", message: "Java paused viewport moved") }
         report["nativePausedFollowRetainedAnchor"] = true
         try await capture(first, "native-java-paused-output-en-dark.png")

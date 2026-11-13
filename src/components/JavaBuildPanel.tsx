@@ -802,6 +802,8 @@ export function JavaBuildPanel({
                 />
                 {tx("Maven 离线模式")}
               </label>
+            </div>
+            <div className="java-form-actions run-save-actions">
               <button type="button" disabled={busy} onClick={() => void saveProjectDraft()}>
                 {tx("保存配置")}
               </button>

@@ -85,11 +85,15 @@ enum PythonSmoke {
         try await TerminalSmoke.wait("Start the disposable long Python task") { run.terminal?.text.contains("BEFORE_PAUSE_119") == true }
         try await ProjectRunSmoke.run(model: model, language: "python", controller: first, task: run.selectedTask, evidence: URL(fileURLWithPath: reportPath).deletingLastPathComponent(), report: &report)
         guard let log = run.terminal else { throw BridgeFailure(code: "PYTHON_QA", message: "No task log for scroll acceptance") }
+        try await ProjectRunSmoke.waitForLogViewport(log, window: first.window)
         log.view.scrollUp(lines: 20)
         guard !log.taskLogFollowsOutput else { throw BridgeFailure(code: "PYTHON_QA", message: "Scrolling up did not pause following") }
         let anchor = log.view.getTerminal().buffer.totalLinesTrimmed + log.view.getTerminal().buffer.yDisp
+        report["pythonPausedFollowBefore"] = ProjectRunSmoke.logViewport(log)
         try Data().write(to: root.appendingPathComponent("qa-continue"))
         try await TerminalSmoke.wait("Consume raw output while follow is paused") { log.text.contains("AFTER_PAUSE_119") }
+        try await ProjectRunSmoke.waitForLogViewport(log, window: first.window)
+        report["pythonPausedFollowAfter"] = ProjectRunSmoke.logViewport(log)
         guard !log.taskLogFollowsOutput, log.view.getTerminal().buffer.totalLinesTrimmed + log.view.getTerminal().buffer.yDisp == anchor else { throw BridgeFailure(code: "PYTHON_QA", message: "New output moved the paused viewport") }
         report["nativePausedFollowRetainedAnchor"] = true
         let paused = "native-python-paused-output-en-dark.png"

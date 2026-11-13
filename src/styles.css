@@ -90,10 +90,12 @@
   margin: 0;
   padding: 0;
 }
-.python-form-actions {
+.python-form-actions,
+.run-save-actions {
   justify-content: flex-end;
 }
-.python-form-actions > button {
+.python-form-actions > button,
+.run-save-actions > button {
   flex: 0 0 auto;
   height: 28px;
   padding: 4px 10px;

@@ -308,7 +308,7 @@ enum SettingsSmoke {
             report["simulatedLoginItemOptInApprovalFailureAndDisable"] = true
             report["actualOSLoginRegistrationExecuted"] = false
             var captures: [String] = [paletteCapture, terminalCapture, fontCapture]
-            captures.append(try await verifyGlobalMaven(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
+            captures.append(try await verifyGlobalMaven(settings: current, open: open, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             captures.append(try await verifyDatabaseComponents(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             captures.append(try await verifyJavaComponents(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             current.window.makeKeyAndOrderFront(nil)
@@ -1044,7 +1044,7 @@ enum SettingsSmoke {
         return capture
     }
 
-    private static func verifyGlobalMaven(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
+    private static func verifyGlobalMaven(settings: NativeSettingsWindow, open: () -> NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
         let maven = settings.model.maven
         settings.window.makeKeyAndOrderFront(nil)
         try await TerminalSmoke.wait("Render the Maven settings navigation button") { (view(settings.window, id: "native-settings-section-maven") as? NSButton)?.isEnabled == true }
@@ -1083,7 +1083,8 @@ enum SettingsSmoke {
             guard maven.dirty, maven.values["home"]?.string == literal + " local draft", configuration["global"] == .object(peerGlobal), configuration["project"] == .object(project) else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Conflict lost a Maven draft or peer/project settings") }
             settings.window.performClose(nil)
             guard !settings.window.isVisible, maven.dirty else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Hiding settings lost the Maven draft") }
-            settings.window.makeKeyAndOrderFront(nil)
+            guard open() === settings, settings.window.parent != nil else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "The actual settings entry did not reattach the retained overlay") }
+            guard maven.dirty, maven.values["home"]?.string == literal + " local draft" else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Reopening the actual settings overlay lost the Maven draft") }
             let capture = "native-settings-maven-conflict.png"
             try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
             report["mavenConflictScreenshot"] = capture
