@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # uTerm feature guide
@@ -122,6 +122,12 @@ missing from its explicit read allowlist. The candidate adds only that read meth
 remain forbidden. Failed images/logs are retained in the
 [ordinary artifact](https://github.com/YondFane/uTerm/actions/runs/43051436701/artifacts/13873090397).
 The new modal and full pairing remain unaccepted until their own current-source run.
+
+Pairing discovery waits up to 60 minutes for an unexpired Personal ARM artifact from the exact
+source head, including an explicitly dispatched run. The comparison job has a 75-minute total limit.
+Missing artifacts, different source identities and failed comparison checks remain failures. Six
+Linux discovery tests cover delayed availability, finite timeout and event/source rejection; 23
+existing evidence-policy tests pass. New paired Mac evidence is still required.
 
 Paired artifacts also include a local `comparison.html` scene viewer alongside the original PNGs,
 JSON and Markdown. Extract the artifact, select an area/scene, and open either image at its original
@@ -2821,6 +2827,12 @@ native search is available in All and SSH and retains its input focus when filte
 Native temporary connections offer **Save connection** in their context menu and connection window.
 Cleanup retains file/tunnel ownership and database/Redis dependencies, including legacy SSH-host
 references; an unresolved native connection draft also defers cleanup.
+
+The native Quick SSH smoke check waits for the real sidebar row to be visible and its attached
+button to be enabled after each asynchronous workspace operation. It still opens the actual form six
+times and checks create, keep and cleanup behavior; a missing or disabled control fails within the
+existing control deadline with attachment and workspace diagnostics. Linux Swift 6.1.2 syntax and
+shell checks pass; the current-source Intel and ARM application checks remain pending.
 
 SSH host filtering retains the mounted native search cell while inserting/removing result rows. An
 empty query explicitly restores all hosts and external query changes synchronize the editor. At head

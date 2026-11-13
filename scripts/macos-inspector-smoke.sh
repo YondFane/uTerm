@@ -30,6 +30,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-inspector-') as directo
                 'paneSwapAndZoomRetainLayoutViewsAndOutput', 'closeFocusedToolsRetainsPTYAndReturnsFocus',
                 'leftToolsRemainVisibleWithoutSidebar', 'explicitFixtureCloseAndIdleHostShutdown']:
         assert data[key], key
+    assert type(data['nativeQuickSSHActualOpenCount']) is int and data['nativeQuickSSHActualOpenCount'] == 6
     assert len(data['captures']) == 9
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])

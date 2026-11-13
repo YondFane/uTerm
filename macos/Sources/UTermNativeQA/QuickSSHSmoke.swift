@@ -87,13 +87,35 @@ enum QuickSSHSmoke {
         }
         guard model.selectedID == selected, model.terminals.mapValues({ $0.generation }) == generations else { throw BridgeFailure(code: "QUICK_SSH_SEARCH", message: "Host filtering changed terminal identity") }
         report["nativeSSHSearchAllAndCategoryRetainFocusAndSessions"] = true
+        var actualOpenCount = 0
         func open() async throws -> ContentWindow {
-            guard let button = control(window, id: "native-ssh-quick") as? NSButton, button.isEnabled else { throw BridgeFailure(code: "QUICK_SSH_BUTTON", message: "Missing actual Quick SSH button") }
+            do {
+                // Model completion precedes AppKit refresh; exercise the attached, enabled control.
+                // 模型操作完成早于 AppKit 重绘，须等待控件挂载并启用后再操作。
+                try await TerminalSmoke.wait("Attach and enable the actual Quick SSH button") {
+                    if let sidebar = table(window) {
+                        for row in 0..<sidebar.numberOfRows where sidebar.view(atColumn: 0, row: row, makeIfNecessary: true)?.identifier?.rawValue == "native-sidebar-row-ssh-quick" {
+                            sidebar.scrollRowToVisible(row); sidebar.layoutSubtreeIfNeeded(); break
+                        }
+                    }
+                    guard let button = control(window, id: "native-ssh-quick") as? NSButton else { return false }
+                    return !model.busy && button.isEnabled && button.window === window
+                }
+            } catch {
+                let button = control(window, id: "native-ssh-quick") as? NSButton
+                report["nativeQuickSSHOpenDiagnostics"] = ["attempt": actualOpenCount + 1, "modelBusy": model.busy,
+                    "buttonFound": button != nil, "buttonEnabled": button?.isEnabled == true, "buttonAttached": button?.window === window,
+                    "rowCount": table(window)?.numberOfRows ?? 0, "sidebarSection": model.sidebarSection,
+                    "workspaceErrorCode": String(model.error.split(separator: ":", maxSplits: 1).first ?? "")]
+                throw error
+            }
+            guard let button = control(window, id: "native-ssh-quick") as? NSButton, button.isEnabled, button.window === window else { throw BridgeFailure(code: "QUICK_SSH_BUTTON", message: "Missing actual attached Quick SSH button") }
             button.performClick(nil)
             try await TerminalSmoke.wait("Open shared Quick SSH through the actual sidebar button") { lookup()?.webView.window === window }
             guard let content = lookup() else { throw BridgeFailure(code: "QUICK_SSH_WINDOW", message: "Quick SSH window is missing") }
             try await ContentSmoke.wait(content, "document.querySelector('.ssh-quick-dialog[open] input') !== null")
             guard content.presentationWindow === window, content.window?.isVisible == false, model.quickSSHContent === content else { throw BridgeFailure(code: "QUICK_SSH_PRESENTATION", message: "Quick SSH is not embedded in the main window") }
+            actualOpenCount += 1; report["nativeQuickSSHActualOpenCount"] = actualOpenCount
             return content
         }
         var quick = try await open()
