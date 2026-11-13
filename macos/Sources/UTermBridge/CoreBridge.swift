@@ -92,6 +92,10 @@ public actor CoreBridge {
         return try JSONDecoder().decode(CoreSnapshot.self, from: JSONEncoder().encode(value))
     }
 
+    public func legacyExport() async throws -> JSONValue {
+        try await readSnapshot("legacy.export")
+    }
+
     public func sessionEntries() throws -> [CoreSessionEntry] {
         try JSONDecoder().decode([CoreSessionEntry].self, from: JSONEncoder().encode(call("session.entries")))
     }

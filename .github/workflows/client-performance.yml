@@ -57,6 +57,14 @@ jobs:
             node -e 'console.log(JSON.stringify({head:process.env.PR_HEAD_SHA,platform:process.platform,arch:process.arch,system:require("node:os").version()}))'
           } 2>&1 | tee ci-evidence/performance/toolchain.txt
           cargo build --locked --manifest-path crates/uterm-core/Cargo.toml --bin uterm-core-contract
+      - name: Test isolated phase replacement and Windows reader locks
+        run: |
+          qa_phase_test="$RUNNER_TEMP/uterm-qa-phase-tests"
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            qa_phase_test="$(cygpath -u "$RUNNER_TEMP")/uterm-qa-phase-tests.exe"
+          fi
+          rustc --edition=2021 --test src-tauri/src/qa_phase.rs -o "$qa_phase_test" 2>&1 | tee ci-evidence/performance/qa-phase-build.log
+          "$qa_phase_test" --nocapture 2>&1 | tee ci-evidence/performance/qa-phase-tests.log
       - name: Build native QA on Mac
         if: runner.os == 'macOS'
         run: |

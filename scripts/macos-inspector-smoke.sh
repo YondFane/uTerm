@@ -25,11 +25,21 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-inspector-') as directo
                 'sharedFilesRootAndMethodBoundaries', 'sharedFilesActualCreateCopyRenameDeleteAndCancel', 'sharedFilesStaleProjectRejected', 'sharedFilesAcrossProjectsRetainCopiedSource',
                 'sharedFilesAcrossWorkspacesRetainCopiedSourceAndRejectRemovedRoots',
                 'nativeSSHSearchAllAndCategoryRetainFocusAndSessions', 'nativeQuickSSHInvalidCancelAndStaleWorkspacePreserveState', 'nativeQuickSSHActualCreateAndKeepRetainSession',
-                'nativeQuickSSHActualFinalSessionPrunesTemporary', 'nativeQuickSSHInMainWindow', 'nativeQuickSSHModalCloseKeysRetainState', 'nativeQuickSSHModalRetainsExistingSessions', 'nativeQuickSSHFormBoundsAndLayoutArguments', 'nativeQuickSSHActualBackdropCancelRetainsState',
+                'nativeQuickSSHActualFinalSessionPrunesTemporary', 'nativeQuickSSHSavedSessionClosedBeforeProfileCleanup', 'nativeQuickSSHInMainWindow', 'nativeQuickSSHModalCloseKeysRetainState', 'nativeQuickSSHModalRetainsExistingSessions', 'nativeQuickSSHFormBoundsAndLayoutArguments', 'nativeQuickSSHActualBackdropCancelRetainsState',
                 'searchJumpRetainsExistingEditorText', 'cancelledSearchAndFilenameQuickOpen',
                 'paneSwapAndZoomRetainLayoutViewsAndOutput', 'closeFocusedToolsRetainsPTYAndReturnsFocus',
                 'leftToolsRemainVisibleWithoutSidebar', 'explicitFixtureCloseAndIdleHostShutdown']:
         assert data[key], key
+    assert type(data['nativeQuickSSHActualOpenCount']) is int and data['nativeQuickSSHActualOpenCount'] == 6
+    closes = data['quickSSHFixtureCloseReadiness']
+    assert len(closes) == 2 and len({item['sessionID'] for item in closes}) == 2
+    for item in closes:
+        assert type(item['initiallyBusy']) is bool and item['stage'] == 'completed'
+        assert item['sessionRemoved'] is True and item['profileCorrect'] is True
+        assert item['busyAfterClose'] is False and not item['error']
+    attempts = data['quickSSHFixtureCleanupWriteAttempts']
+    assert len(attempts) == 3 and all(type(value) is int and 1 <= value <= 3 for value in attempts.values())
+    assert type(data['quickSSHFixtureCleanupReadRetries']) is int and data['quickSSHFixtureCleanupReadRetries'] >= 0
     assert len(data['captures']) == 9
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
