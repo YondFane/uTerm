@@ -123,6 +123,12 @@ remain forbidden. Failed images/logs are retained in the
 [ordinary artifact](https://github.com/YondFane/uTerm/actions/runs/43051436701/artifacts/13873090397).
 The new modal and full pairing remain unaccepted until their own current-source run.
 
+Pairing discovery waits up to 60 minutes for an unexpired Personal ARM artifact from the exact
+source head, including an explicitly dispatched run. The comparison job has a 75-minute total limit.
+Missing artifacts, different source identities and failed comparison checks remain failures. Six
+Linux discovery tests cover delayed availability, finite timeout and event/source rejection; 23
+existing evidence-policy tests pass. New paired Mac evidence is still required.
+
 Paired artifacts also include a local `comparison.html` scene viewer alongside the original PNGs,
 JSON and Markdown. Extract the artifact, select an area/scene, and open either image at its original
 size. Source/merge identities, image digests and the pending functional-acceptance notice stay
@@ -2822,6 +2828,19 @@ native search is available in All and SSH and retains its input focus when filte
 Native temporary connections offer **Save connection** in their context menu and connection window.
 Cleanup retains file/tunnel ownership and database/Redis dependencies, including legacy SSH-host
 references; an unresolved native connection draft also defers cleanup.
+
+The native Quick SSH smoke check waits for the real sidebar row to be visible and its attached
+button to be enabled after each asynchronous workspace operation. It still opens the actual form six
+times and checks create, keep and cleanup behavior; a missing or disabled control fails within the
+existing control deadline with attachment and workspace diagnostics. Linux Swift 6.1.2 syntax and
+shell checks pass; the current-source Intel and ARM application checks remain pending. The three
+cleanup fixtures also record their attempt counts. A rejected `WRITER_BUSY` write may repeat at most
+three times with the original revision only while the full canonical workspace, settings and
+selected context remain unchanged. Conflicts, peer changes and other errors fail immediately;
+application writes do not gain automatic retries. The current
+[Intel report](https://github.com/YondFane/uTerm/actions/runs/43345255828/artifacts/14003763231)
+records successful profile fixtures and panel checks, followed by busy cleanup of an SSH fixture.
+The new cleanup policy still requires its own Mac run.
 
 SSH host filtering retains the mounted native search cell while inserting/removing result rows. An
 empty query explicitly restores all hosts and external query changes synchronize the editor. At head
