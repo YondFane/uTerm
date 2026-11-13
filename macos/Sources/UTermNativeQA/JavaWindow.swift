@@ -401,9 +401,9 @@ struct JavaRunView: View {
                         Text("Java \(Int(jdk["version"].number ?? 0)) · " + (jdk["home"].string ?? "")).tag("home:" + (jdk["home"].string ?? "")).disabled(jdk["available"].bool == false)
                     }
                 }.labelsHidden().frame(height: 28)
-                if !selectedJavaHome.isEmpty { Text(selectedJavaHome).font(.system(size: 11)).foregroundStyle(.secondary).textSelection(.enabled) }
+                if !selectedJavaHome.isEmpty { Text(selectedJavaHome).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(selectedJavaHome).textSelection(.enabled) }
             }
-        }.padding(.top, 7)
+        }.padding(.top, 7).background(NativeRunPanelFrame(identifier: "native-java-primary-grid"))
     }
     private var mainClassField: some View {
         VStack(alignment: .leading, spacing: 4) {

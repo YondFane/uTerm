@@ -360,7 +360,7 @@ struct PythonRunView: View {
                     }
                 }
             }
-        }.padding(.top, 7)
+        }.padding(.top, 7).background(NativeRunPanelFrame(identifier: "native-python-primary-grid"))
     }
     private var advancedFields: some View {
         VStack(alignment: .leading, spacing: 8) {

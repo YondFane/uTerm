@@ -330,6 +330,20 @@ and
 retain the reports and real failure images. The field-layout assertion remains required; new
 failures record actual frames and attachment state. Current-source Mac rendering remains pending.
 
+The selected JDK home stays on one line with middle truncation and a full-path tooltip; the editable
+home and saved value remain unchanged. Form evidence measures the actual primary-grid bounds and
+window backing scale. Both Swift and Python require each column's left edge, width and right edge
+to stay within that container's physical-pixel floor/ceiling, with the same row order and wrapping.
+This accepts integer-pixel distribution without accepting stretched, overlapping or clipped fields.
+Source `bc7f747cd344fadf6fb5c4406c6a41df371b576e` / tested merge
+`f86245fe9e43918a0e1c609547e03ead7111b8b1` restores the visible form but fails the old equal-width
+assertion on measured 164/163/164-point columns; the JDK path also wraps to several lines. Its
+[actual failure14019779207](https://github.com/YondFane/uTerm/actions/runs/43385658859/artifacts/14019779207)
+retains `personal-initial.json` with field rectangles and `personal-initial-failure.png`. Sixteen
+Linux Swift Foundation tests cover the observed grid, Retina rounding, narrow Python rows and
+rejection of wrong columns, shifted edges and overlap. New same-source Mac operation and image
+acceptance remain required.
+
 **Run-form validation**
 
 Both real-client collectors operate advanced-form controls in Java/Python, English/dark wide and

@@ -16,6 +16,25 @@ spec.loader.exec_module(package)
 
 
 class PersonalPackageTests(unittest.TestCase):
+    def test_run_forms_require_measured_grid_and_pixel_scale(self):
+        fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+        report = self.workspace_evidence("initial")
+        row = next(row for row in report['runPanelFormProof'] if row['kind'] == 'java' and row['width'] == 1100)
+        row.update(panelWidth=554, formGridFrame=dict(left=12, top=20, width=515, height=180), backingScale=1,
+                   fieldFrames=[dict(id=name, left=left, top=27, width=width, height=46) for name, left, width in [('module', 12, 164), ('mode', 188, 163), ('version', 363, 164)]])
+        package.validate_native_run_forms(report, fixture, 'a'*40, 'b'*40, 'initial')
+        index = report['runPanelFormProof'].index(row)
+        for key, value in [('formGridFrame', None), ('formGridFrame', dict(left=12, top=20, width=516, height=180)), ('backingScale', 0), ('backingScale', True), ('backingScale', float('nan'))]:
+            wrong = copy.deepcopy(report); wrong['runPanelFormProof'][index][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(AssertionError):
+                package.validate_native_run_forms(wrong, fixture, 'a'*40, 'b'*40, 'initial')
+        wrong = copy.deepcopy(report); wrong['runPanelFormProof'][index]['fieldFrames'][1]['width'] -= 2
+        with self.assertRaises(AssertionError):
+            package.validate_native_run_forms(wrong, fixture, 'a'*40, 'b'*40, 'initial')
+        wrong = copy.deepcopy(report); wrong['runPanelFormProof'][index]['fieldFrames'][2]['width'] -= 1
+        with self.assertRaises(AssertionError):
+            package.validate_native_run_forms(wrong, fixture, 'a'*40, 'b'*40, 'initial')
+
     def test_run_forms_require_actual_actions_current_sources_and_originals(self):
         fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
         for phase in ["initial", "replacement"]:

@@ -3,6 +3,34 @@
 import math
 
 
+def form_grid_matches(grid, fields, columns, full_interpreter, scale):
+    def finite(value):
+        return type(value) in [int, float] and math.isfinite(value)
+    if not isinstance(grid, dict) or type(columns) is not int or columns not in [2, 3] or type(full_interpreter) is not bool:
+        return False
+    if not finite(scale) or not 0 < scale <= 8 or not all(finite(grid.get(key)) for key in ['left', 'top', 'width', 'height']) or grid['width'] <= 24 or grid['height'] <= 0:
+        return False
+    if len(fields) != 3 or not all(all(finite(field.get(key)) for key in ['left', 'top', 'width', 'height']) and field['width'] > 0 and field['height'] > 0 for field in fields):
+        return False
+    origin, width, gap, epsilon = grid['left'], grid['width'], 12, 0.000001
+    column_width = (width - gap * (columns - 1)) / columns
+    def rasterized(actual, ideal):
+        return math.floor(ideal * scale) / scale - epsilon <= actual <= math.ceil(ideal * scale) / scale + epsilon
+    def placed(field, column, full=False):
+        left, expected_width = origin + column * (column_width + gap), width if full else column_width
+        return (rasterized(field['left'], left) and rasterized(field['width'], expected_width)
+                and rasterized(field['left'] + field['width'], left + expected_width)
+                and field['left'] + field['width'] <= math.ceil((origin + width) * scale) / scale + epsilon)
+    def same_row(left, right):
+        return abs(left['top'] - right['top']) < 1 / scale
+    first, second, third = fields
+    if full_interpreter:
+        return columns == 2 and placed(first, 0, True) and placed(second, 0) and placed(third, 1) and same_row(second, third) and second['top'] >= first['top'] + first['height']
+    if not (placed(first, 0) and placed(second, 1) and same_row(first, second)):
+        return False
+    return placed(third, 2) and same_row(first, third) if columns == 3 else placed(third, 0) and third['top'] >= max(first['top'] + first['height'], second['top'] + second['height'])
+
+
 def validate_native_run_forms(report, fixture, head, tested, phase):
     expected = {(kind, row['language'], row['appearance'], row['width'], row['height'])
                 for kind in fixture['runPanelKinds'] for row in fixture['runPanelScenes']}
@@ -31,19 +59,10 @@ def validate_native_run_forms(report, fixture, head, tested, phase):
         for field in fields:
             assert all(finite(field.get(key)) for key in ['left', 'top', 'width', 'height']) and field['left'] >= 0 and field['width'] > 0 and field['height'] > 0, 'Invalid run-form field'
             assert field['left'] + field['width'] <= row['panelWidth'] + 0.5, 'Overflowing run-form field'
-        first, second, third = fields
-        def same(left, right, key):
-            return abs(left[key] - right[key]) < 1
-        if full_interpreter:
-            assert abs(first['width'] - (second['width'] * 2 + 12)) < 1 and same(second, third, 'width'), 'Interpreter must fill the narrow row'
-            assert same(first, second, 'left') and third['left'] >= second['left'] + second['width'], 'Misplaced narrow Python fields'
-            assert same(second, third, 'top') and second['top'] >= first['top'] + first['height'], 'Overlapping interpreter row'
-        else:
-            assert all(same(field, first, 'width') for field in fields) and second['left'] >= first['left'] + first['width'] and same(first, second, 'top'), 'Misplaced equal-width run fields'
-            if columns == 3:
-                assert third['left'] >= second['left'] + second['width'] and same(third, first, 'top'), 'Misplaced wide third column'
-            else:
-                assert same(third, first, 'left') and third['top'] >= max(first['top'] + first['height'], second['top'] + second['height']), 'Misplaced wrapped run field'
+        grid = row.get('formGridFrame')
+        assert isinstance(grid, dict) and all(finite(grid.get(key)) for key in ['left', 'top', 'width', 'height']), 'Missing measured form grid'
+        assert grid['left'] >= 0 and grid['left'] + grid['width'] <= row['panelWidth'] + 0.5, 'Clipped form grid'
+        assert form_grid_matches(grid, fields, columns, full_interpreter, row.get('backingScale')), 'Run fields do not match the measured container and physical pixel bounds'
 
 
 def validate_run_panels(scenes, fixture):

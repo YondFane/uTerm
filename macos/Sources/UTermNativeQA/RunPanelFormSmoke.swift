@@ -72,18 +72,17 @@ enum RunPanelFormSmoke {
                 return CGRect(x: rect.minX, y: panel.view.isFlipped ? rect.minY : panel.view.bounds.height - rect.maxY, width: rect.width, height: rect.height)
             }
         }
+        func measuredGrid() -> CGRect? {
+            guard let actual = view("primary-grid"), actual.window === window else { return nil }
+            let rect = actual.convert(actual.bounds, to: panel.view)
+            return CGRect(x: rect.minX, y: panel.view.isFlipped ? rect.minY : panel.view.bounds.height - rect.maxY, width: rect.width, height: rect.height)
+        }
+        let backingScale = Double(window.backingScaleFactor)
         func responsiveFieldsMatch() -> Bool {
             let frames = measuredFields()
-            guard frames.count == 3, frames.allSatisfy({ $0.width > 0 && $0.height > 0 && $0.minX >= 0 && $0.maxX <= panel.view.bounds.width + 0.5 }) else { return false }
-            if fullInterpreter {
-                return abs(frames[0].width - (frames[1].width * 2 + 12)) < 1 && abs(frames[1].width - frames[2].width) < 1
-                    && abs(frames[0].minX - frames[1].minX) < 1 && frames[2].minX >= frames[1].maxX
-                    && abs(frames[1].minY - frames[2].minY) < 1 && frames[1].minY >= frames[0].maxY
-            }
-            guard frames.allSatisfy({ abs($0.width - frames[0].width) < 1 }), frames[1].minX >= frames[0].maxX,
-                  abs(frames[0].minY - frames[1].minY) < 1 else { return false }
-            return columns == 3 ? frames[2].minX >= frames[1].maxX && abs(frames[2].minY - frames[0].minY) < 1
-                : abs(frames[2].minX - frames[0].minX) < 1 && frames[2].minY >= max(frames[0].maxY, frames[1].maxY)
+            guard let grid = measuredGrid(), grid.minX >= 0, grid.maxX <= panel.view.bounds.width + 0.5,
+                  frames.allSatisfy({ $0.minX >= 0 && $0.maxX <= panel.view.bounds.width + 0.5 }) else { return false }
+            return RunPanelLayout.formGridMatches(grid, fields: frames, columns: columns, interpreterFullRow: fullInterpreter, scale: backingScale)
         }
         _ = try await button("configuration-toggle")
         do {
@@ -95,6 +94,8 @@ enum RunPanelFormSmoke {
             diagnostic["columnCount"] = columns; diagnostic["interpreterFullRow"] = fullInterpreter
             diagnostic["configurationToggleAttached"] = view("configuration-toggle")?.window === window
             diagnostic["fieldFrames"] = measuredFields().map { ["left": Double($0.minX), "top": Double($0.minY), "width": Double($0.width), "height": Double($0.height)] }
+            diagnostic["backingScale"] = backingScale
+            if let grid = measuredGrid() { diagnostic["formGridFrame"] = ["left": Double(grid.minX), "top": Double(grid.minY), "width": Double(grid.width), "height": Double(grid.height)] }
             report["runPanelFormLayoutDiagnostics"] = diagnostic
             throw error
         }
@@ -102,6 +103,8 @@ enum RunPanelFormSmoke {
         for (field, rect) in zip(fields, measuredFields()) {
             frames.append(["id": field, "left": Double(rect.minX), "top": Double(rect.minY), "width": Double(rect.width), "height": Double(rect.height)])
         }
+        guard let grid = measuredGrid() else { throw BridgeFailure(code: "RUN_FORM_QA", message: "Actual run form grid is detached") }
+        let gridFrame = ["left": Double(grid.minX), "top": Double(grid.minY), "width": Double(grid.width), "height": Double(grid.height)]
         try await button("advanced-toggle").performClick(nil)
         try await TerminalSmoke.wait("Mount the actual advanced Save configuration action") { (view("save-configuration") as? NSButton)?.isEnabled == true }
         let save = try await button("save-configuration"), saveRect = save.convert(save.bounds, to: panel.view)
@@ -150,6 +153,7 @@ enum RunPanelFormSmoke {
             "passed": true, "actualAdvancedToggle": true, "actualTextEditorInput": true, "invalidArgumentRetainedWithoutWrite": true, "literalArgumentsSaved": true, "validArgumentTextRetained": true, "temporaryEnvironmentRetainedWithoutPersistence": true, "fixtureArguments": literal, "fixtureEnvironment": environment, "savedArguments": input["argumentValues"].array.compactMap(\.string), "actualSaveButtonAndFeedback": true, "compactRightAlignedSave": true,
             "actualConfigurationCollapseAndRestore": true, "canonicalStateAndSessionRetained": true, "fieldFrames": frames, "columnCount": columns, "interpreterFullRow": fullInterpreter,
             "panelWidth": Double(panel.view.bounds.width), "saveWidth": Double(saveRect.width), "saveHeight": Double(saveRect.height), "saveRightInset": Double(inset), "screenshot": name,
+            "formGridFrame": gridFrame, "backingScale": backingScale,
             "input": "Actual attached AppKit field/text editors and NSButton actions; no physical pointer claim"]
         for key in ["sourceHeadSHA", "testedMergeSHA", "platform", "architecture", "system"] { proof[key] = report[key] }
         var proofs = report["runPanelFormProof"] as? [[String: Any]] ?? []; proofs.append(proof); report["runPanelFormProof"] = proofs

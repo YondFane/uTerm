@@ -8,6 +8,34 @@ public struct RunPanelLayout: Equatable, Sendable {
         !viewportWidth.isFinite || viewportWidth <= CoreChrome.pythonInterpreterFullRowViewportWidth
     }
 
+    public static func formGridMatches(_ bounds: CGRect, fields: [CGRect], columns: Int, interpreterFullRow: Bool, scale: Double) -> Bool {
+        guard [2, 3].contains(columns), fields.count == 3, scale.isFinite, scale > 0, scale <= 8,
+              [bounds.minX, bounds.minY, bounds.width, bounds.height].allSatisfy({ $0.isFinite }), bounds.width > 24, bounds.height > 0,
+              fields.allSatisfy({ [$0.minX, $0.minY, $0.width, $0.height].allSatisfy({ $0.isFinite }) && $0.width > 0 && $0.height > 0 }) else { return false }
+        let origin = Double(bounds.minX), width = Double(bounds.width), gap = 12.0
+        let columnWidth = (width - gap * Double(columns - 1)) / Double(columns), epsilon = 0.000001
+        func rasterized(_ actual: Double, _ ideal: Double) -> Bool {
+            // AppKit may allocate adjacent columns to different physical pixels; require the measured grid's floor/ceiling bounds.
+            // AppKit 可能将相邻列分配到不同物理像素；必须符合实测网格的向下／向上取整边界。
+            actual >= floor(ideal * scale) / scale - epsilon && actual <= ceil(ideal * scale) / scale + epsilon
+        }
+        func placed(_ field: CGRect, column: Int, full: Bool = false) -> Bool {
+            let left = origin + Double(column) * (columnWidth + gap), expectedWidth = full ? width : columnWidth
+            return rasterized(Double(field.minX), left) && rasterized(Double(field.width), expectedWidth)
+                && rasterized(Double(field.maxX), left + expectedWidth)
+                && Double(field.maxX) <= ceil((origin + width) * scale) / scale + epsilon
+        }
+        func sameRow(_ left: CGRect, _ right: CGRect) -> Bool { abs(Double(left.minY - right.minY)) < 1 / scale }
+        let first = fields[0], second = fields[1], third = fields[2]
+        if interpreterFullRow {
+            return columns == 2 && placed(first, column: 0, full: true) && placed(second, column: 0) && placed(third, column: 1)
+                && sameRow(second, third) && second.minY >= first.maxY
+        }
+        guard placed(first, column: 0), placed(second, column: 1), sameRow(first, second) else { return false }
+        return columns == 3 ? placed(third, column: 2) && sameRow(first, third)
+            : placed(third, column: 0) && third.minY >= max(first.maxY, second.maxY)
+    }
+
     public static func toolbar(width: Double, items: [CoreChromeLayout.HeaderItem]) -> CoreChromeLayout.HeaderFlow {
         let width = max(0, width.isFinite ? width : 0), gap = 6.0
         let widths = items.map { $0.id == "spacer" ? 0 : min(width, max(0, $0.width.isFinite ? $0.width : 0)) }

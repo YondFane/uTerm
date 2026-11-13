@@ -186,6 +186,12 @@ Swift 语法及脚本解析通过，新的 Mac 原图和后续通知检查仍待
 `5b768fb`、实际测试 merge `896f6d8`
 的两个架构均编译并通过桥接测试，随后真实表单布局验收因配置区空白而失败；[ARM 产物14012559826](https://github.com/YondFane/uTerm/actions/runs/43368364086/artifacts/14012559826)和[Intel 产物14013367625](https://github.com/YondFane/uTerm/actions/runs/43368364086/artifacts/14013367625)保留报告及实际失败原图。字段布局断言保持必要，新失败记录真实矩形与挂载状态；仍须当前源码 Mac 渲染。
 
+选中的 JDK 目录保持单行，中间截断并用提示显示完整路径；可编辑目录及保存值不变。表单证据实测主网格边界和窗口像素缩放。Swift 与 Python 均要求各列的左边、宽度和右边处于该容器的物理像素向下／向上取整范围，仍核对行次序及换行；允许整数像素分配，拒绝拉伸、重叠或裁切。源码
+`bc7f747cd344fadf6fb5c4406c6a41df371b576e`／实际测试 merge
+`f86245fe9e43918a0e1c609547e03ead7111b8b1`
+已恢复可见表单，但实测三列 164／163／164 点触发旧等宽断言，JDK 目录也换行占用了过多高度。[实际失败14019779207](https://github.com/YondFane/uTerm/actions/runs/43385658859/artifacts/14019779207)保留带字段矩形的
+`personal-initial.json` 及 `personal-initial-failure.png`。Linux 十六项 Swift Foundation 测试覆盖该实测网格、Retina 取整、窄窗 Python 行，以及错列、边界偏移和重叠拒绝；新的同源码 Mac 操作和原图验收仍为必需。
+
 **运行表单验证**
 
 两版真实采集器均操作 Java／Python 高级表单，覆盖英文深色宽窗与中文浅色窄窗。通过真实编辑器输入相同的引号参数、空参数、Windows 路径、Unicode 和字面 shell 符号。引号未闭合时必须保留输入，已保存项目及 revision 不变；有效保存后保留原有引号／空格文本，并必须保留精确参数值，并保留临时环境变量文本且不将其持久化。Java 的 JVM／应用参数为单行编辑器，Python 参数及两版环境变量为多行编辑器；JDK 目录与原生选择器仍保留。

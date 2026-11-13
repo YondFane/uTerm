@@ -33,6 +33,7 @@ def policy_forms(fixture, phase, head, tested, system):
                              compactRightAlignedSave=True, actualConfigurationCollapseAndRestore=True,
                              canonicalStateAndSessionRetained=True, panelWidth=300, saveWidth=100, saveHeight=28, saveRightInset=12,
                              fieldFrames=fields, columnCount=columns, interpreterFullRow=full_interpreter,
+                             formGridFrame=dict(left=12, top=20, width=276, height=180), backingScale=1,
                              sourceHeadSHA=head, testedMergeSHA=tested, platform='macOS', architecture='arm64', system=system,
                              screenshot=f"personal-{phase}-run-form-{kind}-{item['language']}-{item['appearance']}-{item['width']}.png"))
     return rows

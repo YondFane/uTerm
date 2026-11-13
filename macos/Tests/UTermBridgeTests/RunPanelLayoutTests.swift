@@ -2,6 +2,34 @@ import XCTest
 @testable import UTermBridge
 
 final class RunPanelLayoutTests: XCTestCase {
+    func testMeasuredGridAcceptsOnlyRasterizedContainerColumns() {
+        let grid = CGRect(x: 12, y: 20, width: 515, height: 180)
+        let fields = [CGRect(x: 12, y: 27, width: 164, height: 46), CGRect(x: 188, y: 27, width: 163, height: 46), CGRect(x: 363, y: 27, width: 164, height: 64)]
+        XCTAssertTrue(RunPanelLayout.formGridMatches(grid, fields: fields, columns: 3, interpreterFullRow: false, scale: 1))
+        for change in 0..<4 {
+            var wrong = fields
+            if change == 0 { wrong[1].size.width -= 2 }
+            if change == 1 { wrong[1].origin.x -= 2 }
+            if change == 2 { wrong[2].origin.y += 2 }
+            if change == 3 { wrong[2].size.width -= 1 }
+            XCTAssertFalse(RunPanelLayout.formGridMatches(grid, fields: wrong, columns: 3, interpreterFullRow: false, scale: 1))
+        }
+        XCTAssertFalse(RunPanelLayout.formGridMatches(grid, fields: fields, columns: 2, interpreterFullRow: false, scale: 1))
+        XCTAssertFalse(RunPanelLayout.formGridMatches(grid, fields: fields, columns: 3, interpreterFullRow: false, scale: .nan))
+        let retina = [CGRect(x: 12, y: 27, width: 164, height: 46), CGRect(x: 188, y: 27, width: 163.5, height: 46), CGRect(x: 363.5, y: 27, width: 164, height: 64)]
+        XCTAssertTrue(RunPanelLayout.formGridMatches(CGRect(x: 12, y: 20, width: 515.5, height: 180), fields: retina, columns: 3, interpreterFullRow: false, scale: 2))
+    }
+
+    func testNarrowInterpreterUsesMeasuredWidthAndRejectsOverlap() {
+        let grid = CGRect(x: 12, y: 20, width: 515, height: 180)
+        var fields = [CGRect(x: 12, y: 20, width: 515, height: 60), CGRect(x: 12, y: 88, width: 252, height: 40), CGRect(x: 276, y: 88, width: 251, height: 40)]
+        XCTAssertTrue(RunPanelLayout.formGridMatches(grid, fields: fields, columns: 2, interpreterFullRow: true, scale: 1))
+        fields[1].origin.y = 70; fields[2].origin.y = 70
+        XCTAssertFalse(RunPanelLayout.formGridMatches(grid, fields: fields, columns: 2, interpreterFullRow: true, scale: 1))
+        fields = [CGRect(x: 12, y: 20, width: 252, height: 40), CGRect(x: 276, y: 20, width: 251, height: 40), CGRect(x: 12, y: 68, width: 252, height: 40)]
+        XCTAssertTrue(RunPanelLayout.formGridMatches(grid, fields: fields, columns: 2, interpreterFullRow: false, scale: 1))
+    }
+
     func testWindowBreakpointsMatchWideAndNarrowOrdinaryRunForms() {
         for (width, columns, interpreterRow) in [(640.0, 2, true), (850, 2, true), (851, 2, false), (900, 2, false), (901, 3, false), (1100, 3, false)] {
             XCTAssertEqual(RunPanelLayout.formColumns(viewportWidth: width), columns)
