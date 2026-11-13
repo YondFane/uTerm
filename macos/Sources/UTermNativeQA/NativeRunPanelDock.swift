@@ -133,7 +133,7 @@ private final class RunPanelResizeView: NSView {
 }
 
 @MainActor
-private struct NativeRunPanelFrame: NSViewRepresentable {
+struct NativeRunPanelFrame: NSViewRepresentable {
     let identifier: String
     final class FrameView: NSView {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }

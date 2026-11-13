@@ -333,6 +333,13 @@ paired/discovery/fixture policy checks pass, as do TypeScript, production build,
 and localization checks. New AppKit rendering and these controls still require current-source macOS
 CI; Linux checks do not accept native windows.
 
+The
+[ARM performance build artifact](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)
+at head `f3e5ba8`, tested merge `3f9e9a7`, records an AppKit compilation failure: the form reused a
+file-private measurement view. The candidate makes that shared view module-internal. That failed
+build produced no accepted new form screenshots; corrected Mac compilation and runtime checks remain
+required.
+
 Hiding or closing a docked Java/Python panel saves its loaded configuration, including an unchanged
 form. Busy operations, conflicts and storage errors keep the panel and draft open. Reload saved
 configuration explicitly after another window changes it, then try again. Standalone windows retain
