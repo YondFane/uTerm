@@ -250,6 +250,7 @@ def validate_github_scenes(report, head, tested, phase):
         assert scene.get("sourceHeadSHA") == head and scene.get("testedMergeSHA") == tested
         assert scene.get("platform") == "macOS" and scene.get("architecture") in ["arm64", "x86_64"] and scene.get("system")
         assert scene.get("scenario") == "github-pr-draft"
+        assert scene.get("actualEnabledToolsSwitcher") is True, "GitHub navigation did not verify its actual enabled control"
         validate_pr(scene, fixture)
         name = f"personal-{phase}-github-pr-draft-{identity[0]}-{identity[1]}-{identity[2]}.png"
         assert scene.get("screenshot") == name and name in report["captures"]
