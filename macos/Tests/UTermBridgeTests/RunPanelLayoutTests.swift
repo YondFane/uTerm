@@ -2,6 +2,46 @@ import XCTest
 @testable import UTermBridge
 
 final class RunPanelLayoutTests: XCTestCase {
+    func testWindowBreakpointsMatchWideAndNarrowOrdinaryRunForms() {
+        for (width, columns, interpreterRow) in [(640.0, 2, true), (850, 2, true), (851, 2, false), (900, 2, false), (901, 3, false), (1100, 3, false)] {
+            XCTAssertEqual(RunPanelLayout.formColumns(viewportWidth: width), columns)
+            XCTAssertEqual(RunPanelLayout.interpreterFillsRow(viewportWidth: width), interpreterRow)
+        }
+    }
+
+    func testTaskActionsWrapWithinTheNarrowPanelAndKeepTheirOrder() {
+        let items = [CoreChromeLayout.HeaderItem("state", width: 80, height: 14), .init("spacer", width: 0, height: 0),
+                     .init("more", width: 22, height: 20), .init("goal", width: 82, height: 28), .init("build", width: 55, height: 34),
+                     .init("run-again", width: 100, height: 34), .init("stop", width: 48, height: 34)]
+        let wide = RunPanelLayout.toolbar(width: 530, items: items)
+        XCTAssertEqual(wide.height, 34)
+        let narrow = RunPanelLayout.toolbar(width: 296, items: items)
+        XCTAssertGreaterThan(narrow.height, wide.height)
+        for width in [0.0, 40, 128, 296, 530, .nan] {
+            let flow = RunPanelLayout.toolbar(width: width, items: items)
+            XCTAssertEqual(flow.frames.count, items.count)
+            let limit = width.isFinite ? width : 0
+            for frame in flow.frames {
+                XCTAssertGreaterThanOrEqual(frame.x, 0); XCTAssertLessThanOrEqual(frame.x + frame.width, limit)
+                XCTAssertGreaterThanOrEqual(frame.y, 0); XCTAssertLessThanOrEqual(frame.y + frame.height, flow.height)
+            }
+            for (before, after) in zip(flow.frames, flow.frames.dropFirst()) {
+                XCTAssertTrue(after.y >= before.y + before.height || after.x >= before.x + before.width)
+            }
+        }
+    }
+
+    func testExpandedPanelCountsTheTitlebarInsetOnce() {
+        for kind in ["java", "python"] {
+            let regular = RunPanelLayout(kind: kind, available: 676, viewport: 720, requested: nil)
+            XCTAssertEqual(regular.expandedHeight, 640)
+            XCTAssertEqual(CoreChrome.titlebarHeight + 676 - regular.expandedHeight, regular.expandedTop)
+            let compact = RunPanelLayout(kind: kind, available: 476, viewport: 520, requested: nil)
+            XCTAssertEqual(compact.expandedHeight, 476)
+            XCTAssertEqual(CoreChrome.titlebarHeight + 476 - compact.expandedHeight, CoreChrome.titlebarHeight)
+        }
+    }
+
     func testRunDefaultsAndKeyboardStepsKeepSpaceForTheTerminal() {
         for (kind, expected) in [("java", 380.0), ("python", 470.0)] {
             let layout = RunPanelLayout(kind: kind, available: 676, viewport: 720, requested: nil)
@@ -21,6 +61,7 @@ final class RunPanelLayoutTests: XCTestCase {
                 XCTAssertLessThanOrEqual(layout.height, max(0, available - 88))
                 XCTAssertLessThanOrEqual(layout.minimum, layout.maximum)
                 XCTAssertGreaterThanOrEqual(layout.expandedTop, 0); XCTAssertLessThanOrEqual(layout.expandedTop, available)
+                XCTAssertGreaterThanOrEqual(layout.expandedHeight, 0); XCTAssertLessThanOrEqual(layout.expandedHeight, available)
             }
         }
         XCTAssertEqual(RunPanelLayout(kind: "java", available: .nan, viewport: 720, requested: nil).height, 0)

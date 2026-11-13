@@ -50,7 +50,7 @@ enum RunPanelSmoke {
         try await wait("An AppKit double-click restores the shared default") { layout().height == defaultHeight && bodyFits(defaultHeight) }
         guard let expand = view("native-run-panel-expand-" + panel.id) as? NSButton else { throw BridgeFailure(code: "RUN_DOCK_QA", message: "Missing actual expand control") }
         expand.performClick(nil)
-        try await wait("Actual expand control enlarges the same native view") { model.panels.runExpanded(panel.id) && bodyFits(max(0, available - layout().expandedTop)) }
+        try await wait("Actual expand control enlarges the same native view") { model.panels.runExpanded(panel.id) && bodyFits(layout().expandedHeight) }
         let expandedImage = prefix + "-dock-expanded.png"
         try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent(expandedImage))
         guard let restore = view("native-run-panel-expand-" + panel.id) as? NSButton else { throw BridgeFailure(code: "RUN_DOCK_QA", message: "Missing actual restore control") }

@@ -17,11 +17,12 @@ import uuid
 from pathlib import Path
 
 from ui_parity_github import validate_pr
-from ui_parity_run_panels import validate_run_panels
+from ui_parity_run_panels import validate_run_panels, validate_native_run_forms
 from macos_disk_image import create_disk_image, verify_disk_image
 from macos_qa_http import LoopbackHTTPServer
 
 IDENTIFIER = "sh.uterm.desktop.personal"
+SMOKE_PHASE_DEADLINE_SECONDS = 300
 
 
 def run(*args, timeout=120):
@@ -169,6 +170,7 @@ def validate_smoke_report(report, head, tested, phase):
     validate_java_run_tools(report, head, tested, phase)
     fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
     validate_run_panels(report.get("runPanelScenes", []), fixture)
+    validate_native_run_forms(report, fixture, head, tested, phase)
     assert report.get("runPanelActualFileCloseAndHideVerified") is True, "Missing actual run-panel file close/hide"
     for row in report["runPanelScenes"]:
         assert row.get("sourceHeadSHA") == head and row.get("testedMergeSHA") == tested, "Stale run-panel scene"
@@ -408,9 +410,9 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
             try:
                 # The full paired grid runs in each phase; all original operation assertions still apply.
                 # 每个阶段都执行完整配对网格，全部原有操作断言仍须满足。
-                result = process.wait(timeout=180)
+                result = process.wait(timeout=SMOKE_PHASE_DEADLINE_SECONDS)
             except subprocess.TimeoutExpired:
-                failure = "Personal app exceeded the 180-second phase deadline"
+                failure = f"Personal app exceeded the {SMOKE_PHASE_DEADLINE_SECONDS}-second phase deadline"
                 sample_smoke_timeout(process.pid, evidence, phase)
                 raise
             finally:
@@ -451,7 +453,7 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
             run("ditto", source, installed)
     return dict(reports=reports, captures=captures, realWindow=True, manualAppReplacement=True,
                 fixtureBundleIdentifier=identity, qaArgumentsIgnored=True, productionDataAccess=False,
-                phaseDeadlineSeconds=180, phaseDurationsSeconds=phase_durations)
+                phaseDeadlineSeconds=SMOKE_PHASE_DEADLINE_SECONDS, phaseDurationsSeconds=phase_durations)
 
 
 def main():

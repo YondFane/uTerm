@@ -97,7 +97,7 @@ struct NativeWorkspaceDocumentSurface: View {
                     .padding(.bottom, CGFloat(expanded ? 0 : layout?.height ?? 0))
                     if let run, let layout {
                         NativeDockedRunPanel(model: model, panels: panels, panel: run, layout: layout, available: available, viewport: viewport)
-                            .frame(height: CGFloat(expanded ? max(0, available - layout.expandedTop) : layout.height))
+                            .frame(height: CGFloat(expanded ? layout.expandedHeight : layout.height))
                             .onChange(of: available, initial: true) { _, _ in
                                 panels.resizeRun(run.id, requested: layout.height, available: available, viewport: viewport)
                             }

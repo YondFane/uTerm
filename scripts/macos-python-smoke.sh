@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert report['coreReady'] and not report['productionDataAccess'], report
     for key in ['nativePathSelectionBoundaries', 'nativePythonMenuOpened', 'configurationConflictRetainedDraft', 'realPythonFinalOutputAndExitCode',
                 'windowDetachRetainedTask', 'reopenedSameGenerationAndReplay', 'staleGenerationStopRefused',
-                'forceStopCompleted', 'temporaryEnvironmentNotSaved', 'nativeLogSearchFoundLiteralOutput',
+                'activeTaskStoppedWhileHistorySelected', 'forceStopCompleted', 'temporaryEnvironmentNotSaved', 'nativeLogSearchFoundLiteralOutput',
                 'nativePausedFollowRetainedAnchor', 'nativeFollowResumed', 'reattachRetainedHostPID',
                 'runAgainWaitedForOldExit', 'normalStopRetainedFinalOutputAndCopy']:
         assert report[key], (key, report)

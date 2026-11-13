@@ -1,6 +1,8 @@
 import importlib.util
+import copy
 import base64
 import json
+import plistlib
 import sys
 import tempfile
 import unittest
@@ -14,6 +16,64 @@ spec.loader.exec_module(package)
 
 
 class PersonalPackageTests(unittest.TestCase):
+    def test_run_forms_require_actual_actions_current_sources_and_originals(self):
+        fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+        for phase in ["initial", "replacement"]:
+            report = self.workspace_evidence(phase)
+            package.validate_native_run_forms(report, fixture, "a"*40, "b"*40, phase)
+            changes = [(key, False) for key in ["passed", "actualAdvancedToggle", "actualSaveButtonAndFeedback", "compactRightAlignedSave", "actualConfigurationCollapseAndRestore", "canonicalStateAndSessionRetained"]]
+            changes += [("sourceHeadSHA", "c"*40), ("testedMergeSHA", "c"*40), ("architecture", "x86_64"), ("screenshot", "old.png")]
+            for key, value in changes:
+                wrong = copy.deepcopy(report); wrong["runPanelFormProof"][0][key] = value
+                with self.subTest(phase=phase, key=key), self.assertRaises(AssertionError):
+                    package.validate_native_run_forms(wrong, fixture, "a"*40, "b"*40, phase)
+
+    def test_run_forms_reject_stretched_buttons_and_overlapping_or_missing_columns(self):
+        fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+        report = self.workspace_evidence("initial")
+        for key, value in [("saveWidth", 300), ("saveHeight", 80), ("saveRightInset", 100), ("saveRightInset", -1), ("panelWidth", True), ("saveHeight", float("nan")),
+                           ("fieldFrames", []), ("fieldFrames", [dict(id=name, left=12, top=20, width=84, height=40) for name in ["module", "mode", "version"]])]:
+            wrong = copy.deepcopy(report); wrong["runPanelFormProof"][0][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(AssertionError):
+                package.validate_native_run_forms(wrong, fixture, "a"*40, "b"*40, "initial")
+
+    def test_run_forms_require_every_kind_language_and_window_once(self):
+        fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+        report = self.workspace_evidence("initial")
+        for proofs in [[], report["runPanelFormProof"][:-1], [report["runPanelFormProof"][0]]*4]:
+            with self.subTest(count=len(proofs)), self.assertRaises(AssertionError):
+                package.validate_native_run_forms(dict(report, runPanelFormProof=proofs), fixture, "a"*40, "b"*40, "initial")
+
+    def test_phase_timeout_kills_owned_app_and_retains_incomplete_evidence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "source"
+            evidence = Path(temporary) / "evidence"
+            installed = Path(temporary) / "installed.app"
+            root.mkdir(); evidence.mkdir(); (installed / "Contents").mkdir(parents=True)
+            (installed / "Contents/Info.plist").write_bytes(plistlib.dumps(dict(UTermUpdateMode="manual")))
+            progress = dict(passed=False, inProgress=True, stage="run-panel-grid", elapsedSeconds=299)
+            (root / "personal-initial-progress.json").write_text(json.dumps(progress))
+            name = "personal-initial-run-python.png"
+            (root / name).write_bytes(b"\x89PNG\r\n\x1a\npolicy-test-only")
+            process = mock.Mock(pid=12345)
+            process.wait.side_effect = [package.subprocess.TimeoutExpired("uTerm", 300), 0]
+            process.poll.return_value = None
+            with mock.patch.object(package, "run", return_value=b"{}"), \
+                 mock.patch.object(package.subprocess, "Popen", return_value=process), \
+                 mock.patch.object(package, "sample_smoke_timeout") as sample:
+                with self.assertRaises(package.subprocess.TimeoutExpired):
+                    package.run_smoke(installed, installed, root, evidence, "a" * 40, "b" * 40, "https://example.invalid")
+            self.assertEqual(process.wait.call_args_list, [mock.call(timeout=300), mock.call()])
+            process.kill.assert_called_once_with()
+            sample.assert_called_once_with(12345, evidence, "initial")
+            report = json.loads((evidence / "personal-initial-incomplete.json").read_text())
+            self.assertFalse(report["passed"])
+            self.assertTrue(report["incomplete"])
+            self.assertEqual(report["lastProgress"], progress)
+            self.assertEqual(report["captures"], [name])
+            self.assertIn("300-second", report["failure"])
+            self.assertFalse((evidence / "personal-initial.json").exists())
+
     def test_occluded_attempt_keeps_original_and_visibility_without_changing_failed_report(self):
         with tempfile.TemporaryDirectory() as temporary:
             root, evidence = Path(temporary) / "source", Path(temporary) / "evidence"
@@ -164,8 +224,10 @@ class PersonalPackageTests(unittest.TestCase):
                       screenshot=f"personal-{phase}-java-tools-{scene['language']}-{scene['appearance']}-{scene['width']}.png")
                  for scene in fixture["runPanelScenes"]]
 
-        return dict(platform="macOS", architecture="arm64", system="policy fixture", runPanelJavaToolsProof=tools, runPanelScenes=runs, runPanelActualFileCloseAndHideVerified=True, nativeProjectMenuRevisionAndWorkspaceMove=dict(passed=True, dragSimulation=dict(passed=True, actualNSTableViewCallbacks=True, ownedPasteboard=True, foreignSourceRejected=True, forgedPayloadRejected=True, cancelledDragRejected=True, staleRevisionRejected=True, freshDropAndReverseVerified=True), actualMenuActions=True, stalePinRejected=True, staleMoveRejected=True, peerSettingRetained=True, terminalGenerationsAndViewsRetained=True, splitLayoutRetainedInReopenedSnapshot=True, movedAndReturned=True, sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system="policy fixture", screenshot=f"personal-{phase}-project-workspace-move.png"), nativeSidebarSessionClose=dict(passed=True, actualKeyboardFocusVisible=True, actualSpaceClosedBackgroundSession=True, selectedGenerationRetained=True, targetSessionID="background", selectedSessionID="foreground", screenshot=f"personal-{phase}-sidebar-close-background.png", sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720), githubPRScenes=github, quickSSHScenes=quick, contentScenes=pdf, pdfHighlightsNativeDrawDeleteReopenAndScopeVerified=True, pdfMarkWrongRootAndPathRejected=True, pdfHighlightsRetainedAfterReplacement=phase == "replacement", nativeSidebarSectionOrderAndReadOnlyCollapse=True, backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
-                    settingsScenes=settings, nativeTerminalControls=dict(generationBeforeRestart="old-generation", restartedGeneration="new-generation", searchInputBytesBefore=0, searchInputBytesAfter=0, passed=True, actualFontButtonsAppliedAndRestored=True, fontWritesRemainAvailableDuringFileRefresh=True, fontBoundsDisabled=True, unicodeCaseCountsAndNavigation=True, keyboardOpenAndEscape=True, keyboardShiftFindRoutesProjectSearch=True, searchInputDidNotReachPTY=True, terminalIdentityAndGenerationRetained=True, explicitRestartRetainedDescriptorAndView=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-terminal-search.png"), embeddedWorkspaceFiles=dict(passed=True, tabControlsActivated=True, fontShortcutsTargetEditor=True, findShortcutRetainsEditorAndTerminal=True, arrowNavigationActivated=True, sameMainWindow=True, orderedAndReused=True, exactUnsavedDraftRetained=True, cancelCloseRetainedTabs=True, discardPreservedSiblingAndExternalWriter=True, terminalViewAndGenerationRetained=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-embedded-files.png"), captures=[scene["screenshot"] for scene in scenes + settings + pdf + quick + github + runs + tools] + [f"personal-{phase}-project-workspace-move.png", f"personal-{phase}-sidebar-close-background.png", f"personal-{phase}-embedded-files.png", f"personal-{phase}-terminal-search.png"])
+        from tests.run_panel_parity_fixtures import policy_forms
+        forms = policy_forms(fixture, phase, "a"*40, "b"*40, "policy fixture")
+        return dict(runPanelFormProof=forms, platform="macOS", architecture="arm64", system="policy fixture", runPanelJavaToolsProof=tools, runPanelScenes=runs, runPanelActualFileCloseAndHideVerified=True, nativeProjectMenuRevisionAndWorkspaceMove=dict(passed=True, dragSimulation=dict(passed=True, actualNSTableViewCallbacks=True, ownedPasteboard=True, foreignSourceRejected=True, forgedPayloadRejected=True, cancelledDragRejected=True, staleRevisionRejected=True, freshDropAndReverseVerified=True), actualMenuActions=True, stalePinRejected=True, staleMoveRejected=True, peerSettingRetained=True, terminalGenerationsAndViewsRetained=True, splitLayoutRetainedInReopenedSnapshot=True, movedAndReturned=True, sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system="policy fixture", screenshot=f"personal-{phase}-project-workspace-move.png"), nativeSidebarSessionClose=dict(passed=True, actualKeyboardFocusVisible=True, actualSpaceClosedBackgroundSession=True, selectedGenerationRetained=True, targetSessionID="background", selectedSessionID="foreground", screenshot=f"personal-{phase}-sidebar-close-background.png", sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720), githubPRScenes=github, quickSSHScenes=quick, contentScenes=pdf, pdfHighlightsNativeDrawDeleteReopenAndScopeVerified=True, pdfMarkWrongRootAndPathRejected=True, pdfHighlightsRetainedAfterReplacement=phase == "replacement", nativeSidebarSectionOrderAndReadOnlyCollapse=True, backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
+                    settingsScenes=settings, nativeTerminalControls=dict(generationBeforeRestart="old-generation", restartedGeneration="new-generation", searchInputBytesBefore=0, searchInputBytesAfter=0, passed=True, actualFontButtonsAppliedAndRestored=True, fontWritesRemainAvailableDuringFileRefresh=True, fontBoundsDisabled=True, unicodeCaseCountsAndNavigation=True, keyboardOpenAndEscape=True, keyboardShiftFindRoutesProjectSearch=True, searchInputDidNotReachPTY=True, terminalIdentityAndGenerationRetained=True, explicitRestartRetainedDescriptorAndView=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-terminal-search.png"), embeddedWorkspaceFiles=dict(passed=True, tabControlsActivated=True, fontShortcutsTargetEditor=True, findShortcutRetainsEditorAndTerminal=True, arrowNavigationActivated=True, sameMainWindow=True, orderedAndReused=True, exactUnsavedDraftRetained=True, cancelCloseRetainedTabs=True, discardPreservedSiblingAndExternalWriter=True, terminalViewAndGenerationRetained=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-embedded-files.png"), captures=[row["screenshot"] for row in forms] + [scene["screenshot"] for scene in scenes + settings + pdf + quick + github + runs + tools] + [f"personal-{phase}-project-workspace-move.png", f"personal-{phase}-sidebar-close-background.png", f"personal-{phase}-embedded-files.png", f"personal-{phase}-terminal-search.png"])
 
     def test_java_tools_requires_actual_route_refresh_and_retained_draft(self):
         import copy

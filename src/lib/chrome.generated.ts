@@ -1,4 +1,4 @@
 // Generated from chrome-ui-v1.json; run pnpm chrome:generate.
 // 由 chrome-ui-v1.json 生成；执行 pnpm chrome:generate。
 export const chromeContractSHA256 =
-  "2f6e580a6c0ad06f884fbe435932a676b5f199516181d46eb5a9ae306d1beef9";
+  "f0a50e18d5977f706a4e419b2f43b99efc846d818e6b46722933e527a06d0a5d";

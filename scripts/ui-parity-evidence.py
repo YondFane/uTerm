@@ -1,7 +1,7 @@
 """Compare source-bound real-window artifacts. 对照绑定源码的真实窗口产物。"""
 
 from ui_parity_github import validate_pr
-from ui_parity_run_panels import validate_run_panels
+from ui_parity_run_panels import validate_run_panels, validate_native_run_forms
 
 import argparse
 import hashlib
@@ -262,6 +262,11 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
         pairs.append(dict(area="github-pr-draft", language=language, appearance=appearance, width=width, height=height,
                           native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
+    validate_native_run_forms(native, fixture, head, tested, 'initial')
+    native_run_forms = []
+    for proof in native['runPanelFormProof']:
+        _, digest = image(native_path.parent, proof['screenshot'], minimum_height=proof['height'])
+        native_run_forms.append(dict(proof, SHA256=digest))
     native_runs = native.get("runPanelScenes", [])
     ordinary_runs = [row["checks"] for row in tauri["scenes"] if row["scenario"].startswith("run-") and row["scenario"] != "run-panels-complete"]
     left_runs = validate_run_panels(native_runs, fixture)
@@ -299,11 +304,14 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         shutil.copyfile(tauri_path.parent / pair["tauri"], output / pair["tauri"])
     shutil.copyfile(restart_file, output / restart_file.name)
     shutil.copyfile(run_cleanup_file, output / run_cleanup_file.name)
+    for proof in native_run_forms:
+        shutil.copyfile(native_path.parent / proof['screenshot'], output / proof['screenshot'])
     result = dict(sourceHeadSHA=head, testedMergeSHA=tested, uiParityFixtureSHA256=fixture_digest,
                   chromeContractSHA256=chrome_digest,
                   platform="macOS", architecture="arm64", system=native["system"], pairs=pairs,
                   ordinaryRestart=dict(screenshot=restart_file.name, SHA256=restart_digest, checks=checks),
                   ordinaryRunPanelsCleanup=dict(screenshot=run_cleanup_file.name, SHA256=run_cleanup_digest, checks=run_cleanup["checks"]),
+                  nativeRunFormEvidence=native_run_forms,
                   comparisonReady=True, functionalParityAccepted=False,
                   scope="Workspace, settings, PDF, Quick SSH, GitHub PR and Java/Python docked/expanded/file screenshots. PR uses the isolated simulated CLI, literal form input and actual Cancel; no real GitHub write. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
     (output / "comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
@@ -317,6 +325,9 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         rows.append(f"| {label} | ![ordinary]({pair['tauri']}) | ![personal]({pair['native']}) |")
     rows.extend(["", "Actual ordinary restart / 普通版实际重启", "", f"![restart]({restart_file.name})"])
     rows.extend(["", "Actual ordinary run-panel cleanup / 普通版运行面板实际清理", "", f"![run-panel cleanup]({run_cleanup_file.name})"])
+    rows.extend(["", "Additional native form controls (unpaired) / 补充原生表单控件（未配对）", ""])
+    for proof in native_run_forms:
+        rows.extend([f"{proof['kind']} / {proof['language']} / {proof['appearance']} / {proof['width']}×{proof['height']}", "", f"![native form]({proof['screenshot']})", ""])
     (output / "comparison.md").write_text("\n".join(rows) + "\n")
     return result
 

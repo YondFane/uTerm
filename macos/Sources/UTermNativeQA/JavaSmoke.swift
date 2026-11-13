@@ -121,8 +121,17 @@ enum JavaSmoke {
         guard reopened.model.running, reopened.model.selectedTask["generation"] != previous["generation"],
               reopened.model.tasks.contains(where: { $0["spec"]["id"] == previous["spec"]["id"] && $0["running"].bool == false }) else { throw BridgeFailure(code: "JAVA_QA", message: "Java rerun did not wait for old exit") }
         report["runAgainWaitedForOldExit"] = true
+        let runningID = reopened.model.selectedID
+        guard let historyID = previous["spec"]["id"].string else { throw BridgeFailure(code: "JAVA_QA", message: "Missing retained task history") }
+        reopened.model.selectedID = historyID
+        await reopened.model.selectTask()
+        guard reopened.model.running, reopened.model.selectedTask["running"].bool == false else { throw BridgeFailure(code: "JAVA_QA", message: "History selection did not retain a separate active task") }
         await reopened.model.stop(force: true)
         try await TerminalSmoke.wait("Force stop Java") { !reopened.model.running }
+        guard reopened.model.selectedID == historyID else { throw BridgeFailure(code: "JAVA_QA", message: "Stopping the active task replaced the selected history log") }
+        report["activeTaskStoppedWhileHistorySelected"] = true
+        reopened.model.selectedID = runningID
+        await reopened.model.selectTask()
         report["forceStopCompleted"] = true
         report["temporaryEnvironmentNotSaved"] = (try await bridge.call("java.configuration", params: .object(["directory": .string(root.path)])))["project"]["environment"] == .null
         await reopened.forceClose()

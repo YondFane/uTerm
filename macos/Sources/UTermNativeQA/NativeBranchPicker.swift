@@ -113,7 +113,7 @@ struct NativeBranchControl: NSViewRepresentable {
     }
     func sizeThatFits(_ proposal: ProposedViewSize, nsView button: BranchButton, context: Context) -> CGSize? {
         let limit: CGFloat = (button.window?.frame.width ?? 1100) <= 760 ? 140 : 220
-        return CGSize(width: max(24, min(button.intrinsicContentSize.width, limit, proposal.width ?? limit)), height: 24)
+        return CGSize(width: max(24, min(button.intrinsicContentSize.width, limit, proposal.width ?? limit)), height: 23)
     }
     @MainActor final class BranchCell: NSButtonCell {
         override func imageRect(forBounds rect: NSRect) -> NSRect { NSRect(x: rect.minX + 7, y: rect.midY - 7.5, width: 15, height: 15) }
@@ -124,7 +124,7 @@ struct NativeBranchControl: NSViewRepresentable {
     }
     func makeCoordinator() -> Coordinator { Coordinator(picker) }
     @MainActor final class BranchButton: NSButton {
-        override var intrinsicContentSize: NSSize { NSSize(width: ceil(attributedTitle.size().width) + 36, height: 24) }
+        override var intrinsicContentSize: NSSize { NSSize(width: ceil(attributedTitle.size().width) + 36, height: 23) }
         var actionsRequested: (() -> Void)?
         override var acceptsFirstResponder: Bool { isEnabled }
         override func rightMouseDown(with event: NSEvent) { if isEnabled { actionsRequested?() } }

@@ -128,8 +128,8 @@ enum PythonSmoke {
         guard NSPasteboard.general.string(forType: .string)?.contains("STOP_CLEANUP") == true else { throw BridgeFailure(code: "PYTHON_QA", message: "Native copy lost retained final output") }
         report["runAgainWaitedForOldExit"] = true
         report["normalStopRetainedFinalOutputAndCopy"] = true
-        reopened.model.selectedID = restartedID
-        await reopened.model.selectTask()
+        let historyID = reopened.model.selectedID
+        guard reopened.model.running, reopened.model.selectedTask["running"].bool == false else { throw BridgeFailure(code: "PYTHON_QA", message: "History selection did not retain a separate active task") }
         await reopened.model.stop(force: true)
         for _ in 0..<100 {
             await reopened.model.refreshTasks()
@@ -137,6 +137,10 @@ enum PythonSmoke {
             try await Task.sleep(for: .milliseconds(50))
         }
         guard !reopened.model.running else { throw BridgeFailure(code: "PYTHON_QA", message: "Force stop did not stop the target Python process") }
+        guard reopened.model.selectedID == historyID else { throw BridgeFailure(code: "PYTHON_QA", message: "Stopping the active task replaced the selected history log") }
+        report["activeTaskStoppedWhileHistorySelected"] = true
+        reopened.model.selectedID = restartedID
+        await reopened.model.selectTask()
         report["forceStopCompleted"] = true
         report["temporaryEnvironmentNotSaved"] = (try await bridge.call("python.configuration", params: .object(["directory": .string(root.path)])))["project"]["environment"] == .null
         _ = try await bridge.call("host.shutdownIdle")

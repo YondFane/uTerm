@@ -68,6 +68,12 @@ class ParityEvidenceTests(unittest.TestCase):
             (self.native / native).write_bytes(image); (self.tauri / tauri).write_bytes(image)
             self.n["captures"].append(native)
             self.t["scenes"].append(dict(scenario=name, checks=copy.deepcopy(row), screenshot=tauri))
+        from tests.run_panel_parity_fixtures import policy_forms
+        self.n["runPanelFormProof"] = policy_forms(fixture, "initial", "a"*40, "b"*40, self.n["system"])
+        for row in self.n["runPanelFormProof"]:
+            image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", row["width"], row["height"]) + bytes(1100)
+            (self.native / row["screenshot"]).write_bytes(image)
+            self.n["captures"].append(row["screenshot"])
         cleanup = "ui-parity-run-panels-complete.png"
         (self.tauri / cleanup).write_bytes(image)
         self.t["scenes"].append(dict(scenario="run-panels-complete", screenshot=cleanup, checks=dict(passed=True, actualFileCloseAndHideVerified=True, terminalGenerationRetained=True, canonicalWorkspaceRetained=True)))
@@ -184,7 +190,12 @@ class ParityEvidenceTests(unittest.TestCase):
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
         self.assertEqual(len(result["pairs"]), 50)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 102)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 106)
+        self.assertEqual(len(result['nativeRunFormEvidence']), 4)
+        for proof in result['nativeRunFormEvidence']:
+            original = (self.native / proof['screenshot']).read_bytes()
+            self.assertEqual((self.root / 'comparison' / proof['screenshot']).read_bytes(), original)
+            self.assertEqual(proof['SHA256'], hashlib.sha256(original).hexdigest())
 
     def test_quick_ssh_requires_current_main_window_images_and_preserved_data(self):
         original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)

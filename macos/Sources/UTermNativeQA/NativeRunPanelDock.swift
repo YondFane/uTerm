@@ -15,18 +15,22 @@ struct NativeDockedRunPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Text(panel.runKind == "python" ? localized("Python run", "Python 运行") : localized("Build and run", "构建与运行")).bold()
-                Text(directory).font(.caption).lineLimit(1).truncationMode(.middle).help(directory)
+                if panel.runKind == "python" { Image(nsImage: NativeChromeImages.toolbar(.python)).resizable().frame(width: 16, height: 16) }
+                Text(panel.runKind == "python" ? localized("Python run", "Python 运行") : localized("Build and run", "构建与运行")).font(.system(size: 12, weight: .medium)).fixedSize()
+                Text(directory).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).help(directory)
                 Spacer(minLength: 0)
+                if let controller = panel.controller as? PythonWindow {
+                    NativeRunPythonDetectButton(run: controller.model, palette: palette)
+                }
                 if let controller = panel.controller as? JavaWindow {
                     NativeRunJavaToolsButton(workspace: model, run: controller.model, identifier: "native-run-panel-java-tools-" + panel.id, scope: panel.scope) {
                         _ = model.openJavaToolsRequested?(controller.model)
                     }
                 }
-                NativeDocumentAction(title: expanded ? localized("Restore run panel", "还原运行面板") : localized("Expand run panel", "展开运行面板"), identifier: "native-run-panel-expand-" + panel.id, image: NativeChromeImages.toolbar(expanded ? .restore : .maximize), iconOnly: true, active: expanded, tint: tint) { panels.toggleRunExpanded(panel.id) }.frame(width: 28, height: 28)
-                NativeDocumentAction(title: localized("Hide run panel", "隐藏运行面板"), identifier: "native-run-panel-hide-" + panel.id, image: NativeChromeImages.toolbar(.close), iconOnly: true, active: false, tint: tint) { panels.close(panel.id) }.frame(width: 28, height: 28)
+                NativeRunAction(title: expanded ? localized("Restore run panel", "还原运行面板") : localized("Expand run panel", "展开运行面板"), id: "native-run-panel-expand-" + panel.id, palette: palette, icon: expanded ? .restore : .maximize, iconOnly: true) { panels.toggleRunExpanded(panel.id) }.fixedSize()
+                NativeRunAction(title: localized("Hide run panel", "隐藏运行面板"), id: "native-run-panel-hide-" + panel.id, palette: palette, icon: .close, iconOnly: true) { panels.close(panel.id) }.fixedSize()
             }
-            .padding(.horizontal, 8).frame(height: CGFloat(CoreChrome.runPanelHeaderHeight))
+            .padding(.horizontal, 12).frame(height: CGFloat(CoreChrome.runPanelHeaderHeight))
             .background(NativeRunPanelFrame(identifier: "native-run-panel-header-" + panel.id))
             NativeHostedPanel(panel: panel).id(panel.id)
         }
@@ -49,6 +53,16 @@ struct NativeDockedRunPanel: View {
 }
 
 @MainActor
+private struct NativeRunPythonDetectButton: View {
+    @ObservedObject var run: PythonRunModel
+    let palette: JSONValue
+    var body: some View {
+        NativeRunAction(title: localized("Check again", "重新检测"), id: "native-python-redetect", palette: palette) { Task { await run.detect() } }
+            .fixedSize().disabled(run.busy || run.prepared)
+    }
+}
+
+@MainActor
 private struct NativeRunJavaToolsButton: View {
     @ObservedObject var workspace: WorkspaceModel
     @ObservedObject var run: JavaRunModel
@@ -57,8 +71,8 @@ private struct NativeRunJavaToolsButton: View {
     let action: () -> Void
     private var available: Bool { !run.busy && !run.prepared && !workspace.busy && !workspace.settingsPresented && !workspace.workspaceModalPresented && workspace.inspectorContextKey == scope }
     var body: some View {
-        NativeJavaActionButton(title: localized("Manage tools", "管理环境"), id: identifier, enabled: available) { if available { action() } }
-            .fixedSize().frame(height: 28)
+        NativeRunAction(title: localized("Manage tools", "管理环境"), id: identifier, palette: NativePreferences.interfacePalette(workspace.settings, catalog: workspace.settingsCatalog)) { if available { action() } }
+            .fixedSize().disabled(!available)
     }
 }
 

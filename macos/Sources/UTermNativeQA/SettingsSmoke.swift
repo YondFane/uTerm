@@ -267,8 +267,17 @@ enum SettingsSmoke {
             try await TerminalSmoke.capture(window: terminalWindow, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(terminalCapture))
             report["nativeThemeImportDraftFailureAndTerminalEffects"] = true
             try await verifyWorkspaceManagement(settings: current, peer: other, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
-            await workspace.closeSession()
-            guard workspace.state?.sessions.isEmpty == true else { throw BridgeFailure(code: "SETTINGS_QA_CLOSE", message: "Settings QA session was not closed") }
+            try await TerminalSmoke.wait("Complete workspace actions before closing the retained QA terminal") { !workspace.busy && workspace.selectedID == terminal.id }
+            await workspace.closeSession(id: terminal.id)
+            guard workspace.state?.sessions.isEmpty == true else {
+                let canonical = try? await readSnapshot(bridge)
+                report["nativeSettingsCloseDiagnostics"] = ["busy": workspace.busy, "selectedID": workspace.selectedID ?? "",
+                    "expectedSessionID": terminal.id, "retainedSessionIDs": workspace.state?.sessions.map(\.sessionID) ?? [],
+                    "workspaceErrorCode": String(workspace.error.split(separator: ":", maxSplits: 1).first ?? ""),
+                    "cachedRevision": workspace.state?.snapshot.revision ?? "", "canonicalRevision": canonical?.revision ?? ""]
+                throw BridgeFailure(code: "SETTINGS_QA_CLOSE", message: "Settings QA session was not closed: " + workspace.error)
+            }
+            report["nativeSettingsActualRetainedSessionClosed"] = true
             _ = try await bridge.call("host.shutdownIdle")
             let resetBefore = try Data(contentsOf: snapshotFile)
             model.resetDraft()
@@ -648,6 +657,9 @@ enum SettingsSmoke {
             } else { try await TerminalSmoke.wait("Remove the explicitly confirmed inactive workspace") { !workspace.groupItems.contains(where: { $0.id == created.id }) } }
             try retainedActive()
         }
+        // Observing a removed row precedes completion of the shared model's mutation and reload.
+        // 行被移除的可见状态早于共享模型写入与重载完成。
+        try await TerminalSmoke.wait("Finish the actual workspace management operation") { !workspace.busy }
         let final = try await readSnapshot(bridge)
         guard final.document.workspace == original.document.workspace, final.document.settings == original.document.settings else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace management changed unrelated saved data") }
         report["nativeWorkspaceManagementAttempts"] = attempts

@@ -29,7 +29,9 @@
     "runPanelReservedHeight": 88,
     "runPanelExpandedTop": 80,
     "runPanelResizeStep": 24,
-    "runPanelHeaderHeight": 36
+    "runPanelHeaderHeight": 46,
+    "runPanelTwoColumnViewportWidth": 900,
+    "pythonInterpreterFullRowViewportWidth": 850
   },
   "icons": {
     "sidebar": {

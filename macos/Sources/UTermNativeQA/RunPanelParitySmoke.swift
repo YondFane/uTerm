@@ -61,6 +61,8 @@ enum RunPanelParitySmoke {
                     try await RunPanelJavaToolsSmoke.run(model: model, window: window, panel: panel, evidence: output, phase: phase, scene: scene, readSnapshot: snapshot, report: &report, captures: &captures)
                     try await unchanged()
                 }
+                try await RunPanelFormSmoke.run(model: model, window: window, panel: panel, evidence: output, phase: phase, scene: scene, readSnapshot: snapshot, report: &report, captures: &captures)
+                try await unchanged()
                 func capture(_ state: String) async throws {
                     try await unchanged()
                     guard let current = model.panels.active(in: model.inspectorContextKey), current.id == panel.id,

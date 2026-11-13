@@ -21,6 +21,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     assert data['coreReady'] and not data['productionDataAccess']
     for key in ['nativeSettingsMenuAndReadonlyOpen', 'invalidNumericDraftRetainedWithoutWrite', 'unrelatedExternalSettingsPreserved', 'sameFieldConflictRetainsDraftAndPeerValue', 'hiddenWindowAndActualQuitCancellationRetainDraft', 'nativeReservedAndDuplicateShortcutErrors', 'nativeShortcutCaptureAndSave', 'nativeDynamicMenuPaletteKeyboardAndFocusReturn', 'nativeThemeImportDraftFailureAndTerminalEffects', 'explicitResetUsesSharedDefaults', 'simulatedLoginItemOptInApprovalFailureAndDisable']:
         assert data[key], key
+    assert data.get('nativeSettingsActualRetainedSessionClosed') is True
     proof = data['nativeSettingsSearchProof']
     for key in ['actualAppKitInput', 'filteredNavigation', 'matchingCategoryClickable', 'draftRetained', 'escapeClearsWithoutClosing', 'savedBytesUnchanged']:
         assert proof[key] is True, key

@@ -960,7 +960,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
         do {
             _ = try await worker.call("host.configure", params: .object(["helper": .string(resources.appendingPathComponent("bin/utermd-local").path)]))
-            let run = JavaRunModel(directory: root, bridge: worker, settings: model.settings)
+            let run = JavaRunModel(directory: root, bridge: worker, settings: model.settings, catalog: model.settingsCatalog)
             let controller = JavaWindow(model: run)
             controller.didClose = { [weak self, weak controller] in if let controller { self?.model.panels.remove(controller) }; self?.javaWindows.removeValue(forKey: root) }
             javaWindows[root] = controller
@@ -1021,7 +1021,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
         do {
             _ = try await worker.call("host.configure", params: .object(["helper": .string(resources.appendingPathComponent("bin/utermd-local").path)]))
-            let run = PythonRunModel(directory: root, bridge: worker, settings: model.settings)
+            let run = PythonRunModel(directory: root, bridge: worker, settings: model.settings, catalog: model.settingsCatalog)
             let controller = PythonWindow(model: run)
             controller.didClose = { [weak self, weak controller] in if let controller { self?.model.panels.remove(controller) }; self?.pythonWindows.removeValue(forKey: root) }
             pythonWindows[root] = controller

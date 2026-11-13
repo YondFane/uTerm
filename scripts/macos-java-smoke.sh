@@ -61,7 +61,7 @@ public class TaskProbe {
     assert report['coreReady'] and not report['productionDataAccess'], report
     for key in ['nativeJavaMenuOpened', 'nativeJDKRegistration', 'configurationConflictRetainedDraft',
                 'realJARFinalOutputAndExitCode', 'existingJarBypassedInvalidWrapper', 'windowDetachRetainedTask',
-                'reopenedSameGenerationAndHost', 'staleGenerationStopRefused', 'forceStopCompleted',
+                'reopenedSameGenerationAndHost', 'staleGenerationStopRefused', 'activeTaskStoppedWhileHistorySelected', 'forceStopCompleted',
                 'temporaryEnvironmentNotSaved', 'nativeLogSearchFoundLiteralOutput',
                 'nativePausedFollowRetainedAnchor', 'nativeFollowResumed', 'runAgainWaitedForOldExit',
                 'normalStopRetainedFinalOutputAndCopy']:

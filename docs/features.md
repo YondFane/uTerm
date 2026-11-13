@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # uTerm feature guide
@@ -287,6 +287,45 @@ capture because 37,557 Dock pixels intersect the enlarged window; the full
 [artifact13976370340](https://github.com/YondFane/uTerm/actions/runs/43282517996/artifacts/13976370340)
 retains this failure. Swift syntax and script parsing pass on Linux. New Mac screenshots and the
 remaining notification checks are pending; the alpha gate is unchanged.
+
+Native run forms use three equal columns in wide windows and two columns at window widths up to
+900px; Python interpreters fill their own row up to 850px. They provide separate **Run
+configuration** and **Advanced settings** disclosure controls. Java keeps module, launch mode and
+JDK together, followed by the main class and Maven scope/profiles. Python keeps interpreter, launch
+mode and startup target together. Interpreter and target fields retain detected completions and file
+pickers. **Save configuration** stays inside the advanced area on its own right-aligned row at 28px
+height. Java's toolbar separates the build goal, Build and Run; task controls wrap inside narrow
+panels. **More actions** retains explicit saved-configuration reload, rerun and force stop. Search,
+copy and the adjacent Auto follow checkbox share the log toolbar. Stop and Force stop target the
+active task even while an older task log is selected. The real Java/Python task suites additionally
+select completed history before stopping a separate active task and require that history selection
+to remain unchanged.
+
+For an unconfigured Python project, the native draft follows the ordinary client's detection
+priority: one framework entry, otherwise one main.py, otherwise one unambiguous candidate, plus the
+first existing interpreter. A saved configuration remains unchanged. Changing launch mode clears an
+incompatible target unless exactly one matching candidate exists, and Flask defaults to port 5000.
+Detection and mode selection only change the draft. Running web tasks expose their numeric HTTP
+service address; this does not assert service readiness. The panel does not install Python,
+dependencies or environments.
+
+Expanded panels use an 80px window-relative top inset, counting the 44px titlebar once; compact
+windows use 44px. Native run headers follow the ordinary Mac header's measured 46px height. The
+native branch control uses the ordinary Mac control's measured 23px height.
+
+**Run-form validation**
+
+The native Personal grid additionally operates actual attached disclosure and Save controls in
+Java/Python, English/dark wide and Chinese/light narrow windows. It measures the actual wide/narrow
+field rows and a compact right-aligned Save button, requires save feedback, collapses/restores
+configuration, and checks retained sessions plus canonical workspace/settings. Originals are named
+`personal-{phase}-run-form-{kind}-{language}-{appearance}-{width}.png`. Missing actions, stale
+source/merge metadata, malformed geometry or missing originals fail acceptance. Nine Linux Swift
+6.1.2 Foundation tests cover expanded-window origin, narrow task-action bounds, saved Python drafts,
+detection ambiguity, mode changes and service-link rejection. Thirty package/evidence and 36
+paired/discovery/fixture policy checks pass, as do TypeScript, production build, chrome generation
+and localization checks. New AppKit rendering and these controls still require current-source macOS
+CI; Linux checks do not accept native windows.
 
 Hiding or closing a docked Java/Python panel saves its loaded configuration, including an unchanged
 form. Busy operations, conflicts and storage errors keep the panel and draft open. Reload saved
@@ -782,11 +821,13 @@ visual parity.
 Real-window CI prepares a display of at least 1280×900 before the matching screenshot grid; the
 required 720-pixel content height is still checked against actual window bounds. Personal smoke
 failures retain the raw report and available original captures before validation, including an
-attempted failure-window capture. Each initial/replacement phase has a 180-second process deadline
+attempted failure-window capture. Each initial/replacement phase has a 300-second process deadline
 for the full grid. Atomic progress checkpoints retain the exact source/merge, stage and elapsed
 time. A timeout samples only the owned QA process for at most five seconds and keeps incomplete
 reports and existing original images, even if no final report was produced. Incomplete progress
-cannot satisfy acceptance; all operation, fixture and shutdown assertions remain required.
+cannot satisfy acceptance; all operation, fixture and shutdown assertions remain required. Settings
+QA waits for workspace writes to finish before closing its explicitly captured retained session and
+records any remaining IDs and canonical revision on failure.
 
 The SDK capture-boundary test loads its local loopback helper from the repository's scripts
 directory, matching direct script execution. At source `6153824`, tested merge `0f49119a`, its
