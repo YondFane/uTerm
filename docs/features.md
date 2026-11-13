@@ -817,6 +817,15 @@ clicks a real theme-preview button, verifies terminal preferences are unchanged,
 automatic-save operations and same-source screenshots remain pending macOS CI; the reordered fields
 and full settings styling still require actual Mac screenshots and comparison under #53.
 
+The Core read for compatibility export retries only `WRITER_BUSY`, at most 20 attempts with 10 ms
+between attempts. The destination is still written once, and settings mutations are not replayed
+automatically. Actual file-lock tests cover short-contention recovery, exhaustion, cancellation and
+unchanged snapshot bytes; they require macOS CI. The ARM64 `1336ba7` / `733e066` export check fails
+with a generic message, so its underlying cause is not established. Failure reports now include the
+error code, destination and busy state; current-source macOS results remain pending. Linux x86_64
+passes 18 relevant Core persistence, Git-favorite and PDF tests; the existing unprivileged
+filesystem test is skipped in this root session.
+
 Native QA opens and cancels the actual save sheet, checks its close guard, exports committed data
 with an invalid draft, and rejects a directory destination while retaining the prior export. It
 records `nativeLegacyExportProof`, `native-settings-legacy-export.json` and

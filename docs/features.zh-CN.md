@@ -386,6 +386,12 @@ ARM64 运行在字体操作中显示了
 `native-settings-theme-cards-900.png`／`native-settings-theme-cards-640.png`。新增自动保存操作及同源码截图仍待 macOS
 CI；调整后的字段与完整设置样式仍需实际 Mac 截图并在 #53 对照。
 
+兼容导出的 Core 读取仅在 `WRITER_BUSY`
+时有限重读，最多 20 次、每次间隔 10 毫秒；目标文件仍仅写入一次，不自动重放设置写入。实际文件锁测试覆盖短暂争用恢复、持续争用退出、取消及原始快照字节不变，须由 macOS
+CI 执行。当前 ARM64 `1336ba7`／`733e066`
+的导出检查失败，仅记录通用提示，不能据此确认底层原因。失败报告现记录错误码及目标、忙碌状态；本次检查仍待新源码 macOS 结果。 Linux
+x86_64 通过 18 项相关 Core 持久化、Git 收藏及 PDF 测试；本次 root 会话跳过一项既有的非特权文件系统检查。
+
 原生 QA 打开并取消真实保存对话框，检查关闭保护，在有无效草稿时导出已提交数据，并拒绝目录目标、保留已有导出，记录
 `nativeLegacyExportProof`、`native-settings-legacy-export.json` 和
 `native-settings-legacy-export-error.png`。Agent 选择使用真实 Core 目录和两个明确的 `/usr/bin/true`
