@@ -277,6 +277,17 @@ attempts; later runtime checks were skipped and its matrix is incomplete. The
 retains that result. This does not accept the missing checks; current-source Mac CI must execute and
 upload them.
 
+Personal PR artifacts also include their run attempt. The paired-image collector selects the newest
+matching attempt and accepts legacy names; expired latest evidence cannot fall back to an older
+artifact. Source/merge and report checks remain required. Versioned release collection names stay
+unchanged. ARM source `4e1eb47f95282ca4b22798745b19e35ea99ab3bb` / tested merge
+`3b480c338acb7a097ba5fb6f19c89e3500613969` built and passed bridge tests but failed all five existing
+`hdiutil verify` attempts with Resource temporarily unavailable before window QA. Its
+[original artifact14021661024](https://github.com/YondFane/uTerm/actions/runs/43385658224/artifacts/14021661024)
+retains `personal-package.json` and the command log; no application screenshots were produced.
+Eight discovery tests and workflow validation pass on Linux. Actual image verification and Mac
+window acceptance remain pending; retries keep their earlier evidence.
+
 The isolated `workspace-panels-native.json` scenario captures twelve actual main-window scenes
 (English/dark at 1100px and Chinese/light at 640px), clicks terminal/panel/close controls, checks
 retained views/documents and preserves terminal identity/generation. Each capture records its
@@ -355,6 +366,14 @@ retains that failure. The inspected full-display Dock original has nonzero alpha
 its visible bar near row 890, while the window ends at row 880. Linux pixel analysis and Swift
 parsing support the increased clearance; fresh Mac window, scrolling and obstruction checks remain
 pending.
+
+At source `e4a909a`, tested merge `3784e956`, Intel Git QA fails isolated Worktree creation after
+its branch/editor checks.
+[Artifact13957342510](https://github.com/YondFane/uTerm/actions/runs/43243044376/artifacts/13957342510)
+retains `native-git-failure.png` and the failed report, which omitted the bridge reply code. QA now
+records that exact code plus whether the target path or branch exists, and includes the code in its
+failure. It does not retry or waive Worktree creation. The cause and fresh current-source Mac
+acceptance remain unresolved.
 
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 before the Git test tool compiles, and uploads their early reports and original windows. SSH,
@@ -625,7 +644,45 @@ rename, pin/unpin, move up/down, move to another workspace and removal of an emp
 project order supports local dragging within the same pin group; name sorting disables manual
 reordering. Pinning, collapse and order write shared state with revision checks. The workspace menu
 adds create/rename/delete; deletion is available only for an empty workspace when another remains.
-These candidate interactions require their new native CI checks; drag acceptance remains pending.
+Project pin/collapse, reorder, workspace-move and removal menus capture the revision when opened. A
+menu held across another client's write rejects its stale operation, preserving the current project
+and peer settings; reopen the menu to act on fresh data. Disclosure controls retain their existing
+immediate behavior.
+
+Native QA holds actual pin/move menus across a second Core client's write, requires conflict
+rejection, then moves grouped real terminals to another workspace and back through fresh menus.
+It checks the same PTY generations and native views, and reopens the saved snapshot to verify the
+split layout. Originals are `native-project-workspace-move.png` and
+`personal-{phase}-project-workspace-move.png`; packages require source-bound
+`nativeProjectMenuRevisionAndWorkspaceMove` proof. A delegate simulation uses an owned pasteboard
+and actual NSTableView callbacks to reject foreign sources, forged payloads, cancelled drags and
+stale revisions, then reorder and restore sessions through shared Core. Physical pointer dragging
+has not been executed; grouping-menu execution is recorded separately.
+
+Snapshot recovery clears only feedback originating from a snapshot read. A failed menu or Git
+operation remains visible even when its error text is identical to the earlier read error;
+background read failures cannot replace an operation conflict. Four isolated Foundation tests pass
+with Swift 6.1.2 on Linux; AppKit execution still requires the new source's Mac run.
+
+Menu and Worktree QA records each action result. Only a visible `WRITER_BUSY` with the exact
+original revision, workspace and settings unchanged permits at most two explicit re-clicks; menus
+retain their captured revision, and Worktree actions require another real confirmation and the
+original directory/dirty bytes. Dirty deletion must report `GIT_ERROR`, not merely any error.
+Application writes are not replayed. Source `1eb5621f56fbfadc541449ae886ca6a723b4f878` / tested merge
+`2da80460cd36c7d6813af65dd90fc31fa307b736` failed the ARM stale-pin wait and Intel clean-Worktree
+wait, with writer-busy feedback in both original windows. The [ARM report14044417035](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14044417035)
+and [Intel report14045730537](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14045730537)
+are retained; these failures are not waived. The revised feedback and action checks await their
+own current-source Mac validation.
+
+The native interaction audit requires the workspace report, its matching source/merge, platform,
+architecture and system, all menu/move/generation checks, the labelled drag simulation and the
+original project-move screenshot. Real application exit/relaunch also compares the complete saved
+split layout and exact session/generation map, verifies both terminal views are visible and replayed,
+and captures `native-reconnect-restored-layout.png` before closing either session. Missing, failed,
+stale or cross-platform evidence cannot promote the capability to accepted. Linux passes ten
+interaction-evidence policy tests, Swift 6.1.2 parsing and shell/report syntax; the new source still
+requires actual Mac build, operations and originals. Manual interaction remains waived, not executed.
 
 [Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
 checks for drag/group operations, layout persistence, content tabs and workbench integration. Both
@@ -811,14 +868,26 @@ the cause is not established. Its
 is retained. Linux Swift 6.1.2 syntax, formatting and documentation checks pass; the new control
 checks still require their own actual Mac run.
 
+The automatic-save QA fixture now uses the same bounded read helper for every peer snapshot,
+including restoration after theme screenshots. Setup and restoration writes use the existing
+original-revision guard: retry only `WRITER_BUSY` while the full saved workspace and settings are
+unchanged. Application actions and conflict assertions remain explicit. The report retains the
+current fixture stage and read/write retry counts even on failure. Intel source
+`676c9ce3e0f06f3a08ba8bb7d9fb4e0adc81508d` / tested merge
+`fe9fa9d6d1e97ddd57da344fc613b9d5e705ff89` saved the theme and captured both sizes, then failed
+with `WRITER_BUSY` during the following fixture restoration; its precise read/write operation
+was not recorded. The [failure report and originals14024845956](https://github.com/YondFane/uTerm/actions/runs/43394240939/artifacts/14024845956)
+are retained. The revised fixture still requires a current-source actual Mac run.
+
 The Core read for compatibility export retries only `WRITER_BUSY`, at most 20 attempts with 10 ms
 between attempts. The destination is still written once, and settings mutations are not replayed
 automatically. Actual file-lock tests cover short-contention recovery, exhaustion, cancellation and
-unchanged snapshot bytes; they require macOS CI. The ARM64 `1336ba7` / `733e066` export check fails
-with a generic message, so its underlying cause is not established. Failure reports now include the
-error code, destination and busy state; current-source macOS results remain pending. Linux x86_64
-passes 18 relevant Core persistence, Git-favorite and PDF tests; the existing unprivileged
-filesystem test is skipped in this root session.
+unchanged snapshot bytes. Source `9c16e467edcc17f911a9b4600f30c534ad420293` / tested merge
+`499a6e26847421ca008e9418565ea5d591a10379` passes both actual Mac Native suites and 65 Swift tests
+per architecture, including the OS-lock export cases. The [ARM report](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14035540650)
+and [Intel report](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14038396877)
+retain `nativeLegacyExportProof` and the actual failure/draft-retention window. This validates that
+recorded source; revised menu/relaunch evidence still requires its own current-source Mac run.
 
 Native QA opens and cancels the actual save sheet, checks its close guard, exports committed data
 with an invalid draft, and rejects a directory destination while retaining the prior export. It

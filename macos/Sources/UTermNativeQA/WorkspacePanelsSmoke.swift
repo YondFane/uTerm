@@ -151,6 +151,7 @@ enum WorkspacePanelsSmoke {
         guard model.selectedID == session, model.selectedTerminal?.generation == generation else { throw BridgeFailure(code: "PANELS_PTY", message: "Workbench operations changed terminal identity") }
         report["captures"] = captures; report["scenes"] = scenes
         report["scenario"] = "Real AppKit controls and mounted views; isolated Git repository, offline connection profiles, no external services. Service failure/lifetime checks run in their existing suites."
+        try await ProjectMenuSmoke.run(model: model, window: window, projectID: "panels-qa", prefix: "native", evidence: evidence, report: &report)
         for entry in model.sessionEntries { await model.closeSession(id: entry.sessionID) }
         _ = try await bridge.call("host.shutdownIdle")
         report["cleanup"] = true

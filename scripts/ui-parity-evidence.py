@@ -266,7 +266,20 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
     return result
 
 
-def find_native_run(repository, head, artifact_name):
+def native_artifact_name(artifacts, prefix):
+    candidates = []
+    for artifact in artifacts:
+        name = artifact['name']
+        attempt = re.fullmatch(re.escape(prefix) + r'-([1-9][0-9]*)', name)
+        if name == prefix or attempt:
+            candidates.append((int(attempt[1]) if attempt else 0, artifact))
+    if not candidates:
+        return None
+    selected = max(candidates, key=lambda candidate: candidate[0])[1]
+    return None if selected['expired'] else selected['name']
+
+
+def find_native_run(repository, head, artifact_name, with_artifact=False):
     assert re.fullmatch(r"[\w.-]+/[\w.-]+", repository) and re.fullmatch(r"[0-9a-f]{40}", head)
     def request(path):
         req = urllib.request.Request("https://api.github.com/repos/" + repository + path,
@@ -279,8 +292,9 @@ def find_native_run(repository, head, artifact_name):
         if candidates:
             run = max(candidates, key=lambda candidate: candidate["id"])
             artifacts = request(f"/actions/runs/{run['id']}/artifacts?per_page=100")["artifacts"]
-            if any(artifact["name"] == artifact_name and not artifact["expired"] for artifact in artifacts):
-                print(run["id"])
+            selected = native_artifact_name(artifacts, artifact_name)
+            if selected:
+                print(json.dumps(dict(run=run['id'], artifact=selected)) if with_artifact else run['id'])
                 return
             assert run["status"] != "completed", f"Native run {run['html_url']} completed without the required artifact"
         time.sleep(15)
@@ -294,12 +308,13 @@ if __name__ == "__main__":
     finder.add_argument("repository")
     finder.add_argument("head")
     finder.add_argument("artifact")
+    finder.add_argument("--with-artifact", action="store_true")
     check = commands.add_parser("compare")
     for name in ["native", "tauri", "output", "head", "tested"]:
         check.add_argument("--" + name, required=True)
     check.add_argument("--fixture", default="shared/fixtures/client-ui-parity.json")
     args = parser.parse_args()
     if args.command == "find-native-run":
-        find_native_run(args.repository, args.head, args.artifact)
+        find_native_run(args.repository, args.head, args.artifact, with_artifact=args.with_artifact)
     else:
         compare(args.native, args.tauri, args.output, args.head, args.tested, args.fixture)

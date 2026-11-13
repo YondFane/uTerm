@@ -157,7 +157,12 @@ enum GitSmoke {
             editor.forceClose()
 
             let tree = temporary.appendingPathComponent("git-worktree 中文")
-            guard try await ContentSmoke.request(content, method: "create_worktree", params: ["directory": root.path, "reference": "refs/heads/main", "oid": head, "branch": "native-worktree", "path": tree.path]) == "SUCCESS" else { throw BridgeFailure(code: "GIT_WORKTREE", message: "Cannot create isolated Worktree through native bridge") }
+            let creationCode = try await ContentSmoke.request(content, method: "create_worktree", params: ["directory": root.path, "reference": "refs/heads/main", "oid": head, "branch": "native-worktree", "path": tree.path])
+            report["nativeWorktreeCreationReplyCode"] = creationCode
+            if creationCode != "SUCCESS" {
+                report["nativeWorktreeCreationFailure"] = ["replyCode": creationCode, "targetExists": FileManager.default.fileExists(atPath: tree.path), "branchExists": !(try git(["branch", "--list", "native-worktree"])).isEmpty]
+                throw BridgeFailure(code: "GIT_WORKTREE", message: "Cannot create isolated Worktree through native bridge: " + creationCode)
+            }
             guard let project = model.projects.first(where: { $0["id"].string == "native-git-qa" }),
                   let treeID = project["worktrees"].array.first(where: { $0["branch"].string == "native-worktree" })?["id"].string,
                   let view = parent.contentView,
@@ -227,21 +232,40 @@ enum GitSmoke {
             try press(cancelled, "Cancel")
             try await TerminalSmoke.wait("Cancel native deletion without changing the Worktree") { parent.attachedSheet == nil && !model.worktreeDeletionPresented }
             report["nativeDeleteCancelRetainedWorktree"] = try Data(contentsOf: retained) == dirty
-            let rejected = try await deletionSheet()
-            try press(rejected, "Delete Worktree")
-            do {
-                try await TerminalSmoke.wait("Refuse dirty Worktree deletion in shared Core") { parent.attachedSheet == nil && !model.worktreeDeletionPresented && !model.busy && !model.error.isEmpty }
-            } catch {
-                report["worktreeDeleteFailureDiagnostics"] = ["sheetVisible": parent.attachedSheet != nil, "deletionPresented": model.worktreeDeletionPresented, "workspaceBusy": model.busy, "visibleError": model.error, "dirtyBytesRetained": (try? Data(contentsOf: retained)) == dirty, "directoryRetained": FileManager.default.fileExists(atPath: tree.path)]
-                throw error
+            func deleteThroughMenu(dirtyExpected: Bool) async throws {
+                let before = try await bridge.snapshot()
+                for attempt in 0..<3 {
+                    let sheet = try await deletionSheet()
+                    model.error = ""
+                    try press(sheet, "Delete Worktree")
+                    do {
+                        try await TerminalSmoke.wait(dirtyExpected ? "Refuse dirty Worktree deletion in shared Core" : "Delete clean Worktree through native menu and shared Core") {
+                            parent.attachedSheet == nil && !model.worktreeDeletionPresented && !model.busy && (!model.error.isEmpty || (!FileManager.default.fileExists(atPath: tree.path) && model.projects.first(where: { $0["id"].string == "native-git-qa" })?["worktrees"].array.isEmpty == true))
+                        }
+                    } catch {
+                        report["worktreeDeleteFailureDiagnostics"] = ["dirtyExpected": dirtyExpected, "attempt": attempt, "sheetVisible": parent.attachedSheet != nil, "deletionPresented": model.worktreeDeletionPresented, "workspaceBusy": model.busy, "visibleError": model.error, "dirtyBytesRetained": (try? Data(contentsOf: retained)) == dirty, "directoryRetained": FileManager.default.fileExists(atPath: tree.path)]
+                        throw error
+                    }
+                    let message = model.error
+                    var attempts = report["nativeWorktreeDeleteAttempts"] as? [[String: Any]] ?? []
+                    attempts.append(["dirtyExpected": dirtyExpected, "attempt": attempt, "error": message])
+                    report["nativeWorktreeDeleteAttempts"] = attempts
+                    if dirtyExpected && message.hasPrefix("GIT_ERROR:") && (try? Data(contentsOf: retained)) == dirty { return }
+                    if !dirtyExpected && message.isEmpty && !FileManager.default.fileExists(atPath: tree.path) { return }
+                    guard attempt < 2, message.hasPrefix("WRITER_BUSY:") else { throw BridgeFailure(code: "GIT_DELETE", message: "Unexpected native Worktree deletion result: " + message) }
+                    let unchanged = try await bridge.snapshot()
+                    guard unchanged.revision == before.revision, unchanged.document.workspace == before.document.workspace, unchanged.document.settings == before.document.settings,
+                          FileManager.default.fileExists(atPath: tree.path), !dirtyExpected || (try? Data(contentsOf: retained)) == dirty else { throw BridgeFailure(code: "GIT_DELETE_RETRY", message: "Refusing another confirmation after Worktree data changed") }
+                    // A busy rejection permits another real confirmation only while the original data is unchanged.
+                    // 忙碌拒绝仅在原数据未变时允许再次通过真实确认框执行。
+                }
             }
+            try await deleteThroughMenu(dirtyExpected: true)
             report["dirtyWorktreeDeletionRefused"] = try Data(contentsOf: retained) == dirty
             captures.append("native-git-worktree-delete-error.png")
             try await TerminalSmoke.capture(window: parent, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(captures.last!))
             try FileManager.default.removeItem(at: retained)
-            let confirmed = try await deletionSheet()
-            try press(confirmed, "Delete Worktree")
-            try await TerminalSmoke.wait("Delete clean Worktree through native menu and shared Core") { !FileManager.default.fileExists(atPath: tree.path) && !model.busy && model.projects.first(where: { $0["id"].string == "native-git-qa" })?["worktrees"].array.isEmpty == true }
+            try await deleteThroughMenu(dirtyExpected: false)
             report["worktreeBridgeCreateAndCleanDelete"] = !FileManager.default.fileExists(atPath: tree.path)
             report["nativeDeleteMenuCompleted"] = model.error.isEmpty
             report["nativeDeleteInput"] = "Real AppKit NSMenu action and NSAlert buttons; automated dispatch, not manual mouse acceptance"

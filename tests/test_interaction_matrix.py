@@ -1,4 +1,5 @@
 import importlib.util
+import copy
 import json
 import tempfile
 import unittest
@@ -12,6 +13,104 @@ spec.loader.exec_module(matrix)
 
 
 class InteractionEvidenceTests(unittest.TestCase):
+    def reopened_reports(self):
+        sessions = [{"id": "first", "generation": "generation-one"}, {"id": "second", "generation": "generation-two"}]
+        layout = {"kind": "split", "axis": "horizontal", "sessions": ["first", "second"]}
+        return ({"splitSessionCount": 2, "sessions": sessions, "persistedSplitLayout": layout},
+                {"restoredTerminalViewsVisible": True, "replayed": True, "sessions": list(reversed(copy.deepcopy(sessions))), "restoredSplitLayout": copy.deepcopy(layout), "captures": ["native-reconnect-restored-layout.png"]})
+
+    def test_real_relaunch_evidence_retains_exact_layout_generations_and_original_window(self):
+        with tempfile.TemporaryDirectory() as path:
+            root = Path(path)
+            live, reopened = self.reopened_reports()
+            name = "native-reconnect-restored-layout.png"
+            with self.assertRaises(FileNotFoundError):
+                matrix.restored_session_evidence(root, live, reopened)
+            (root / name).write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(1024))
+            self.assertEqual(matrix.restored_session_evidence(root, live, reopened), [name])
+
+    def test_relaunch_cannot_replace_layout_generation_session_or_visible_capture(self):
+        cases = [{"restoredTerminalViewsVisible": False}, {"replayed": False}, {"restoredSplitLayout": {"kind": "split", "axis": "vertical", "sessions": ["first", "second"]}}, {"sessions": []},
+                 {"sessions": [{"id": "first", "generation": "generation-one"}, {"id": "second", "generation": "new-generation"}]},
+                 {"sessions": [{"id": "first", "generation": "generation-one"}] * 2},
+                 {"sessions": [{"id": "first", "generation": 1}, {"id": "second", "generation": "generation-two"}]},
+                 {"captures": []}, {"captures": ["old.png"]}]
+        with tempfile.TemporaryDirectory() as path:
+            root = Path(path)
+            for changes in cases:
+                live, reopened = self.reopened_reports()
+                reopened.update(changes)
+                with self.subTest(changes=changes), self.assertRaises(AssertionError):
+                    matrix.restored_session_evidence(root, live, reopened)
+
+    def project_report(self):
+        proof = {key: True for key in ["passed", "actualMenuActions", "stalePinRejected", "staleMoveRejected", "peerSettingRetained", "terminalGenerationsAndViewsRetained", "splitLayoutRetainedInReopenedSnapshot", "movedAndReturned"]}
+        proof.update(sourceHeadSHA="head", testedMergeSHA="merge", platform="macOS", architecture="arm64", system="fixture", groupMenuExecuted=True, physicalDragExecuted=False, screenshot="native-project-workspace-move.png")
+        proof["dragSimulation"] = {key: True for key in ["passed", "actualNSTableViewCallbacks", "ownedPasteboard", "foreignSourceRejected", "forgedPayloadRejected", "cancelledDragRejected", "staleRevisionRejected", "freshDropAndReverseVerified"]}
+        return {"sourceHeadSHA": "head", "testedMergeSHA": "merge", "sourceTreeDirty": False, "productionDataAccess": False, "passed": True, "platform": "macOS", "architecture": "arm64", "system": "fixture", "nativeProjectMenuRevisionAndWorkspaceMove": proof}
+
+    def test_native_project_layout_requires_menu_identity_and_labelled_callback_proof(self):
+        with tempfile.TemporaryDirectory() as path:
+            root = Path(path)
+            name = "native-project-workspace-move.png"
+            (root / name).write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(1024))
+            report = self.project_report()
+            self.assertEqual(matrix.project_layout_evidence(root, report, "head", "merge"), [name])
+            report["nativeProjectMenuRevisionAndWorkspaceMove"]["groupMenuExecuted"] = False
+            self.assertEqual(matrix.project_layout_evidence(root, report, "head", "merge"), [name])
+
+    def test_project_layout_rejects_old_or_cross_platform_nested_proofs(self):
+        with tempfile.TemporaryDirectory() as path:
+            root = Path(path)
+            for changes in [{"sourceHeadSHA": "old"}, {"testedMergeSHA": "old"}, {"platform": "win32"}, {"architecture": "x86_64"}, {"system": "other"}]:
+                report = self.project_report()
+                report["nativeProjectMenuRevisionAndWorkspaceMove"].update(changes)
+                with self.subTest(changes=changes), self.assertRaises(AssertionError):
+                    matrix.project_layout_evidence(root, report, "head", "merge")
+
+    def test_missing_failed_or_non_boolean_project_and_drag_checks_stay_unaccepted(self):
+        with tempfile.TemporaryDirectory() as path:
+            root = Path(path)
+            baseline = self.project_report()
+            proof = baseline["nativeProjectMenuRevisionAndWorkspaceMove"]
+            groups = [(None, [key for key, value in proof.items() if value is True and key != "groupMenuExecuted"]), ("dragSimulation", list(proof["dragSimulation"]))]
+            for group, keys in groups:
+                for key in keys:
+                    for value in [None, False, 1]:
+                        report = copy.deepcopy(baseline)
+                        target = report["nativeProjectMenuRevisionAndWorkspaceMove"]
+                        if group:
+                            target = target[group]
+                        if value is None:
+                            del target[key]
+                        else:
+                            target[key] = value
+                        with self.subTest(group=group, key=key, value=value), self.assertRaises(AssertionError):
+                            matrix.project_layout_evidence(root, report, "head", "merge")
+
+    def test_project_layout_cannot_promote_simulation_to_physical_dragging(self):
+        with tempfile.TemporaryDirectory() as path:
+            root = Path(path)
+            for changes in [{"physicalDragExecuted": True}, {"physicalDragExecuted": 0}, {"groupMenuExecuted": "true"}]:
+                report = self.project_report()
+                report["nativeProjectMenuRevisionAndWorkspaceMove"].update(changes)
+                with self.subTest(changes=changes), self.assertRaises(AssertionError):
+                    matrix.project_layout_evidence(root, report, "head", "merge")
+
+    def test_project_layout_requires_its_original_scene_not_another_capture(self):
+        with tempfile.TemporaryDirectory() as path:
+            root = Path(path)
+            report = self.project_report()
+            with self.assertRaises(FileNotFoundError):
+                matrix.project_layout_evidence(root, report, "head", "merge")
+            (root / "other.png").write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(1024))
+            report["nativeProjectMenuRevisionAndWorkspaceMove"]["screenshot"] = "other.png"
+            with self.assertRaises(AssertionError):
+                matrix.project_layout_evidence(root, report, "head", "merge")
+            report["nativeProjectMenuRevisionAndWorkspaceMove"]["screenshot"] = "../other.png"
+            with self.assertRaises(AssertionError):
+                matrix.project_layout_evidence(root, report, "head", "merge")
+
     def test_relative_capture_paths_and_unicode_reports_use_artifact_root(self):
         with tempfile.TemporaryDirectory() as path:
             root = Path(path)
