@@ -75,6 +75,10 @@ public class TaskProbe {
     for name in dock['captures']:
         assert (evidence / name).stat().st_size > 1000, name
     proof = report['javaToolbarRunList']
+    assert proof['actualSidebarRunIcon'] is True
+    stopped = report['javaSidebarStoppedIcon']
+    assert stopped['passed'] is True and stopped['actualRestoredImage'] is True
+    assert (evidence / stopped['screenshot']).stat().st_size > 1000
     assert dock['taskID'] == proof['taskID'] and dock['taskGeneration'] == proof['taskGeneration']
     for field in ['passed', 'realHostTask', 'actualMenuAction', 'actualToolbarCoordinator', 'appKitActionDispatched', 'staleGenerationRejected', 'scopeRetainedOnRejection', 'sameTaskGeneration', 'actualMainWindow', 'actualToggleButtonRetainedGeneration', 'retainedContentAfterBackingWindowCleared']:
         assert proof[field] is True, (field, proof)

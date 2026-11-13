@@ -55,9 +55,9 @@ struct NativeProjectRunButton: NSViewRepresentable {
     func updateNSView(_ button: RunButton, context: Context) {
         context.coordinator.button = button
         button.isEnabled = context.environment.isEnabled && model.ready && !model.busy
-        let icon = NativeChromeImages.toolbar(language == "java" ? .java : .python).copy() as! NSImage
-        icon.size = NSSize(width: 18, height: 18); button.image = icon
-        button.running = !runs.tasks(language).isEmpty; button.needsDisplay = true
+        let running = !runs.tasks(language).isEmpty
+        let icon = NativeChromeImages.projectRun(language, running: running, light: NativePreferences.light(model.settings)).copy() as! NSImage
+        icon.size = NSSize(width: 17, height: 17); button.image = icon
         button.toolTip = title; button.setAccessibilityLabel(title)
         let active = panels.active(in: model.inspectorContextKey)?.id.hasPrefix(language + "-") == true
         button.state = active ? .on : .off
@@ -68,11 +68,6 @@ struct NativeProjectRunButton: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: RunButton, context: Context) -> CGSize? { CGSize(width: 30, height: 30) }
     @MainActor final class RunButton: NSButton {
         var menuRequested: (() -> Void)?
-        var running = false
-        override func draw(_ dirtyRect: NSRect) {
-            super.draw(dirtyRect)
-            if running { NSColor.systemGreen.setFill(); NSBezierPath(ovalIn: NSRect(x: bounds.maxX - 10, y: bounds.minY + 5, width: 5, height: 5)).fill() }
-        }
         override var acceptsFirstResponder: Bool { isEnabled }
         override func rightMouseDown(with event: NSEvent) { if isEnabled { menuRequested?() } }
         override func keyDown(with event: NSEvent) {

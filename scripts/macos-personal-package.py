@@ -62,6 +62,7 @@ def validate_info(info, head, tested):
 
 
 def validate_workspace_scenes(report, head, tested, phase):
+    assert report.get("nativeProjectActiveRingRetainedOnCollapse") is True, "Missing actual active-project ring proof"
     fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
     project = report.get("nativeProjectMenuRevisionAndWorkspaceMove", {})
     for key in ["passed", "actualMenuActions", "stalePinRejected", "staleMoveRejected", "peerSettingRetained", "terminalGenerationsAndViewsRetained", "splitLayoutRetainedInReopenedSnapshot", "movedAndReturned"]:

@@ -463,12 +463,18 @@ enum PersonalSmoke {
         try await TerminalSmoke.wait("Hide project children without closing their processes") {
             model.projects.first?["collapsed"].bool == true && !model.busy && row("Terminal 1") == nil && row("Terminal 2") == nil
         }
+        func activeRing() -> NativeResourceRing? {
+            TerminalSmoke.descendants(content).first { $0.identifier?.rawValue == "native-resource-active-p:personal-qa-project" } as? NativeResourceRing
+        }
+        guard let collapsedRing = activeRing(), !collapsedRing.isHiddenOrHasHiddenAncestor, collapsedRing.visibleRect.width > 0 else { throw BridgeFailure(code: "PERSONAL_RESOURCE_RING", message: "Collapsed active project lost its actual ring") }
         let collapsed = "personal-\(phase)-sidebar-collapsed.png"
         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(collapsed))
         report["captures"] = (report["captures"] as? [String] ?? []) + [collapsed]
         guard let disclosure = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-project-disclosure-personal-qa-project" }) as? NSButton else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Project disclosure control is missing") }
         disclosure.performClick(nil)
         try await TerminalSmoke.wait("Expand through the real disclosure control") { row("Terminal 1") != nil && row("Terminal 2") != nil && !model.busy }
+        guard let expandedRing = activeRing(), !expandedRing.isHiddenOrHasHiddenAncestor, expandedRing.visibleRect.width > 0 else { throw BridgeFailure(code: "PERSONAL_RESOURCE_RING", message: "Expanded active project lost its actual ring") }
+        report["nativeProjectActiveRingRetainedOnCollapse"] = true
         try click(projectName, localized("Unpin project", "取消置顶项目"))
         try await TerminalSmoke.wait("Persist unpin through the real sidebar menu") { model.projects.first?["pinned"].bool == false && !model.busy }
         let extraDirectory = root.appendingPathComponent("sidebar-order")

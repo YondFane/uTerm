@@ -137,6 +137,7 @@ enum JavaSmoke {
         reopened.model.selectedID = runningID
         await reopened.model.selectTask()
         report["forceStopCompleted"] = true
+        try await ProjectRunSmoke.verifyStopped(model: model, root: root.path, language: "java", evidence: URL(fileURLWithPath: reportPath).deletingLastPathComponent(), report: &report)
         report["temporaryEnvironmentNotSaved"] = (try await bridge.call("java.configuration", params: .object(["directory": .string(root.path)])))["project"]["environment"] == .null
         await reopened.forceClose()
         report["javaCaptures"] = captures

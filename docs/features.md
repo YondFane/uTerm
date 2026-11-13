@@ -190,6 +190,32 @@ monospaced label, a 5-point caption gap and compact bordered control; non-Git pr
 Quick SSH uses a flat action and a 36-point host-search field, with the same list inset. Cascadia
 Code semibold uses its bundled exact face.
 
+Running Java/Python projects and Worktrees use their language icon in the sidebar, matched to the
+exact task root. Task refreshes update these rows even when the workspace snapshot is unchanged.
+Build/history tasks do not light the icon, stopping restores the folder/branch, and Python takes
+precedence when both languages share a root. Toolbar and sidebar use the same running colors.
+Projects, Worktrees and saved SSH rows with open sessions retain the ordinary green activity ring,
+including while collapsed; a run task alone does not create a session ring.
+
+**Activity-indicator validation**
+
+At source `6de2397be9a85862a95684149d387b282238b33f`, tested merge
+`a012a3e6f3762ca679ed018e807980cd484b22fe`, the
+[ARM native matrix](https://github.com/YondFane/uTerm/actions/runs/43484429586/artifacts/14068028024)
+passes, but the reviewed `native-java-launch-list-workspace.png` still shows a folder during a real
+run. The
+[Intel Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43484429722/artifacts/14068232932)
+shows the corrected narrow Quick SSH wrapping and visible terminal marker, but lacks the active
+project ring. Its initial smoke passes; replacement stops at `WRITER_BUSY` during sidebar checks.
+The report did not identify the exact call. New QA records project-menu stages and permits at most
+three explicit rejected peer-fixture writes only while the original revision and full data are
+unchanged. Application writes retain their existing behavior. New actual-image/run-stop and
+collapsed-ring assertions require fresh Mac evidence; these earlier passes do not accept the fix.
+Linux Swift6.1.2 passes four exact-copy root-matching regressions, including Windows/UNC forms, task
+filtering and language precedence. Eighty-five evidence-policy checks, both existing run
+summary/navigation tests, type/production build, formatting and bilingual documentation checks pass.
+Linux parses the changed AppKit sources but does not execute them.
+
 The main window retains AppKit's actual close/minimize/zoom buttons and aligns their container to
 the ordinary client's 16/24 inset, including after resize or leaving fullscreen. Workspace capture
 records their actual bounds and the mounted branch control's font, size and caption spacing. The

@@ -146,6 +146,7 @@ enum PythonSmoke {
         reopened.model.selectedID = restartedID
         await reopened.model.selectTask()
         report["forceStopCompleted"] = true
+        try await ProjectRunSmoke.verifyStopped(model: model, root: root.path, language: "python", evidence: URL(fileURLWithPath: reportPath).deletingLastPathComponent(), report: &report)
         report["temporaryEnvironmentNotSaved"] = (try await bridge.call("python.configuration", params: .object(["directory": .string(root.path)])))["project"]["environment"] == .null
         _ = try await bridge.call("host.shutdownIdle")
         await reopened.forceClose()
