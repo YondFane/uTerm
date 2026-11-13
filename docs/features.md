@@ -7572,6 +7572,22 @@ source/tested SHAs; these Linux results do not establish it.
 
 ### Performance measurements
 
+The isolated client benchmark replaces its phase heartbeat atomically. QA builds retry only Windows
+replacement errors 5/32/33, keeping the same staged bytes, for at most ten attempts spaced 20 ms
+apart. Other errors return immediately; exhaustion remains a failure and preserves the original
+marker. This does not repeat application/Core operations. CI runs the helper's actual Windows
+open-reader recovery and persistent-lock exhaustion tests and retains `qa-phase-tests.log` and
+`qa-phase-build.log` with the performance artifact.
+
+Windows source `6c91edc92260ad40944e2759bf43faff7de16856` / tested merge
+`5551fda7ccf145345da450340647961c853f0c95` failed with Access denied while replacing a phase marker
+after terminal output cycle 12. The holder of the blocking handle is not identified. The
+[original artifact14018140007](https://github.com/YondFane/uTerm/actions/runs/43383383260/artifacts/14018140007)
+retains `tauri-state-qa/performance-failure.json`, its actual Windows window and the sampler report.
+Linux passes two real atomic-replacement tests, six existing sampling/report/terminal boundary
+tests and workflow validation. The Windows lock tests and complete current-source workload still
+require their own CI execution; this failed run is not performance acceptance.
+
 - Performance validation: 119 frontend/build-helper tests, localization checks and the
   TypeScript/production build pass. The main JavaScript chunk measures 909.45 kB versus a 1,343.64
   kB baseline (approximately 32% smaller); this is startup chunk size, not total installer size.

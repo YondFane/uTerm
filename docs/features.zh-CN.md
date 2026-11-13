@@ -4200,6 +4200,14 @@ React 组件位于 `src/components/`，状态和纯逻辑位于 `src/lib/`，Tau
 
 ### 性能测量
 
+隔离客户端基准原子替换阶段心跳。QA 构建仅对 Windows 替换错误 5／32／33 保留同一份临时字节，间隔 20 毫秒、最多尝试十次；其他错误立即返回，耗尽后仍失败并保留原标记，不重复应用／Core 操作。CI 执行真实 Windows 读取句柄释放后的恢复及持续持锁耗尽测试，将
+`qa-phase-tests.log` 和 `qa-phase-build.log` 保存在性能产物中。
+
+Windows 源码 `6c91edc92260ad40944e2759bf43faff7de16856`／实际测试 merge
+`5551fda7ccf145345da450340647961c853f0c95`
+在终端输出第 12 轮之后替换阶段标记时遇到“Access denied”，阻塞句柄的持有者尚未确认。[原始产物14018140007](https://github.com/YondFane/uTerm/actions/runs/43383383260/artifacts/14018140007)保留
+`tauri-state-qa/performance-failure.json`、真实 Windows 窗口及采样报告。Linux 的两项真实原子替换测试、六项现有采样／报告／终端边界测试和工作流检查通过；Windows 锁测试及完整当前源码负载仍须自己的 CI 执行，本次失败不算性能验收。
+
 - 性能验证：119 项前端及构建工具测试、国际化检查和 TypeScript/生产构建通过。主 JavaScript 包为 909.45
   kB，基准为 1,343.64 kB，约减少 32%；此指标是启动代码包大小，不是安装包总体积。
 
