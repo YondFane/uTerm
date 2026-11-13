@@ -309,6 +309,15 @@ enum PersonalSmoke {
                             diagnostic["tailText"] = terminal.qaTailText; diagnostic["error"] = terminal.error; diagnostic["replayResets"] = terminal.qaReplayResets
                             diagnostic["sourceHeadSHA"] = report["sourceHeadSHA"]; diagnostic["testedMergeSHA"] = report["testedMergeSHA"]
                             report["workspaceTerminalRendererDiagnostics"] = diagnostic
+                            var trace: [String: Any] = ["events": terminal.qaLayoutEvents, "truncated": terminal.qaLayoutTraceTruncated]
+                            trace["sourceHeadSHA"] = report["sourceHeadSHA"]; trace["testedMergeSHA"] = report["testedMergeSHA"]
+                            trace["sessionID"] = terminal.id; trace["generation"] = terminal.generation ?? ""
+                            trace["platform"] = "macOS"; trace["architecture"] = architecture; trace["phase"] = phase
+                            let name = "personal-" + phase + "-terminal-layout-trace.json"
+                            do {
+                                try JSONSerialization.data(withJSONObject: trace, options: [.prettyPrinted, .sortedKeys]).write(to: root.appendingPathComponent(name), options: .atomic)
+                                report["workspaceTerminalLayoutTrace"] = name
+                            } catch { report["workspaceTerminalLayoutTraceWriteError"] = error.localizedDescription }
                             throw error
                         }
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))

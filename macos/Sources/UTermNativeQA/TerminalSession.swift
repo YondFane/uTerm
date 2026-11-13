@@ -63,6 +63,35 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private(set) var qaLastAcknowledgedSequence = "0"
     private(set) var qaLastAckUptime: TimeInterval = 0
     private(set) var qaReplayResets = 0
+    private(set) var qaLayoutEvents: [[String: Any]] = []
+    private(set) var qaLayoutTraceTruncated = false
+    private var qaLayoutTraceBytes = 0
+    private func traceLayout(_ event: String, packet: TerminalPacket? = nil) {
+        // Record only isolated Personal fixtures, with a fixed memory budget; never capture user sessions.
+        // 仅记录隔离个人版样例并限制内存用量，不采集用户会话。
+        guard WorkspaceModel.applicationProfile.personalFixture else { return }
+        guard qaLayoutEvents.count < 512, qaLayoutTraceBytes < 1_048_576 else { qaLayoutTraceTruncated = true; return }
+        let terminal = view.getTerminal()
+        var record: [String: Any] = ["event": event, "uptime": ProcessInfo.processInfo.systemUptime]
+        record["columns"] = terminal.cols; record["rows"] = terminal.rows
+        record["cursorX"] = terminal.getCursorLocation().x; record["cursorY"] = terminal.getCursorLocation().y
+        record["displayRow"] = terminal.buffer.yDisp; record["applyingReplay"] = applyingReplay
+        record["fontName"] = view.font.fontName; record["fontSize"] = view.font.pointSize
+        record["lineSpacing"] = view.lineSpacing; record["viewWidth"] = view.bounds.width; record["viewHeight"] = view.bounds.height
+        record["windowVisible"] = view.window?.isVisible == true
+        record["hostColumns"] = hostSize?.0 ?? -1; record["hostRows"] = hostSize?.1 ?? -1
+        record["inputControl"] = inputControl.map { $0.owned ? "owner" : "viewer" } ?? "unknown"
+        let rendered = text
+        record["text"] = String(rendered.prefix(8192)); record["textTruncated"] = rendered.count > 8192
+        if let packet {
+            guard packet.bytes.count <= 262_144 else { qaLayoutTraceTruncated = true; return }
+            record["sequence"] = String(packet.header.sequence); record["reset"] = packet.header.reset
+            record["packetColumns"] = Int(packet.header.cols); record["packetRows"] = Int(packet.header.rows)
+            record["bytesBase64"] = packet.bytes.base64EncodedString()
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: record), qaLayoutTraceBytes + data.count <= 1_048_576 else { qaLayoutTraceTruncated = true; return }
+        qaLayoutTraceBytes += data.count; qaLayoutEvents.append(record)
+    }
     var qaHostGrid: [String: Int] {
         guard let (columns, rows) = hostSize else { return [:] }
         return ["columns": columns, "rows": rows]
@@ -99,6 +128,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     func apply(settings: JSONValue, catalog: JSONValue = .null) {
         let light = NativePreferences.light(settings)
         guard settings != appliedSettings || catalog != appliedCatalog || appliedLight != light else { return }
+        traceLayout("settings-before")
         appliedSettings = settings; appliedCatalog = catalog; appliedLight = light
         let size = CGFloat(settings["fontSize"].number ?? 14)
         let font = NativePreferences.font(settings["fontFamily"].string ?? "monospace", size: size, mono: true, bold: settings["fontThicken"].bool == true)
@@ -129,6 +159,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         view.cursorStyleChanged(source: view.getTerminal(), newStyle: style)
         view.copyOnSelect = settings["copyOnSelect"].bool == true
         view.backgroundOpacity = CGFloat(settings["opacity"].number ?? 1)
+        traceLayout("settings-after")
     }
 
     func connect(reconnectOnly: Bool = false) async {
@@ -184,6 +215,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             guard packet.header.attachment == attachment, packet.header.generation == generation else { return }
         }
         let terminal = view.getTerminal()
+        traceLayout("packet-before", packet: packet)
         if agentState != packet.header.agent_state || activityUnavailable != (packet.header.agent_activity_error != nil) {
             agentState = packet.header.agent_state
             activityUnavailable = packet.header.agent_activity_error != nil
@@ -236,6 +268,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         search.outputChanged()
         qaRenderedFrames += 1
         qaLargestFrame = max(qaLargestFrame, packet.bytes.count)
+        traceLayout("packet-after")
         let wasExited = exited
         exited = packet.header.exited
         if wasExited != exited { changed?() }
@@ -327,10 +360,11 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private func resizeIfNeeded() async {
         guard generation != nil, receivedInitialFrame, inputControl?.owned != false, let (cols, rows) = desiredSize else { return }
         desiredSize = nil
+        traceLayout("resize-send")
         do { _ = try await bridge.call("terminal.action", params: .object([
             "attachment": .string(attachment), "action": .string("resize"),
             "cols": .number(Double(cols)), "rows": .number(Double(rows))
-        ])) } catch { self.error = error.localizedDescription; changed?() }
+        ])); traceLayout("resize-completed") } catch { self.error = error.localizedDescription; changed?() }
     }
 
     func takeInputControl() async {
@@ -387,6 +421,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
 
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
         guard newCols > 0, newRows > 0, newCols <= 1000, newRows <= 1000 else { return }
+        traceLayout("view-resize")
         guard !applyingReplay else { return }
         viewportSize = (newCols, newRows)
         desiredSize = (newCols, newRows)

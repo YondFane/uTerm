@@ -429,14 +429,24 @@ missing measurements and nonfinite values. Linux passes 84 evidence policies, 16
 including scroll-axis/border/transform/window clipping, and four existing sidebar regressions. The
 ordinary capture correction still needs fresh Mac execution.
 
-An earlier native workspace original did not display its output marker; the reviewed 310ffbd wide
-original does. No parser loss was reproduced in the isolated model. Native workspace capture now
+Source `b8cee0a690eef025df2a2a055117829c90ef753a` / tested merge
+`4c808d19340648ac31be44f2c726640c7083e2a5` passes actual ARM activity rings, project menus and
+settings scenes, then fails its first workspace capture: the formerly rendered Unicode marker is
+absent from the full buffer. The
+[actual failure14069114979](https://github.com/YondFane/uTerm/actions/runs/43491526926/artifacts/14069114979)
+records 25 equal received/rendered/ACK frames, one replay reset, a 51×30 host/local grid and no
+connection error; the original shows the activity ring and missing output. The exact failing event
+is not established. No parser loss was reproduced in the isolated model. Native workspace capture
 requires the marker inside the current renderer viewport and equal received/rendered/ACK counts,
 with the actual grid and frame state stable for 250ms. Reports include visible text, host grid and
 failure diagnostics; no output is cleared or viewport forced to manufacture a match. Three
 exact-copy SwiftTerm parser tests pass on Linux Swift6.1.2 at the locked dependency revision,
 including Unicode preservation across repeated resizes and host-sized reset replay. These model
-tests do not replace new Mac window validation.
+tests do not replace new Mac window validation. Isolated Personal fixtures now retain at most 512
+frame/layout events with a 1MiB serialized-event budget and publish a source-bound trace on this
+failure. The trace includes raw output bytes, string sequence, dimensions, settings and parsed text;
+regular applications do not collect it. No output/viewport rewrite or relaxed assertion masks the
+loss.
 
 The
 [ARM performance build artifact](https://github.com/YondFane/uTerm/actions/runs/43358947620/artifacts/14007752932)
