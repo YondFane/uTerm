@@ -176,6 +176,7 @@ jobs:
         run: bash scripts/macos-git-smoke.sh
       - name: Preserve early Git interaction evidence
         if: ${{ always() && steps.native_build.outcome == 'success' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: native-git-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
@@ -274,6 +275,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-qa-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          name: native-qa-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
           path: macos/.build/evidence/
           if-no-files-found: error

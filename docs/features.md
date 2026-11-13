@@ -491,6 +491,15 @@ supplement the twelve grid scenes and four run/file/conflict originals, for twen
 workspace screenshots. These are separate from the 54-pair Personal/ordinary grid. Current-source
 Mac rendering, actions and original-image review remain required.
 
+Native CI preserves early Git evidence without stopping independent runtime checks when that early
+upload fails. The final complete artifact upload and interaction-matrix gates remain mandatory.
+Final native artifacts include the run attempt so a retry preserves earlier evidence. Intel head
+`6857087` / tested merge `0b677e5` encountered GitHub CreateArtifact timeouts in all five upload
+attempts; later runtime checks were skipped and its matrix is incomplete. The
+[failed artifact14011958933](https://github.com/YondFane/uTerm/actions/runs/43365628863/artifacts/14011958933)
+retains that result. This does not accept the missing checks; current-source Mac CI must execute and
+upload them.
+
 The isolated `workspace-panels-native.json` scenario captures twelve panel-grid main-window scenes
 (English/dark at 1100px and Chinese/light at 640px), clicks terminal/panel/close controls, checks
 retained views/documents and preserves terminal identity/generation. Each capture records its

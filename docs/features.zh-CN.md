@@ -250,6 +250,11 @@ UI 检查仅为语法。
 的[ARM 原生完整产物14011143963](https://github.com/YondFane/uTerm/actions/runs/43365628863/artifacts/14011143963)通过集成检查，但实际 640px 原图显示 SSH 操作裁切及数据库编辑区被挤压，不能据此接受窄窗视觉一致性。当前布局检查测量真实 SSH 字段／保存按钮边界，操作真实展开控件，要求草稿及存储字节不变。数据库／Redis 检查点击真实连接、返回和配置按钮，要求工作台占满视口并保留同一 DOM／配置／存储。新增四张
 `native-workspace-panel-{kind}-connections-{language}-{appearance}-{width}.png`，加十二张网格图和四张运行／文件／冲突图，共要求二十张工作区截图，独立于 54 组 Personal／普通版配对。仍须当前源码 Mac 渲染、操作及原图复核。
 
+原生 CI 的早期 Git 证据上传失败时仍继续独立运行检查，最终完整产物上传与交互矩阵仍为必要门禁。最终原生产物包含运行次数，重试时保留既有证据。Intel 源码
+`6857087`、实际测试 merge `0b677e5` 在五次 GitHub
+CreateArtifact 上传尝试中均超时，后续运行检查被跳过，矩阵不完整；[失败产物14011958933](https://github.com/YondFane/uTerm/actions/runs/43365628863/artifacts/14011958933)保留此结果。缺失检查尚未验收，仍须当前源码 Mac
+CI 执行并上传。
+
 隔离的 `workspace-panels-native.json`
 场景采集十二张面板网格主窗口：1100px 英文深色、640px 中文浅色；点击终端／面板／关闭控件，检查视图与文档保留，以及终端身份／generation。每张记录源码、实际窗口宽度及平台信息。运行面板在设置变化时重绘本地化标签；临时混合项目同时包含有效的最小 POM 与 Python 入口。此集成场景使用离线连接样例；既有 PostgreSQL、Redis、SSH 及运行测试继续覆盖服务与生命周期。 样例创建配置仅在
 `WRITER_BUSY`
