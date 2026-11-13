@@ -401,7 +401,7 @@ The native workspace smoke adds actual Hide-button checks for both Java and Pyth
 write makes a clean configuration stale; hiding must fail and retain the panel. A separately
 injected unsaved draft then fails against the same revision without overwriting the peer. An
 explicit QA fixture reload followed by another edit and actual Hide must persist the exact draft.
-Reports label the injected draft, retain both conflict originals and require 16 workspace-smoke
+Reports label the injected draft, retain both conflict originals and require 20 workspace-smoke
 PNGs; the 54-pair Personal/ordinary grid is separate. Linux passes 56 existing
 evidence/package/matrix policy checks and two existing run-panel frontend regressions, plus type,
 format and document checks; Swift and shell/Python parsing pass. These checks do not compile AppKit.
@@ -465,6 +465,31 @@ tasks run. Reports retain task IDs/generations, follow mode, native-view identit
 expanded/restored PNGs and the main terminal or file. Failed waits include the expected height and
 actual host/content/window bounds. This candidate's Mac execution and ordinary-client panel pairing
 remain pending; earlier full-tab images do not accept the new dock.
+
+When the available native SSH pane is narrower than 720 points, its connection list becomes a
+disclosure row and the form fills the pane. Profile, transfer and forwarding actions wrap within the
+available width. Resizing and opening the connection list retain the SSH draft and saved profile.
+Database and Redis keep the existing compact workbench by default. Below 720px, opening connection
+management shows a full-width list; **Back to workbench** or selecting a profile restores the same
+mounted workbench. The four tool-switch buttons shrink within a compact tools column while retaining
+their icons and keyboard actions.
+
+Linux passes the complete frontend suite (489 passed, 11 platform skips), 43 paired-evidence
+policies and 30 Personal package policies. The new rejection cases cover the observed clipping,
+incomplete control operations, stale sources and missing originals. Type checking, production build,
+i18n, formatting and documentation checks pass; Swift UI validation on Linux is syntax-only.
+
+The
+[ARM native artifact14011143963](https://github.com/YondFane/uTerm/actions/runs/43365628863/artifacts/14011143963),
+head `6857087` / tested merge `0b677e5`, passes integration checks but its actual 640px originals
+reveal clipped SSH actions and a squeezed database editor. Those images do not accept narrow-window
+visual parity. The current layout checks measure real SSH fields/Save bounds, operate the actual
+disclosure and require unchanged drafts/store bytes. Database/Redis checks click actual connection,
+return and profile controls, verify a full-width viewport and retain the same DOM/profile/store.
+Four `native-workspace-panel-{kind}-connections-{language}-{appearance}-{width}.png` originals
+supplement the twelve grid scenes and four run/file/conflict originals, for twenty required
+workspace screenshots. These are separate from the 54-pair Personal/ordinary grid. Current-source
+Mac rendering, actions and original-image review remain required.
 
 The isolated `workspace-panels-native.json` scenario captures twelve panel-grid main-window scenes
 (English/dark at 1100px and Chinese/light at 640px), clicks terminal/panel/close controls, checks

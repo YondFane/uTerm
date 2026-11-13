@@ -234,6 +234,7 @@ export function NativeDatabase() {
         <strong>{tx("数据库连接")}</strong>
         {selected && (
           <button
+            className="native-workbench-back"
             onClick={() => {
               setComponents(false);
               setConnectionsVisible(false);
@@ -295,6 +296,7 @@ export function NativeDatabase() {
                 onClick={() => {
                   setComponents(false);
                   setSelected(config.id);
+                  setConnectionsVisible(false);
                   setTabs((previous) =>
                     previous.some((tab) => tab.id === config.id) ? previous : [...previous, config],
                   );

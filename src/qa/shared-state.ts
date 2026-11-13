@@ -452,6 +452,21 @@ async function runUiParity() {
           .querySelector(".app-shell > .file-panel")
           ?.getBoundingClientRect().width;
         const inspector = document.querySelector(".app-shell > .file-panel")!;
+        const switcherBounds = inspector.getBoundingClientRect();
+        const switcherControls = [...inspector.querySelectorAll(".inspector-switcher button")];
+        assert(
+          switcherControls.length === 4 &&
+            switcherControls.every((button) => {
+              const rect = button.getBoundingClientRect();
+              return (
+                rect.width >= 22 &&
+                rect.height > 0 &&
+                rect.left >= switcherBounds.left &&
+                rect.right <= switcherBounds.right + 0.5
+              );
+            }),
+          "Actual inspector controls clip outside the tool panel",
+        );
         const inspectorGeometry = {
           inspectorTop: inspector.getBoundingClientRect().top,
           inspectorHeight: inspector.getBoundingClientRect().height,

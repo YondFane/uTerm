@@ -229,7 +229,9 @@ export function NativeRedis() {
       <header className="native-database-toolbar" hidden={!connectionsVisible}>
         <strong>{tx("Redis 连接")}</strong>
         {selected && (
-          <button onClick={() => setConnectionsVisible(false)}>{tx("返回工作台")}</button>
+          <button className="native-workbench-back" onClick={() => setConnectionsVisible(false)}>
+            {tx("返回工作台")}
+          </button>
         )}
         <select
           aria-label={tx("工作区")}
@@ -275,6 +277,7 @@ export function NativeRedis() {
                 aria-pressed={selected === config.id}
                 onClick={() => {
                   setSelected(config.id);
+                  setConnectionsVisible(false);
                   setTabs((previous) =>
                     previous.some((tab) => tab.id === config.id) ? previous : [...previous, config],
                   );

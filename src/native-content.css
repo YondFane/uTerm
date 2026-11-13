@@ -91,6 +91,16 @@ body,
   overflow: auto;
   border-right: 1px solid var(--ui-border);
 }
+@media (width < 720px) {
+  .native-database[data-connections-visible="true"] .native-database-layout > aside {
+    width: 100%;
+    min-width: 0;
+    border-right: 0;
+  }
+  .native-database[data-connections-visible="true"] .native-database-workbench {
+    display: none;
+  }
+}
 .native-database-profile {
   padding: 6px;
   display: flex;

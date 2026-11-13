@@ -236,6 +236,7 @@ enum PersonalSmoke {
                         }
                         guard let files = model.inspector.content, files.webView.window === window else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Shared file controls are not mounted in the real inspector") }
                         try await ContentSmoke.wait(files, "\(fixturePathsJSON).every(name => [...document.querySelectorAll('.file-row-name')].some(row => row.textContent.trim() === name)) && document.querySelectorAll('.inspector-tabs [role=tab]').length === 3 && document.querySelectorAll('.inspector-switcher button').length === 4")
+                        try await ContentSmoke.wait(files, "[...document.querySelectorAll('.inspector-switcher button')].every(button=>{const rect=button.getBoundingClientRect();return rect.width>=22 && rect.height>0 && rect.left>=0 && rect.right<=innerWidth+.5})")
                         let rawStatus = try await bridge.call("git.fileStatus", params: .object(["directory": .string(files.directory.path)]))
                         let normalizedStatus = try ContentFileRoot.normalizingGitRoot(rawStatus)
                         report["workspaceGitRootDiagnostics"] = ["selectedDirectory": files.directory.path, "rawGitRoot": rawStatus["root"].string ?? "", "normalizedGitRoot": normalizedStatus["root"].string ?? ""]

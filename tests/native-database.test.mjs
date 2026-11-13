@@ -171,6 +171,19 @@ test("native database profile conflicts retain input and quit/resume keeps a mod
     assert.equal(document.querySelector(".native-database-layout > aside").hidden, false);
     assert.equal(document.querySelector(".database-workspace"), retainedWorkbench);
     assert.ok(document.querySelector("dialog[open]"), "Navigation must retain the profile draft");
+    await act(async () => document.querySelector(".native-workbench-back").click());
+    assert.equal(document.querySelector(".native-database-layout > aside").hidden, true);
+    assert.equal(document.querySelector(".database-workspace"), retainedWorkbench);
+    await act(async () => document.querySelector(".native-workbench-connections").click());
+    await act(async () =>
+      document.querySelector(".native-database-profile-name[aria-pressed=true]").click(),
+    );
+    assert.equal(document.querySelector(".native-database-layout > aside").hidden, true);
+    assert.equal(document.querySelector(".database-workspace"), retainedWorkbench);
+    assert.ok(
+      document.querySelector("dialog[open]"),
+      "Connection navigation must retain an unrelated modal draft",
+    );
     const name = document.querySelector("dialog[open] input");
     await change(name, "Retained draft 中文");
     await change(input("Password"), "PRIVATE_TEMPORARY_PASSWORD");

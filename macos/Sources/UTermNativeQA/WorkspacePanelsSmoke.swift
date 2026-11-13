@@ -74,6 +74,10 @@ enum WorkspacePanelsSmoke {
                 await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
                 window.setContentSize(NSSize(width: CGFloat(width), height: 720))
                 try await TerminalSmoke.wait("Actual panel window reaches requested width") { abs((window.contentView?.bounds.width ?? 0) - CGFloat(width)) < 1 }
+                if kind == "ssh" { try await WorkbenchLayoutSmoke.ssh(model: model, window: window, language: language, appearance: appearance, width: width, report: &report) }
+                if ["database", "redis"].contains(kind) {
+                    try await WorkbenchLayoutSmoke.connections(model: model, window: window, kind: kind, language: language, appearance: appearance, width: width, evidence: evidence, report: &report, captures: &captures)
+                }
                 let screenshot = "native-workspace-panel-" + kind + "-" + language + "-" + appearance + "-" + String(width) + ".png"
                 try await capture(screenshot)
                 scenes.append(["scenario": kind, "language": language, "appearance": appearance, "width": width, "height": 720, "screenshot": screenshot,

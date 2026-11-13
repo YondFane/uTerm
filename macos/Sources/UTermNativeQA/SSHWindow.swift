@@ -340,6 +340,7 @@ private struct SSHRow: Identifiable {
 @MainActor
 struct SSHView: View {
     @ObservedObject var model: SSHModel
+    @State private var connectionsExpanded = false
     @ViewBuilder private var profileForm: some View {
         Text(localized("Workspace: ", "工作区：") + model.snapshotWorkspaceName).font(.caption).foregroundStyle(.secondary)
         Grid(alignment: .leading) {
@@ -358,11 +359,13 @@ struct SSHView: View {
             GridRow { Text(localized("Remote system", "远端系统")); Picker("", selection: $model.remoteOS) { Text("Linux / macOS").tag("posix"); Text("Windows").tag("windows") }.labelsHidden() }
             GridRow { Text(localized("File root", "文件根目录")); TextField("", text: $model.rootPath) }
         }.disabled(model.busy || model.prepared)
-        HStack {
+            .background { NativeRunPanelFrame(identifier: "native-ssh-profile-fields-frame") }
+        NativeRunToolbarLayout() {
             Button(localized("Show effective configuration", "显示生效配置")) { Task { await model.resolve() } }
-            Spacer()
-            Button(localized("Reload", "重新读取")) { Task { if await model.confirmDraft() { await model.reload() } } }
-            Button(localized("Save connection", "保存连接")) { Task { _ = await model.save() } }.accessibilityIdentifier("ssh-save")
+            Spacer(minLength: 0).layoutValue(key: NativeRunToolbarSpace.self, value: true)
+            Button(localized("Reload", "重新读取")) { Task { if await model.confirmDraft() { await model.reload() } } }.fixedSize()
+            Button(localized("Save connection", "保存连接")) { Task { _ = await model.save() } }.fixedSize().accessibilityIdentifier("ssh-save")
+                .background { NativeRunPanelFrame(identifier: "native-ssh-save-frame") }
             if model.profile["temporary"].bool == true {
                 Button(localized("Save connection", "保存为常用连接")) { Task { await model.keepTemporary() } }.disabled(model.dirty).accessibilityIdentifier("ssh-keep-temporary")
             }
@@ -371,8 +374,8 @@ struct SSHView: View {
         if !model.resolution.isEmpty { Text(model.resolution).font(.caption).textSelection(.enabled) }
     }
     @ViewBuilder private var remoteFiles: some View {
-        HStack {
-            Text(localized("Remote files", "远程文件")).font(.headline); Spacer()
+        NativeRunToolbarLayout() {
+            Text(localized("Remote files", "远程文件")).font(.headline); Spacer(minLength: 0).layoutValue(key: NativeRunToolbarSpace.self, value: true)
             Button(model.connected ? localized("Reconnect", "重新连接") : localized("Connect files", "连接文件")) { Task { await model.connectFiles() } }.disabled(model.busy || model.prepared || model.dirty || model.selectedID.isEmpty).accessibilityIdentifier("ssh-connect-files")
             Button(localized("Disconnect", "断开")) { Task { await model.disconnectFiles() } }.disabled(!model.connected || model.busy || model.prepared)
         }
@@ -384,7 +387,7 @@ struct SSHView: View {
                     HStack { Image(systemName: item["directory"].bool == true ? "folder" : "doc"); Text(item["name"].string ?? ""); if item["symlink"].bool == true { Text("↗") }; Spacer(); if item["directory"].bool == true { Button(localized("Open", "打开")) { Task { await model.enter(item) } } } }.tag(item["path"].string ?? "")
                 }
             }.frame(minHeight: 150, idealHeight: 190).disabled(model.busy || model.prepared).accessibilityIdentifier("ssh-files")
-            HStack {
+            NativeRunToolbarLayout() {
                 Button(localized("Preview", "预览")) { Task { await model.previewFile() } }.disabled(model.selection == nil)
                 Button(localized("Download…", "下载…")) { Task { await model.transfer(direction: "download") } }.disabled(model.selection == nil)
                 Spacer()
@@ -412,34 +415,53 @@ struct SSHView: View {
             }.disabled(model.busy || model.prepared || model.dirty)
             if let message = status?["error"].string { Text(message).foregroundStyle(.red).font(.caption).textSelection(.enabled) }
         }
-        HStack {
+        NativeRunToolbarLayout() {
             TextField(localized("Local port", "本地端口"), text: $model.localPort).frame(width: 100)
-            TextField(localized("Remote host", "远端地址"), text: $model.remoteHost)
+            TextField(localized("Remote host", "远端地址"), text: $model.remoteHost).frame(width: 160)
             TextField(localized("Remote port", "远端端口"), text: $model.remotePort).frame(width: 100)
             Button(localized("Add forwarding", "添加转发")) { Task { await model.addForward() } }
         }.disabled(model.busy || model.prepared || model.dirty || model.selectedID.isEmpty)
     }
+    private var connections: some View {
+        VStack {
+            List(model.connections.map(SSHRow.init)) { row in
+                let value = row.value
+                Button(value["name"].string ?? "SSH") { Task { await model.select(value["id"].string) } }.buttonStyle(.plain).accessibilityIdentifier("ssh-profile-" + (value["id"].string ?? ""))
+            }
+            HStack { Button(localized("Add", "添加")) { Task { await model.select(nil) } }; Button(localized("Remove", "移除")) { Task { await model.remove() } }.disabled(model.selectedID.isEmpty); Spacer() }.padding(8)
+        }.disabled(model.busy || model.prepared)
+            .background { NativeRunPanelFrame(identifier: "native-ssh-connections-list-frame") }
+    }
+    private var form: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                if model.busy { HStack { ProgressView().controlSize(.small); Text(localized("Working…", "正在处理…")) } }
+                profileForm
+                Divider()
+                remoteFiles
+                Divider()
+                forwarding
+                if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("ssh-error") }
+                if !model.feedback.isEmpty { Text(model.feedback).foregroundStyle(.secondary).accessibilityIdentifier("ssh-feedback") }
+            }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        }.frame(minWidth: 0, maxWidth: .infinity)
+    }
     var body: some View {
-        HSplitView {
-            VStack {
-                List(model.connections.map(SSHRow.init)) { row in
-                    let value = row.value
-                    Button(value["name"].string ?? "SSH") { Task { await model.select(value["id"].string) } }.buttonStyle(.plain).accessibilityIdentifier("ssh-profile-" + (value["id"].string ?? ""))
+        GeometryReader { geometry in
+            if geometry.size.width < 720 {
+                VStack(spacing: 0) {
+                    NativeRunDisclosure(localized("SSH connections", "SSH 连接"), id: "native-ssh-connections-toggle", expanded: $connectionsExpanded) {
+                        connections.frame(height: 160)
+                    }.padding(8)
+                    Divider()
+                    form
                 }
-                HStack { Button(localized("Add", "添加")) { Task { await model.select(nil) } }; Button(localized("Remove", "移除")) { Task { await model.remove() } }.disabled(model.selectedID.isEmpty); Spacer() }.padding(8)
-            }.frame(minWidth: 150, idealWidth: 180, maxWidth: 240).disabled(model.busy || model.prepared)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    if model.busy { HStack { ProgressView().controlSize(.small); Text(localized("Working…", "正在处理…")) } }
-                    profileForm
-                    Divider()
-                    remoteFiles
-                    Divider()
-                    forwarding
-                    if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("ssh-error") }
-                    if !model.feedback.isEmpty { Text(model.feedback).foregroundStyle(.secondary).accessibilityIdentifier("ssh-feedback") }
-                }.padding(12)
-            }.frame(minWidth: 550)
+            } else {
+                HSplitView {
+                    connections.frame(minWidth: 150, idealWidth: 180, maxWidth: 240)
+                    form.frame(minWidth: 320)
+                }
+            }
         }.sheet(isPresented: $model.previewPresented) {
             VStack { ScrollView { Text(model.preview).font(.system(.body, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }; Button(localized("Close", "关闭")) { model.previewPresented = false } }.padding().frame(minWidth: 480, minHeight: 300)
         }
