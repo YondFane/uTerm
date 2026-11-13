@@ -1425,6 +1425,20 @@ side effects and parsed text do not establish GPU display acceptance.
 [Source-bound reports/artifacts](https://github.com/YondFane/uTerm/issues/32#issuecomment-6631153924)
 retain this gap. Manual keyboard, IME and system-clipboard acceptance remain unexecuted.
 
+Concurrent Tauri QA now holds the original owner's ready acknowledgement while the readonly peer
+starts and completes its renderer captures. It releases the owner assertion and actual viewer
+takeover together only after matching session ID, generation and host PID. The existing 30-second
+UI assertions, passive-input rejection and ordinary-exit/reacquisition checks remain unchanged.
+`input-control-handoff.json` records release timing, identities and completion. At source
+`3e609640ba640a9ae665adb80ca4dcfc0c063f03` / tested merge
+`266c379eb9c5b66070db1921a3f7592a7ea858d2`, Mac owner-ready and viewer-readonly reports were 32
+seconds apart; the owner timed out before the peer completed its capture acknowledgement. The
+[failure report and original windows14030727283](https://github.com/YondFane/uTerm/actions/runs/43408460674/artifacts/14030727283)
+are retained. Linux passes 14 handoff/input/lifecycle regressions, including delayed peer startup,
+cross-session/generation/host rejection, duplicate and replayed scenes. The delayed-start regression
+simulates the observed 32-second capture interval; it does not execute a Mac application. Actual
+current-source Mac execution is still required.
+
 Tauri ownership QA retains baseline GPU captures before explicitly losing the actual WebGL context
 through `WEBGL_lose_context`, then requires xterm's existing DOM fallback to display the same shell
 marker. Both app processes retain the same session/generation through recovery, takeover and output.
@@ -2942,6 +2956,19 @@ application writes do not gain automatic retries. The current
 [Intel report](https://github.com/YondFane/uTerm/actions/runs/43345255828/artifacts/14003763231)
 records successful profile fixtures and panel checks, followed by busy cleanup of an SSH fixture.
 The new cleanup policy still requires its own Mac run.
+
+Quick SSH QA now waits for the workspace operation to finish before closing each exact fixture
+session, then verifies the canonical session was removed and the saved profile was retained or the
+temporary profile pruned. It records readiness, close stages and errors even on failure; profile
+removal still refuses active sessions. Intel source `81a7438aaaa5b78d23496a87acbb8e2f5f574065`,
+tested merge `79e010ee54d1eaa3312a4ff6f8f7d1d7a91bde5a`, passed the other independent reports but
+failed this cleanup with `SSH_CONNECTION_BUSY`; the inspector and interaction matrix were not
+accepted. The [complete failure report and originals14027282789](https://github.com/YondFane/uTerm/actions/runs/43385656739/artifacts/14027282789)
+are retained. The previous report did not record whether close was invoked while busy; its caller
+waited for published profile data while the close method may refuse a busy workspace. The new
+readiness and postcondition checks still require an actual Mac run on their own source. Linux
+passes Swift 6.1.2 parsing, shell/embedded Python syntax, three existing Core SSH tests, three
+shared-form/frontend regressions, formatting and documentation checks; these do not execute AppKit.
 
 SSH host filtering retains the mounted native search cell while inserting/removing result rows. An
 empty query explicitly restores all hosts and external query changes synchronize the editor. At head

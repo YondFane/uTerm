@@ -186,14 +186,42 @@ enum QuickSSHSmoke {
                 return profile["sessions"].array.first?["id"].string == session
             })
         }
-        await model.closeSession(id: session)
-        guard connections(model).contains(where: { $0["id"].string == id }) else { throw BridgeFailure(code: "QUICK_SSH_KEEP", message: "Closing the final session removed a saved connection") }
+        var closeReadiness: [[String: Any]] = []
+        defer { report["quickSSHFixtureCloseReadiness"] = closeReadiness }
+        @MainActor func closeFixtureSession(_ target: String, profileID: String, temporary: Bool) async throws {
+            let initiallyBusy = model.busy
+            let index = closeReadiness.count
+            closeReadiness.append(["sessionID": target, "profileID": profileID, "initiallyBusy": initiallyBusy, "stage": "waiting-ready"])
+            // Published profile data can precede the operation's busy-state cleanup.
+            // 连接数据发布可能早于操作清除忙碌状态，关闭前必须等待操作完成。
+            try await TerminalSmoke.wait("Complete the actual Quick SSH operation before closing its session") {
+                model.ready && !model.busy && model.groupID == workspaceID
+            }
+            guard connections(model).contains(where: { $0["id"].string == profileID && $0["sessions"].array.contains(where: { $0["id"].string == target }) }) else {
+                throw BridgeFailure(code: "QUICK_SSH_CLOSE", message: "The exact fixture session disappeared before close")
+            }
+            closeReadiness[index]["stage"] = "closing"
+            await model.closeSession(id: target)
+            let profile = connections(model).first(where: { $0["id"].string == profileID })
+            let sessionRemoved = !model.sessionEntries.contains(where: { $0.sessionID == target })
+            let profileCorrect = temporary ? profile == nil : profile?["sessions"].array.isEmpty == true
+            closeReadiness[index]["busyAfterClose"] = model.busy
+            closeReadiness[index]["sessionRemoved"] = sessionRemoved
+            closeReadiness[index]["profileCorrect"] = profileCorrect
+            closeReadiness[index]["error"] = model.error
+            guard !model.busy, model.error.isEmpty, sessionRemoved, profileCorrect else {
+                throw BridgeFailure(code: "QUICK_SSH_CLOSE", message: "Closing the fixture did not remove its session and retain/prune the expected profile; see quickSSHFixtureCloseReadiness")
+            }
+            closeReadiness[index]["stage"] = "completed"
+        }
+        try await closeFixtureSession(session, profileID: id, temporary: false)
+        report["nativeQuickSSHSavedSessionClosedBeforeProfileCleanup"] = true
         quick = try await open()
         try await address(quick, "ssh://127.0.0.1:1")
         _ = try await quick.webView.evaluateJavaScript("document.querySelector('form').requestSubmit()")
         try await TerminalSmoke.wait("Create another temporary connection for actual close cleanup") { lookup() == nil && createdTemporary(model) }
         guard let temporary = connections(model).first(where: { $0["temporary"].bool == true }), let temporaryID = temporary["id"].string, let temporarySession = temporary["sessions"].array.first?["id"].string else { throw BridgeFailure(code: "QUICK_SSH_PRUNE", message: "Missing temporary cleanup fixture") }
-        await model.closeSession(id: temporarySession)
+        try await closeFixtureSession(temporarySession, profileID: temporaryID, temporary: true)
         guard !connections(model).contains(where: { $0["id"].string == temporaryID }) else { throw BridgeFailure(code: "QUICK_SSH_PRUNE", message: "Closing the final session retained an idle temporary connection") }
         report["nativeQuickSSHActualFinalSessionPrunesTemporary"] = true
         var cleanupWriteAttempts: [String: Int] = [:], cleanupReadRetries = 0
