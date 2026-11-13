@@ -74,6 +74,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert not load['performanceComparison'],load
     assert second['replayed'] and second['explicitCloseStoppedProcesses'] and second['idleHostShutdown'],second
     assert sorted(first['sessions'],key=lambda s:s['id'])==sorted(second['sessions'],key=lambda s:s['id']),reports
+    assert second['restoredTerminalViewsVisible'] and first['persistedSplitLayout']==second['restoredSplitLayout'],reports
+    assert first['persistedSplitLayout']['kind']=='split' and second['captures']==['native-reconnect-restored-layout.png'],reports
+    restored=evidence/second['captures'][0]
+    assert restored.stat().st_size>1000 and restored.read_bytes().startswith(b'\x89PNG\r\n\x1a\n'), 'Missing actual restored-layout window'
     for report, name in zip(reports, ['terminal-live', 'terminal-reconnect']):
         report.update(passed=True, testedMergeSHA=report['sourceSHA'], sourceTreeDirty=False, processExitCode=0)
         (evidence/(name+'.json')).write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n')

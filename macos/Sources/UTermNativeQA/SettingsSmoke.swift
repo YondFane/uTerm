@@ -800,6 +800,7 @@ enum SettingsSmoke {
     private static func verifyAutomaticSave(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
         let model = settings.model, peer = try await CoreBridge.open(root: root)
         do {
+            report["nativeSettingsAutomaticSaveStage"] = "baseline"
             let before = try await readSnapshot(peer)
             model.section = "general"
             try await editField(settings, key: "fileTabLimit", text: "0")
@@ -815,8 +816,9 @@ enum SettingsSmoke {
             let draft = before.document.settings["fontSize"].number == 18 ? "19" : "18"
             let peerSize = before.document.settings["fontSize"].number == 20 ? 21.0 : 20.0
             model.numbers["fontSize"] = draft
+            report["nativeSettingsAutomaticSaveStage"] = "prepare-peer-conflict"
             let snapshot = try await readSnapshot(peer)
-            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(snapshot.revision), "patch": .object(["fontSize": .number(peerSize)])]))
+            try await patchPeer(peer, baseline: snapshot, patch: .object(["fontSize": .number(peerSize)]))
             model.section = "appearance"
             let id = "native-settings-font-interfaceFont"
             try await TerminalSmoke.wait("Render the actual font picker for scoped automatic save") { (view(settings.window, id: id) as? NSPopUpButton)?.isEnabled == true }
@@ -902,6 +904,7 @@ enum SettingsSmoke {
             }
             guard model.error.isEmpty, themed.document.settings["interfaceTheme"].string == themeID,
                   terminalKeys.allSatisfy({ themed.document.settings[$0] == saved.document.settings[$0] }) else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Theme selection changed terminal preferences or failed to save; see nativeSettingsThemeSaveAttempts") }
+            report["nativeSettingsAutomaticSaveStage"] = "theme-captures"
             let oldSize = settings.window.contentView?.bounds.size ?? NSSize(width: 760, height: 620)
             var themeCaptures: [String] = []
             for width in [900, 640] {
@@ -911,13 +914,21 @@ enum SettingsSmoke {
                 try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(name)); themeCaptures.append(name)
             }
             settings.window.setContentSize(oldSize)
+            report["nativeSettingsAutomaticSaveStage"] = "restore-fixture-read"
             let current = try await readSnapshot(peer)
-            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(["fileTabLimit": before.document.settings["fileTabLimit"], "fontSize": before.document.settings["fontSize"], "interfaceFont": before.document.settings["interfaceFont"], "interfaceTheme": before.document.settings["interfaceTheme"]])]))
+            report["nativeSettingsAutomaticSaveStage"] = "restore-fixture-write"
+            try await patchPeer(peer, baseline: current, patch: .object(["fileTabLimit": before.document.settings["fileTabLimit"], "fontSize": before.document.settings["fontSize"], "interfaceFont": before.document.settings["interfaceFont"], "interfaceTheme": before.document.settings["interfaceTheme"]]))
+            report["nativeSettingsAutomaticSaveStage"] = "restore-ui-reload"
             await model.workspace.reload(); await model.reload()
             guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_RELOAD", message: "Explicit reload did not recover the saved preferences") }
             report["nativeSettingsAutomaticSaveProof"] = ["actualFieldEditorBlur": true, "actualFieldEditorEnter": true, "enterRetainsUnrelatedDraft": true, "invalidDraftRetainedWithoutWrite": true, "correctedFieldSavedAutomatically": true, "actualFontPicker": true, "scopedWrite": true, "otherDraftRetained": true, "peerWriteConflictRetained": true, "actualThemePreviewSelection": true, "terminalThemeUnchanged": true, "explicitReloadRecovery": true, "capture": capture, "themeCaptures": themeCaptures]
+            report["nativeSettingsAutomaticSaveStage"] = "completed"
             await peer.close()
-        } catch { await peer.close(); throw error }
+        } catch {
+            report["settingsQAReadOnlyRetryCount"] = readRetries
+            report["settingsQAPeerWriteRetryCount"] = peerWriteRetries
+            await peer.close(); throw error
+        }
     }
 
     private static func verifyFontPickers(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {

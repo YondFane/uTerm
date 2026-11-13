@@ -22,11 +22,17 @@ enum TerminalSmoke {
             try await wait("Reattach both retained processes") { model.terminals.count == 2 && model.terminals.values.allSatisfy { $0.generation != nil && $0.error.isEmpty } }
             try await wait("Replay retained Unicode output") { model.terminals.values.contains { $0.text.contains("UTERM_中文 é") } }
             try await wait("Display both restored native terminal views") {
-                model.terminals.values.allSatisfy { $0.view.window === window && $0.view.visibleRect.width > 0 && $0.view.visibleRect.height > 0 }
+                model.terminals.values.allSatisfy { $0.view.window === window && $0.view.visibleRect.width > 0 && $0.view.visibleRect.height > 0 && $0.qaRenderedFrames > 0 }
             }
             report["restoredTerminalViewsVisible"] = true
             report["replayed"] = true
             report["sessions"] = model.terminals.values.map { ["id": $0.id, "generation": $0.generation ?? ""] }
+            guard let layout = model.state?.layout, layout["kind"].string == "split",
+                  let reportPath = WorkspaceModel.argument("--terminal-reconnect-report") else { throw BridgeFailure(code: "SMOKE_REPLAY", message: "The reopened split layout or report destination is missing") }
+            report["restoredSplitLayout"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(layout))
+            let captureName = "native-reconnect-restored-layout.png"
+            try await capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(captureName))
+            report["captures"] = [captureName]
             let ids = model.state?.sessions.map(\.sessionID) ?? []
             for id in ids { await model.selectSession(id); await model.closeSession() }
             let status = try await bridge.call("host.status")
@@ -152,6 +158,8 @@ enum TerminalSmoke {
         guard abs(model.toolbarHeight - CGFloat(CoreChrome.titlebarHeight)) < 1 else { throw BridgeFailure(code: "SMOKE_TOOLBAR", message: "Measured native toolbar height differs from the shared chrome target") }
         report["nativeToolbarHeight"] = model.toolbarHeight
         report["sessions"] = model.terminals.values.map { ["id": $0.id, "generation": $0.generation ?? ""] }
+        guard let layout = model.state?.layout, layout["kind"].string == "split" else { throw BridgeFailure(code: "SMOKE_SPLIT", message: "The final split layout is missing before application quit") }
+        report["persistedSplitLayout"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(layout))
         let status = try await bridge.call("host.status")
         guard status["sessions"].array.filter({ $0["running"].bool == true }).count == 2,
               status["executable"].string?.hasSuffix("uterm-session-host") == true else { throw BridgeFailure(code: "SMOKE_HELPER", message: "Host is not the staged standalone Rust executable") }

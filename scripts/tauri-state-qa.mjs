@@ -23,6 +23,7 @@ import { createServer } from "node:http";
 import assert from "node:assert/strict";
 import { startResourceSampler } from "./client-resource-sampler.mjs";
 import { assertParityOperations, assertParityScenes } from "./ui-parity-scenes.mjs";
+import { createInputTakeoverHandoff } from "./qa-input-handoff.mjs";
 
 const editorFixture = JSON.parse(
   readFileSync(resolve("shared/fixtures/editor-draft-qa.json"), "utf8"),
@@ -399,6 +400,10 @@ print(number.uint32Value)
     const owner = start("input-owner");
     let viewer;
     let ownerReadonlyAck;
+    const handoff = createInputTakeoverHandoff();
+    const handoffEvents = [];
+    const handoffStarted = Date.now();
+    let handoffPassed = false;
     const deadline = Date.now() + 180000;
     try {
       while (Date.now() < deadline) {
@@ -423,9 +428,22 @@ print(number.uint32Value)
             });
             assert.notEqual(value.scene, "failure", JSON.stringify(value.checks));
             const ack = join(evidence, file.replace(/\.json$/, ".ack"));
-            if (value.scene === "input-owner-readonly") ownerReadonlyAck = ack;
+            const ready = handoff.observe(value.scene, ack, value.checks);
+            if (ready) {
+              handoffEvents.push({
+                scene: value.scene,
+                elapsedMilliseconds: Date.now() - handoffStarted,
+                acknowledgements: ready.acknowledgements.length,
+                startViewer: ready.startViewer,
+                sessionID: value.checks.sessionID,
+                generation: value.checks.generation,
+                hostPID: value.checks.hostPID,
+              });
+              for (const path of ready.acknowledgements)
+                writeFileSync(path, "peer captured; takeover ready");
+              if (ready.startViewer) viewer = start("input-viewer");
+            } else if (value.scene === "input-owner-readonly") ownerReadonlyAck = ack;
             else writeFileSync(ack, "captured");
-            if (value.scene === "input-owner-ready") viewer = start("input-viewer");
           }
         }
         if (viewer?.closed) {
@@ -455,12 +473,27 @@ print(number.uint32Value)
           }
           for (const name of ["stale-owner.txt", "passive-viewer.txt"])
             assert(!existsSync(join(root, "project", name)), name);
+          handoffPassed = true;
           return;
         }
         await delay(100);
       }
       throw Error("Concurrent actual Tauri input-control acceptance timed out");
     } finally {
+      writeFileSync(
+        join(output, "input-control-handoff.json"),
+        JSON.stringify(
+          {
+            ...metadata,
+            passed: handoffPassed,
+            policy:
+              "Release the owner assertion and viewer takeover only after the same actual peer has completed readonly capture",
+            events: handoffEvents,
+          },
+          null,
+          2,
+        ),
+      );
       for (const state of applications) {
         writeFileSync(join(output, state.phase + ".log"), state.log);
         writeFileSync(

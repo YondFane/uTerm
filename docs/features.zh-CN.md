@@ -158,6 +158,14 @@ Swift
 `WRITER_BUSY`
 拒绝的写入才可使用原修订最多执行三次；冲突、外部变化或其他错误立即失败，应用写入不增加自动重试。当前[Intel 报告](https://github.com/YondFane/uTerm/actions/runs/43345255828/artifacts/14003763231)记录配置样例及面板检查通过，随后清理 SSH 样例时遇到忙碌写锁。新清理策略仍须自己的 Mac 运行。
 
+快速 SSH
+QA 现等待工作区操作完成后，关闭准确的样例会话，并核对规范会话已移除、常用连接仍保留或临时连接已清除。报告在失败时也记录就绪状态、关闭阶段和错误；删除连接仍拒绝活动会话。Intel 源码
+`81a7438aaaa5b78d23496a87acbb8e2f5f574065`、实际测试 merge
+`79e010ee54d1eaa3312a4ff6f8f7d1d7a91bde5a` 的其他独立报告通过，但清理时遇到
+`SSH_CONNECTION_BUSY`，检查器和交互矩阵未验收。[完整失败报告与原图14027282789](https://github.com/YondFane/uTerm/actions/runs/43385656739/artifacts/14027282789)保留。此前未记录调用关闭时是否仍忙；调用方只等待连接数据发布，而关闭方法可能拒绝忙碌工作区。新增就绪及关闭后状态检查仍须当前源码真实 Mac 运行。Linux 已通过 Swift
+6.1.2 解析、shell／内嵌 Python 语法、三项既有 Core
+SSH 测试、三项共享表单／前端回归及格式／文档检查；未在 Linux 执行 AppKit。
+
 全部与 SSH 分类均在 SSH 分组内提供快速连接及主机搜索。筛选忽略大小写，只匹配名称、地址和用户名，保留所选项、会话及原本已获得焦点的搜索编辑器。原生快速 SSH 在主工作区上方显示与普通版相同的模态表单和解析器；完整工作台集成及视觉对照仍需对齐。
 
 源码 `047ff1a7`、实际测试 merge `885b4efb`
@@ -190,7 +198,8 @@ Swift 语法及脚本解析通过，新的 Mac 原图和后续通知检查仍待
 `bc7f747cd344fadf6fb5c4406c6a41df371b576e`／实际测试 merge
 `f86245fe9e43918a0e1c609547e03ead7111b8b1`
 已恢复可见表单，但实测三列 164／163／164 点触发旧等宽断言，JDK 目录也换行占用了过多高度。[实际失败14019779207](https://github.com/YondFane/uTerm/actions/runs/43385658859/artifacts/14019779207)保留带字段矩形的
-`personal-initial.json` 及 `personal-initial-failure.png`。Linux 十六项 Swift Foundation 测试覆盖该实测网格、Retina 取整、窄窗 Python 行，以及错列、边界偏移和重叠拒绝；新的同源码 Mac 操作和原图验收仍为必需。
+`personal-initial.json` 及 `personal-initial-failure.png`。Linux 十六项 Swift
+Foundation 测试覆盖该实测网格、Retina 取整、窄窗 Python 行，以及错列、边界偏移和重叠拒绝；新的同源码 Mac 操作和原图验收仍为必需。
 
 **运行表单验证**
 
@@ -200,10 +209,9 @@ Swift 语法及脚本解析通过，新的 Mac 原图和后续通知检查仍待
 `personal-{phase}-run-form-{kind}-{language}-{appearance}-{width}.png` 与
 `ui-parity-run-form-{kind}-{language}-{appearance}-{width}.png`。缺少另一版原图、未执行输入、样例值变化、过期源码／merge 元数据、无效几何或原图缺失均拒绝配对。这些是采集门禁，尚不代表新 Mac 场景已通过。 每次保存检查清理上次测试反馈并等待新的回调；普通版在派发后等待真实保存控件恢复可用。
 
-Linux 通过 14 项 Swift
-Foundation、12 项 Node 及 60 项包／配对策略测试，以及类型、生产构建、格式及文档检查。 使用 Temurin
-JDK 21.0.13 的完整 Node 套件通过 489 项、按平台跳过 11 项；`JAVA_HOME` 必须指向包含 `javac`
-的完整 JDK。
+同步已验收的 release 基线后，Linux 通过 20 项 Swift
+Foundation（16 项布局／输入／默认值和四项操作反馈）、12 项 Node 及 83 项 Python 包／配对／artifact／工作台／交互策略，以及类型、生产构建、格式和文档检查。完整 Node 套件要求
+`JAVA_HOME` 指向包含 `javac` 的完整 JDK，继续由当前源码 CI 执行。
 
 Linux Swift 6.1.2
 Foundation 测试覆盖布局、Python 检测／模式默认值及按字节核对的共用参数／环境变量样例。Node 对普通版两种语言面板运行同一样例，覆盖 CRLF、空字符串、Windows 反斜杠、Unicode 空白及保留环境变量名。新的 AppKit 渲染、输入／保存及绑定源码的截图仍须 macOS
@@ -267,10 +275,11 @@ CI 执行并上传。
 
 Personal 的 PR 产物也包含运行次数。成对截图汇集器选择匹配的最新尝试，仍支持旧名称；最新证据已过期时不能退回旧产物，源码／merge 和报告检查仍为必需。按版本发布的收集名称保持不变。ARM 源码
 `4e1eb47f95282ca4b22798745b19e35ea99ab3bb`／实际测试 merge
-`3b480c338acb7a097ba5fb6f19c89e3500613969`
-已构建并通过桥接测试，但在真实窗口启动前，现有五次 `hdiutil verify`
-均返回“Resource temporarily unavailable”。[原始产物14021661024](https://github.com/YondFane/uTerm/actions/runs/43385658224/artifacts/14021661024)保留
-`personal-package.json` 及命令日志，没有应用截图。Linux 八项发现测试及工作流检查通过；真实镜像校验和 Mac 窗口验收仍待完成，重跑保留之前的证据。
+`3b480c338acb7a097ba5fb6f19c89e3500613969` 已构建并通过桥接测试，但在真实窗口启动前，现有五次
+`hdiutil verify` 均返回“Resource temporarily
+unavailable”。[原始产物14021661024](https://github.com/YondFane/uTerm/actions/runs/43385658224/artifacts/14021661024)保留
+`personal-package.json`
+及命令日志，没有应用截图。Linux 八项发现测试及工作流检查通过；真实镜像校验和 Mac 窗口验收仍待完成，重跑保留之前的证据。
 
 隔离的 `workspace-panels-native.json`
 场景采集十二张面板网格主窗口：1100px 英文深色、640px 中文浅色；点击终端／面板／关闭控件，检查视图与文档保留，以及终端身份／generation。每张记录源码、实际窗口宽度及平台信息。运行面板在设置变化时重绘本地化标签；临时混合项目同时包含有效的最小 POM 与 Python 入口。此集成场景使用离线连接样例；既有 PostgreSQL、Redis、SSH 及运行测试继续覆盖服务与生命周期。 样例创建配置仅在
@@ -430,11 +439,25 @@ generation 和终端视图。排序限于同一会话列表、Worktree 及置顶
 原生 QA 在第二个 Core 客户端写入期间保留实际置顶／移动菜单，要求旧操作发生冲突；随后通过新菜单将实际终端分组移至另一工作区并移回，核对 PTY
 generation 与原生视图不变，并重新打开保存快照检查分屏布局。原图为
 `native-project-workspace-move.png` 和
-`personal-{phase}-project-workspace-move.png`；个人版安装包要求与源码绑定的
-`nativeProjectMenuRevisionAndWorkspaceMove` 证据。Linux
-x86_64 的五项会话检查、十二项持久化检查（一项明确 I/O 检查忽略）及十八项安装包证据策略通过。原生代理模拟使用独立剪贴板和实际表格回调，拒绝外部来源、伪造内容、取消拖动及过期 revision，再通过共享 Core 重排并恢复会话。报告明确标注输入为模拟；物理指针拖动未执行。新增菜单、模拟放置与截图场景仍待 Mac
-CI。本任务已免除人工交互验收，自动化检查仍须通过。 首轮 ARM 代理模拟编译发现继承的 NSObject 文件承诺方法须声明
-`override`；声明已修正，仍须新的 Mac 构建与执行。
+`personal-{phase}-project-workspace-move.png`；安装包要求与源码绑定的
+`nativeProjectMenuRevisionAndWorkspaceMove`
+证据。代理模拟使用独立剪贴板和实际 NSTableView 回调，拒绝外部来源、伪造内容、取消拖动及过期 revision，再通过共享 Core 重排并恢复会话。物理指针拖动未执行；分组菜单是否实际执行单独记录。
+
+快照恢复仅清除来自快照读取的反馈。菜单或 Git 操作失败后，即使错误文字与先前读取错误相同，也继续显示；后台读取失败不能覆盖操作冲突。使用 Swift
+6.1.2 在 Linux 隔离执行的四项 Foundation 测试通过，也在下述已记录的 Mac Native 套件中通过。
+
+菜单及 Worktree QA 记录每次操作结果。仅在可见 `WRITER_BUSY`
+且原 revision、完整工作区及设置均未变时，允许最多两次明确重新点击；菜单保留捕获的 revision，Worktree 操作还须再次通过真实确认框，并保留原目录及脏文件字节。脏目录删除必须返回
+`GIT_ERROR`，不能把任意错误算作拒绝。应用不重放写入。源码
+`1eb5621f56fbfadc541449ae886ca6a723b4f878`／实际测试 merge
+`2da80460cd36c7d6813af65dd90fc31fa307b736`
+在 ARM 过期置顶等待及 Intel 干净 Worktree 删除等待处失败，两张原始窗口均显示写入忙碌反馈。[ARM 报告14044417035](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14044417035)及[Intel 报告14045730537](https://github.com/YondFane/uTerm/actions/runs/43435297598/artifacts/14045730537)保留；反馈与操作检查已在下述明确记录的 Native 源码通过，当前顶栏候选仍须新的源码绑定验证。
+
+原生交互审计要求工作台报告及其匹配的源码／merge、平台、架构、系统，全部菜单／移动／generation 检查，明确标注的拖动模拟及原始项目移动截图。真实应用退出／重开还会比对完整保存的分屏布局与准确会话／generation 映射，验证两块终端视图均可见且已回放，并在关闭会话前采集
+`native-reconnect-restored-layout.png`。缺失、失败、过期或平台不符的证据不能提升为通过。Linux 已通过十项交互证据策略测试、Swift
+6.1.2 解析及 Shell／报告语法。源码 `8d7a526000bf70e9bd5f4ebf291057bbb28ec047`／实际测试 merge
+`a02aad0fa85bc495ed856eeddc96d92caacb5e6d`
+通过两种实际 Native 套件、每架构 69 项 Swift 测试及两种 Personal 初次／替换安装。[ARM 报告14047259103](https://github.com/YondFane/uTerm/actions/runs/43440735630/artifacts/14047259103)及[Intel 报告14049170337](https://github.com/YondFane/uTerm/actions/runs/43440735630/artifacts/14049170337)保留真实项目移动和重开原图、完整会话／generation／布局证明。该结果仅验收记录的源码；当前顶栏／表单候选仍须自己的新源码 CI 与成对窗口复核。人工交互按授权免除，不记为已执行。
 
 [两版一致性验收](native-ui-parity.md)包含完整对齐范围，以及拖动／分组、布局持久化、内容标签和工作台整合等剩余核对项。两版截图采集器使用共同项目数据及匹配的语言／外观／尺寸网格；PR
 CI 将同源码原始 PNG 及对照报告汇集为可下载产物，源码、系统、架构、样例哈希或场景不符时失败。两版均要求实际显示可读的测试文件列表；原生项目上下文读取会刷新快照，只在所选项目未变时有限重试只读冲突。完整设置阻止外部 CLI 写入时，属于设置窗口的快捷键命令仍可使用。当前候选代码尚未完成同源码成对截图验收；Linux 回归不能证明功能和界面已完全一致。
@@ -546,19 +569,30 @@ ARM64 运行在字体操作中显示了
 CI；调整后的字段与完整设置样式仍需实际 Mac 截图并在 #53 对照。
 
 主题 QA 等待已挂载且启用的预览控件，完成字段编辑，并在等待保存结束前确认主题草稿已改变。
-`nativeSettingsThemeSaveAttempts`
-记录每次操作的错误、草稿、已保存主题及终端偏好对照。仅在显示 `WRITER_BUSY`
+`nativeSettingsThemeSaveAttempts` 记录每次操作的错误、草稿、已保存主题及终端偏好对照。仅在显示
+`WRITER_BUSY`
 且已保存数据未变时，才允许最多两次明确重新点击，并保留失败截图；应用不重放写入，最终保存值仍严格核对。Intel 源码
 `8ec7eaf1bcb6896aa6613e6545f956f8c3eb326c`／实际测试 merge
 `e83d1b9dd11ce787d38aa131c7517c671b148849`
-在缺少这些诊断时未通过主题断言，原因尚未确认，[原始失败14016411976](https://github.com/YondFane/uTerm/actions/runs/43373657320/artifacts/14016411976)保留。Linux Swift
-6.1.2 语法、格式及文档检查通过；新增控件检查仍须自己的真实 Mac 运行。
+在缺少这些诊断时未通过主题断言，原因尚未确认，[原始失败14016411976](https://github.com/YondFane/uTerm/actions/runs/43373657320/artifacts/14016411976)保留。Linux
+Swift 6.1.2 语法、格式及文档检查通过；新增控件检查仍须自己的真实 Mac 运行。
+
+自动保存 QA 样例的全部外部快照读取现复用同一有界读取方法，包括主题截图之后的数据恢复。准备和恢复写入复用原修订保护：仅在
+`WRITER_BUSY`
+且完整已保存工作区及设置未变时明确重试。应用操作和冲突断言继续显式执行。报告在失败时也保留当前样例阶段及读写重试次数。Intel 源码
+`676c9ce3e0f06f3a08ba8bb7d9fb4e0adc81508d`／实际测试 merge
+`fe9fa9d6d1e97ddd57da344fc613b9d5e705ff89` 已保存主题并完成两种尺寸截图，随后在样例恢复阶段遇到
+`WRITER_BUSY`，当时未记录具体读取或写入操作。[失败报告与原图14024845956](https://github.com/YondFane/uTerm/actions/runs/43394240939/artifacts/14024845956)保留；在上述记录的
+`8d7a526`／`a02aad0`
+Native 源码中，两种架构的实际设置报告均到达恢复完成阶段。当前顶栏／设置改动仍须自己的源码绑定运行。
 
 兼容导出的 Core 读取仅在 `WRITER_BUSY`
-时有限重读，最多 20 次、每次间隔 10 毫秒；目标文件仍仅写入一次，不自动重放设置写入。实际文件锁测试覆盖短暂争用恢复、持续争用退出、取消及原始快照字节不变，须由 macOS
-CI 执行。当前 ARM64 `1336ba7`／`733e066`
-的导出检查失败，仅记录通用提示，不能据此确认底层原因。失败报告现记录错误码及目标、忙碌状态；本次检查仍待新源码 macOS 结果。 Linux
-x86_64 通过 18 项相关 Core 持久化、Git 收藏及 PDF 测试；本次 root 会话跳过一项既有的非特权文件系统检查。
+时有限重读，最多 20 次、每次间隔 10 毫秒；目标文件仍仅写入一次，不自动重放设置写入。实际文件锁测试覆盖短暂争用恢复、持续争用退出、取消及原始快照字节不变。源码
+`9c16e467edcc17f911a9b4600f30c534ad420293`／实际测试 merge
+`499a6e26847421ca008e9418565ea5d591a10379` 的两种真实 Mac
+Native 套件及每架构 65 项 Swift 测试通过，包括操作系统写锁下的导出检查。[ARM 报告](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14035540650)与[Intel 报告](https://github.com/YondFane/uTerm/actions/runs/43419841331/artifacts/14038396877)保留
+`nativeLegacyExportProof`
+及真实失败／草稿保留窗口。该结果仅验收记录的源码；调整后的菜单／重开证据仍须自己的当前源码 Mac 运行。
 
 原生 QA 打开并取消真实保存对话框，检查关闭保护，在有无效草稿时导出已提交数据，并拒绝目录目标、保留已有导出，记录
 `nativeLegacyExportProof`、`native-settings-legacy-export.json` 和
@@ -850,6 +884,11 @@ ARM／Intel 通过，对应 source `670f421354150e112f71d0ac3c94f29681296993`／
 又确认实际 xterm 无障碍行含预期 Shell 标记、终端／画布尺寸非零，其 macOS
 GPU 截图仍为空白。输入文件副作用与已解析文字不代表 GPU 显示验收。[对应源码报告与产物](https://github.com/YondFane/uTerm/issues/32#issuecomment-6631153924)
 保留此缺口。人工键盘、输入法与系统剪贴板仍未执行。
+
+Tauri 并存 QA 现保留旧所有者的就绪确认，等待只读观察者启动并完成渲染截图；核对相同会话 ID、generation 和宿主 PID 后，再同时放行旧所有者的断言与观察者的真实接管。现有 30 秒界面断言、只读输入拒绝及正常退出／重新接管检查不变。`input-control-handoff.json`
+记录放行时序、身份和完成状态。源码 `3e609640ba640a9ae665adb80ca4dcfc0c063f03`／实际测试 merge
+`266c379eb9c5b66070db1921a3f7592a7ea858d2`
+的 Mac 所有者就绪与观察者只读报告相隔 32 秒，观察者截图尚未完成确认时所有者已超时。[失败报告与原始窗口14030727283](https://github.com/YondFane/uTerm/actions/runs/43408460674/artifacts/14030727283)保留。Linux 已通过 14 项交接／输入／生命周期回归，覆盖慢启动、会话／generation／宿主不符、重复及重放场景。慢启动回归模拟观测到的 32 秒截图间隔，并未执行 Mac 应用；仍须当前源码真实 Mac 执行。
 
 Tauri 并存 QA 保留原始 GPU 截图，再通过 `WEBGL_lose_context`
 令实际 WebGL 上下文丢失，要求 xterm 现有 DOM 回退显示相同 Shell 标记。两个应用进程在恢复、接管和输出期间保持同一会话／generation。
@@ -4375,8 +4414,8 @@ React 组件位于 `src/components/`，状态和纯逻辑位于 `src/lib/`，Tau
 `qa-phase-tests.log` 和 `qa-phase-build.log` 保存在性能产物中。
 
 Windows 源码 `6c91edc92260ad40944e2759bf43faff7de16856`／实际测试 merge
-`5551fda7ccf145345da450340647961c853f0c95`
-在终端输出第 12 轮之后替换阶段标记时遇到“Access denied”，阻塞句柄的持有者尚未确认。[原始产物14018140007](https://github.com/YondFane/uTerm/actions/runs/43383383260/artifacts/14018140007)保留
+`5551fda7ccf145345da450340647961c853f0c95` 在终端输出第 12 轮之后替换阶段标记时遇到“Access
+denied”，阻塞句柄的持有者尚未确认。[原始产物14018140007](https://github.com/YondFane/uTerm/actions/runs/43383383260/artifacts/14018140007)保留
 `tauri-state-qa/performance-failure.json`、真实 Windows 窗口及采样报告。Linux 的两项真实原子替换测试、六项现有采样／报告／终端边界测试和工作流检查通过；Windows 锁测试及完整当前源码负载仍须自己的 CI 执行，本次失败不算性能验收。
 
 - 性能验证：119 项前端及构建工具测试、国际化检查和 TypeScript/生产构建通过。主 JavaScript 包为 909.45
