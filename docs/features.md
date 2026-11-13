@@ -274,7 +274,17 @@ retained views/documents and preserves terminal identity/generation. Each captur
 source, actual window width and platform metadata. Run panels redraw localized labels when settings
 change. The disposable mixed project contains a valid minimal POM and Python entry. Connection
 profiles in this integration scene are offline fixtures; the existing PostgreSQL, Redis, SSH and run
-suites retain service/lifetime coverage.
+suites retain service/lifetime coverage. Fixture profile creation repeats at most three times only
+for `WRITER_BUSY` after confirming that the original revision, complete workspace, settings and
+selected context remain unchanged. Every attempt uses the original revision; conflicts and other
+errors fail immediately. Reports retain per-profile attempts and read-only retries. Application save
+behavior is unchanged.
+
+At source `1ab7a74`, tested merge `06a6fa33`, the full ARM64 native gate fails with
+`PANELS_PROFILE: WRITER_BUSY` while creating the offline fixture; the Intel native gate passes. The
+[native run](https://github.com/YondFane/uTerm/actions/runs/43288575280) retains the failure log.
+Linux Swift/script syntax and documentation checks pass for the bounded fixture retry; full Mac
+execution of the new source is pending.
 
 Run suites also capture the actual main-window menu entry, simulate a stale launch selection,
 dispatch the real NSMenu task item and verify the same hosted generation. They click the actual
@@ -1066,6 +1076,13 @@ check. The gate is released before draining and checking all 1,024 records. Thes
 terminal redraws, not an interactive Vim benchmark; query timings include row serialization, not
 table painting.
 
+Windows performance QA waits for the actual acknowledged parent `cmd` prompt before each command.
+The probe reads the cursor's logical line, including wrapped rows, rather than accepting a child
+output marker from earlier buffer text. It compares the existing `displayLocalPath` presentation of
+the directory, so extended Windows prefixes do not change the expected prompt. Readiness waits occur
+outside latency samples and before pausing the slow consumer; the workload, grid, deadlines and
+acceptance thresholds stay fixed.
+
 After the native build, run `python3 -B scripts/client-performance-database.py` (`python` on
 Windows). The wrapper owns one loopback PostgreSQL cluster across all sequential measurements,
 supplies private credentials to the client runners and invokes `scripts/run-client-performance.sh`.
@@ -1103,6 +1120,17 @@ acknowledgement, not physical keyboard/display latency. A ten-minute sample does
 multi-hour leak freedom.
 
 #### Measurement validation
+
+Head `22c1b57`, tested merge `902ffdef`, retains a third-redraw timeout in
+[Windows artifact13964937868](https://github.com/YondFane/uTerm/actions/runs/43262864971/artifacts/13964937868).
+Its original window shows an unexecuted command and previous `TUI_02` output. The first
+parent-prompt candidate `431c178`, tested merge `bdef6e59`, then rejects the initial prompt because
+QA context uses an extended drive path while `cmd` omits its prefix.
+[Artifact13965803472](https://github.com/YondFane/uTerm/actions/runs/43266511297/artifacts/13965803472)
+retains that report and inspected original. Reusing the existing path conversion fixes the extended
+drive comparison in regression tests. Thirty-eight Linux terminal/input/replay/renderer, file-path,
+performance-report and i18n checks, plus types, production build, format and documents, pass. Fresh
+Windows execution of the corrected readiness check remains required.
 
 At head `047ff1a7`, tested merge `885b4efb`, Windows completes the first real Tauri workload but
 fails temporary-profile deletion with `EPERM`.
@@ -2832,7 +2860,14 @@ The native Quick SSH smoke check waits for the real sidebar row to be visible an
 button to be enabled after each asynchronous workspace operation. It still opens the actual form six
 times and checks create, keep and cleanup behavior; a missing or disabled control fails within the
 existing control deadline with attachment and workspace diagnostics. Linux Swift 6.1.2 syntax and
-shell checks pass; the current-source Intel and ARM application checks remain pending.
+shell checks pass; the current-source Intel and ARM application checks remain pending. The three
+cleanup fixtures also record their attempt counts. A rejected `WRITER_BUSY` write may repeat at most
+three times with the original revision only while the full canonical workspace, settings and
+selected context remain unchanged. Conflicts, peer changes and other errors fail immediately;
+application writes do not gain automatic retries. The current
+[Intel report](https://github.com/YondFane/uTerm/actions/runs/43345255828/artifacts/14003763231)
+records successful profile fixtures and panel checks, followed by busy cleanup of an SSH fixture.
+The new cleanup policy still requires its own Mac run.
 
 SSH host filtering retains the mounted native search cell while inserting/removing result rows. An
 empty query explicitly restores all hosts and external query changes synchronize the editor. At head

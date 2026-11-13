@@ -31,6 +31,9 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-inspector-') as directo
                 'leftToolsRemainVisibleWithoutSidebar', 'explicitFixtureCloseAndIdleHostShutdown']:
         assert data[key], key
     assert type(data['nativeQuickSSHActualOpenCount']) is int and data['nativeQuickSSHActualOpenCount'] == 6
+    attempts = data['quickSSHFixtureCleanupWriteAttempts']
+    assert len(attempts) == 3 and all(type(value) is int and 1 <= value <= 3 for value in attempts.values())
+    assert type(data['quickSSHFixtureCleanupReadRetries']) is int and data['quickSSHFixtureCleanupReadRetries'] >= 0
     assert len(data['captures']) == 9
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])

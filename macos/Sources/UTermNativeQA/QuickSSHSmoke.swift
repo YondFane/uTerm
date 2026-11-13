@@ -196,7 +196,35 @@ enum QuickSSHSmoke {
         await model.closeSession(id: temporarySession)
         guard !connections(model).contains(where: { $0["id"].string == temporaryID }) else { throw BridgeFailure(code: "QUICK_SSH_PRUNE", message: "Closing the final session retained an idle temporary connection") }
         report["nativeQuickSSHActualFinalSessionPrunesTemporary"] = true
-        for id in [firstID, secondID, id] { guard await model.mutate("ssh.profile.remove", ["id": .string(id)]) else { throw BridgeFailure(code: "QUICK_SSH_CLEANUP", message: model.error) } }
+        var cleanupWriteAttempts: [String: Int] = [:], cleanupReadRetries = 0
+        defer { report["quickSSHFixtureCleanupWriteAttempts"] = cleanupWriteAttempts; report["quickSSHFixtureCleanupReadRetries"] = cleanupReadRetries }
+        func cleanupSnapshot() async throws -> CoreSnapshot {
+            for attempt in 1...3 {
+                do { return try await bridge.snapshot() }
+                catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" && attempt < 3 {
+                    cleanupReadRetries += 1; try await Task.sleep(for: .milliseconds(100))
+                }
+            }
+            throw BridgeFailure(code: "QUICK_SSH_CLEANUP", message: "Fixture snapshot did not complete")
+        }
+        for fixtureID in [firstID, secondID, id] {
+            let scope = model.inspectorContextKey, baseline = try await cleanupSnapshot()
+            for attempt in 1...3 {
+                guard model.ready, !model.busy, model.groupID == workspaceID, model.inspectorContextKey == scope else { throw BridgeFailure(code: "QUICK_SSH_CLEANUP", message: "Fixture cleanup context changed") }
+                cleanupWriteAttempts[fixtureID] = attempt; model.error = ""
+                if await model.mutate("ssh.profile.remove", ["id": .string(fixtureID)], revision: baseline.revision) { break }
+                let failure = model.error
+                guard failure.hasPrefix("WRITER_BUSY:"), attempt < 3 else { throw BridgeFailure(code: "QUICK_SSH_CLEANUP", message: failure) }
+                try await Task.sleep(for: .milliseconds(100))
+                let after = try await cleanupSnapshot()
+                // Only unchanged QA fixtures may repeat a rejected busy write with its original revision.
+                // 仅未变化的 QA 样例可用原修订重试被忙碌锁拒绝的写入。
+                guard after.revision == baseline.revision, after.document.workspace == baseline.document.workspace,
+                      after.document.settings == baseline.document.settings, model.inspectorContextKey == scope else {
+                    throw BridgeFailure(code: "QUICK_SSH_CLEANUP", message: failure + "; canonical fixture changed")
+                }
+            }
+        }
         report["nativeQuickSSHActualCreateAndKeepRetainSession"] = true
         report["nativeQuickSSHInMainWindow"] = true
         report["quickSSHScenario"] = "Real WebKit form and AppKit search/menu; loopback port 1 exercises failure without external credentials; no authenticated remote login acceptance"
