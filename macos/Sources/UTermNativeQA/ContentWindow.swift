@@ -82,6 +82,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     var editorStateChanged: (() -> Void)?
     private(set) var editorDirty = false
     var presentationWindow: NSWindow? { presentEmbedded == nil ? window : webView.window }
+    var gitToolbar: ((String) async throws -> Void)?
     var mutateGit: ((String, JSONValue, CoreBridge) async throws -> JSONValue)?
     var openRepositoryFile: ((String) async throws -> Void)?
     var recoverGitFavorites: (() throws -> Void)?
@@ -222,6 +223,10 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Git favorites cannot select another repository") }
             guard request.method != "git_favorites_import" || params.count == 1 else { throw BridgeFailure(code: "METHOD_DENIED", message: "Native Git content cannot import old WebView sources") }
             return try await bridge.call(method, params: .object(params))
+        }
+        if request.method == "git_toolbar" {
+            guard gitMode, params.count == 1, let kind = params["kind"]?.string, let gitToolbar else { throw BridgeFailure(code: "METHOD_DENIED", message: "This Git window has no workspace toolbar") }
+            try await gitToolbar(kind); return .null
         }
         if let method = Self.gitMethods[request.method ?? ""] {
             guard gitMode else { throw BridgeFailure(code: "METHOD_DENIED", message: "This content window cannot access Git") }

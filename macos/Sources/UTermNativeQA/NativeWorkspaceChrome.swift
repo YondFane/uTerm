@@ -13,11 +13,14 @@ struct NativeWorkspaceToolbar: View {
             }
             Text(model.projects.first { $0["id"] == model.workspace["selectedProject"] }?["name"].string ?? localized("Terminal", "终端"))
                 .font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+            if model.workspace["selectedProject"].string != nil {
+                NativeBranchPicker(picker: model.branchPicker, settings: model.settings).frame(maxWidth: 180).fixedSize(horizontal: false, vertical: true)
+            }
             Spacer(minLength: 8)
             if model.busy { ProgressView().controlSize(.small) }
             if model.workspace["selectedProject"].string != nil {
-                tool(.java, localized("Java build and run…", "Java 构建与运行…")) { model.openJavaRequested?() }
-                tool(.python, localized("Python run…", "Python 运行…")) { model.openPythonRequested?() }
+                NativeProjectRunButton(model: model, runs: model.projectRuns, panels: model.panels, language: "java")
+                NativeProjectRunButton(model: model, runs: model.projectRuns, panels: model.panels, language: "python")
             }
             if model.paneZoomed || model.state?.layout["kind"].string == "split" {
                 tool(model.paneZoomed ? .restore : .maximize, localized("Toggle pane zoom", "切换面板缩放")) { model.performCommandRequested?("zoom") }.disabled(model.commandIsAvailable?("zoom") != true)
@@ -34,6 +37,18 @@ struct NativeWorkspaceToolbar: View {
             model.measureToolbar(frame.height); model.measureToolbarTop(frame.minY)
         }.allowsHitTesting(false))
         .accessibilityIdentifier("native-workspace-toolbar")
+        .task(id: model.ready) {
+            while !Task.isCancelled {
+                await model.projectRuns.refresh()
+                do { try await Task.sleep(for: .milliseconds(1500)) } catch { return }
+            }
+        }
+        .task(id: model.inspectorContextKey + String(model.ready)) {
+            while !Task.isCancelled {
+                await model.branchPicker.refresh()
+                do { try await Task.sleep(for: .seconds(4)) } catch { return }
+            }
+        }
     }
     private func tool(_ icon: CoreToolbarIcon, _ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { NativeChromeIcon(toolbar: icon).frame(width: 24, height: 24) }

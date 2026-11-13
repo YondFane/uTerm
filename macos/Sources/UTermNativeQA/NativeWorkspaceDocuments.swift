@@ -12,6 +12,7 @@ final class NativeWorkspaceDocuments: ObservableObject {
     }
     @Published private(set) var documents: [Document] = []
     var terminalFocusRequested: (() -> Void)?
+    var selectionChanged: (() -> Void)?
     @Published private var selected: [String: UUID] = [:]
     func visible(in scope: String) -> [Document] { documents.filter { $0.scope == scope } }
     func active(in scope: String) -> Document? { documents.first { $0.scope == scope && $0.id == selected[scope] } }
@@ -23,6 +24,7 @@ final class NativeWorkspaceDocuments: ObservableObject {
         content.presentEmbedded = { [weak self, weak parent, weak content] in
             guard let self, let parent, let content, self.documents.contains(where: { $0.id == id }) else { return }
             guard let item = self.documents.first(where: { $0.id == id }) else { return }
+            self.selectionChanged?()
             self.selected[item.scope] = id
             parent.makeKeyAndOrderFront(nil)
             DispatchQueue.main.async { [weak self, weak parent, weak content] in
@@ -52,6 +54,14 @@ final class NativeWorkspaceDocuments: ObservableObject {
     }
     func close(_ id: UUID) {
         guard let document = documents.first(where: { $0.id == id }) else { return }
+        if document.content.workbenchHost != nil {
+            document.content.webView.removeFromSuperview()
+            document.content.presentEmbedded = nil
+            document.content.window?.contentView = document.content.webView
+            document.content.window?.orderOut(nil)
+            remove(id)
+            return
+        }
         if document.content.editorDirty { document.content.reveal() }
         document.content.window?.performClose(nil)
     }
@@ -61,15 +71,18 @@ final class NativeWorkspaceDocuments: ObservableObject {
 struct NativeWorkspaceDocumentSurface: View {
     @ObservedObject var model: WorkspaceModel
     @ObservedObject var documents: NativeWorkspaceDocuments
+    @ObservedObject var panels: NativeWorkspacePanels
+    private var panel: NativeWorkspacePanels.Panel? { panels.active(in: model.inspectorContextKey) }
     var body: some View {
         VStack(spacing: 0) {
-            if !documents.visible(in: model.inspectorContextKey).isEmpty {
-                NativeWorkspaceDocumentTabs(model: model, documents: documents)
+            if !documents.visible(in: model.inspectorContextKey).isEmpty || !panels.visible(in: model.inspectorContextKey).isEmpty {
+                NativeWorkspaceDocumentTabs(model: model, documents: documents, panels: panels)
             }
             ZStack {
-                TerminalCanvas(model: model, hidden: documents.active(in: model.inspectorContextKey) != nil)
-                    .allowsHitTesting(documents.active(in: model.inspectorContextKey) == nil)
-                if let selected = documents.active(in: model.inspectorContextKey) {
+                TerminalCanvas(model: model, hidden: documents.active(in: model.inspectorContextKey) != nil || panel != nil)
+                    .allowsHitTesting(documents.active(in: model.inspectorContextKey) == nil && panel == nil)
+                if let panel { NativeHostedPanel(panel: panel).id(panel.id) }
+                else if let selected = documents.active(in: model.inspectorContextKey) {
                     NativeEmbeddedDocument(content: selected.content)
                         .id(selected.id)
                 }
@@ -123,21 +136,31 @@ final class EmbeddedDocumentHost: NSView {
 private struct NativeWorkspaceDocumentTabs: View {
     @ObservedObject var model: WorkspaceModel
     @ObservedObject var documents: NativeWorkspaceDocuments
+    @ObservedObject var panels: NativeWorkspacePanels
     private var palette: JSONValue { NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog) }
     private var scope: String { model.inspectorContextKey }
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 0) {
                 if let session = model.sessionEntries.first(where: { $0.sessionID == model.selectedID }) {
-                    tab(session.session["name"].string ?? localized("Terminal", "终端"), active: documents.active(in: scope) == nil, icon: .terminal, identifier: "native-workspace-terminal-tab") {
-                        documents.showTerminal(in: scope); model.revealSelectedPane()
+                    tab(session.session["name"].string ?? localized("Terminal", "终端"), active: documents.active(in: scope) == nil && panels.active(in: scope) == nil, icon: .terminal, identifier: "native-workspace-terminal-tab") {
+                        documents.showTerminal(in: scope); panels.showTerminal(in: scope); model.revealSelectedPane()
                     }
                     .contextMenu { NativeSessionContextMenu(model: model, id: session.sessionID) }
                 }
+                ForEach(panels.visible(in: scope)) { item in
+                    HStack(spacing: 0) {
+                        tab(item.title, active: panels.active(in: scope)?.id == item.id, icon: nil, identifier: "native-panel-select-" + item.id) { documents.showTerminal(in: scope); panels.select(item.id, scope: scope) }
+                        NativeDocumentAction(title: localized("Close tab", "关闭标签"), identifier: "native-panel-close-" + item.id, image: NativeChromeImages.toolbar(.close), iconOnly: true, active: false, tint: NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)) { panels.close(item.id) }.frame(width: 22, height: 22).padding(.trailing, 4)
+                    }
+                    .background(color(panels.active(in: scope)?.id == item.id ? "canvas" : "sidebar"))
+                    .overlay(alignment: .trailing) { color("border").frame(width: 1) }
+                    .overlay(alignment: .bottom) { color(panels.active(in: scope)?.id == item.id ? "accent" : "sidebar").frame(height: 2) }
+                }
                 ForEach(documents.visible(in: scope)) { item in
                     HStack(spacing: 0) {
-                        tab(item.content.path.split(separator: "/").last.map(String.init) ?? item.content.path, active: documents.active(in: scope)?.id == item.id, icon: nil, dirty: item.content.editorDirty, identifier: "native-file-select-" + item.id.uuidString) { item.content.reveal() }
-                        NativeDocumentAction(title: localized("Close file", "关闭文件"), identifier: "native-file-close-" + item.id.uuidString, image: NativeChromeImages.toolbar(.close), iconOnly: true, active: false, tint: NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)) { documents.close(item.id) }
+                        tab(item.content.workbenchHost.map { nativeWorkbenchTitle($0.kind) } ?? (item.content.path.split(separator: "/").last.map(String.init) ?? item.content.path), active: documents.active(in: scope)?.id == item.id, icon: nil, dirty: item.content.editorDirty, identifier: "native-file-select-" + item.id.uuidString) { item.content.reveal() }
+                        NativeDocumentAction(title: localized("Close tab", "关闭标签"), identifier: "native-file-close-" + item.id.uuidString, image: NativeChromeImages.toolbar(.close), iconOnly: true, active: false, tint: NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)) { documents.close(item.id) }
                             .frame(width: 22, height: 22).padding(.trailing, 4)
                     }
                     .background(color(documents.active(in: scope)?.id == item.id ? "canvas" : "sidebar"))

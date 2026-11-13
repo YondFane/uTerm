@@ -21,8 +21,13 @@ enum PythonSmoke {
               let index = menu.items.firstIndex(where: { $0.title == "Python run…" }) else { throw BridgeFailure(code: "PYTHON_QA", message: "Native Python menu is missing") }
         menu.performActionForItem(at: index)
         try await TerminalSmoke.wait("Open Python through its native menu") { lookup(root.path)?.model.config != nil && lookup(root.path)?.model.busy == false }
-        guard let first = lookup(root.path), let firstWindow = first.window else { throw BridgeFailure(code: "PYTHON_QA", message: "Python window is missing") }
-        report["nativePythonMenuOpened"] = firstWindow.isVisible
+        guard let first = lookup(root.path), first.window != nil else { throw BridgeFailure(code: "PYTHON_QA", message: "Python window is missing") }
+        try await TerminalSmoke.wait("Native Python menu mounts its panel in the main workspace") { model.panels.panels.contains { $0.controller === first && $0.view.window?.isVisible == true } }
+        guard let embedded = model.panels.panels.first(where: { $0.controller === first }), let workspaceWindow = embedded.view.window else { throw BridgeFailure(code: "RUN_MENU", message: "The run menu did not mount the actual workspace panel") }
+        let menuCapture = "native-python-menu-workspace.png"
+        try await TerminalSmoke.capture(window: workspaceWindow, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(menuCapture))
+        report["nativePythonMenuOpened"] = true; report["nativePythonMenuWorkspaceCapture"] = menuCapture
+        try await ProjectRunSmoke.restoreStandalone(model: model, panel: embedded)
         let run = first.model
         let original = run.config?.target
         guard !(await run.applySelection(nil, kind: "script")), run.config?.target == original, !run.dirty else { throw BridgeFailure(code: "PYTHON_QA", message: "Cancelled path selection changed the draft") }
@@ -78,6 +83,7 @@ enum PythonSmoke {
         run.config?.target = "long.py"; run.dirty = true
         await run.run()
         try await TerminalSmoke.wait("Start the disposable long Python task") { run.terminal?.text.contains("BEFORE_PAUSE_119") == true }
+        try await ProjectRunSmoke.run(model: model, language: "python", controller: first, task: run.selectedTask, evidence: URL(fileURLWithPath: reportPath).deletingLastPathComponent(), report: &report)
         guard let log = run.terminal else { throw BridgeFailure(code: "PYTHON_QA", message: "No task log for scroll acceptance") }
         log.view.scrollUp(lines: 20)
         guard !log.taskLogFollowsOutput else { throw BridgeFailure(code: "PYTHON_QA", message: "Scrolling up did not pause following") }

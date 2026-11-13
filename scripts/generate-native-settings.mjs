@@ -5,12 +5,19 @@ import { themes } from "../src/lib/themes.ts";
 import { interfaceThemes } from "../src/lib/interface-themes.ts";
 import { interfaceFonts, terminalFonts } from "../src/lib/settings-fonts.ts";
 
+import { settingsSections } from "../src/lib/settings-search.ts";
+
 const labels = (key) => ({
   en: /\p{Script=Han}/u.test(key) ? translate("en", key) : key,
   "zh-Hans": key,
 });
 const catalog = {
   version: 1,
+  sections: settingsSections.map(({ id, label, keywords }) => ({
+    id,
+    labels: labels(label),
+    keywords,
+  })),
   settingsKeys: [...new Set([...Object.keys(defaults), "agentNotifications"])],
   fonts: Object.fromEntries(
     [

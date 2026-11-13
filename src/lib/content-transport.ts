@@ -100,6 +100,7 @@ const contentMethods = new Set([
   "files_context",
   "files_mode",
   "files_toolbar",
+  "git_toolbar",
   "github_repositories",
   "github_read",
   "github_prepare_pr",
@@ -347,10 +348,12 @@ export class ContentScope {
         "database-frozen",
         "database-host-error",
         "database-settings-changed",
+        "database-selection-changed",
         "redis-close-request",
         "redis-frozen",
         "redis-host-error",
         "redis-settings-changed",
+        "redis-selection-changed",
       ].includes(kind)
     )
       throw new ContentFailure("EVENT_DENIED", "Content event is not allowed");

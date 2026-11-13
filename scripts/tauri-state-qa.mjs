@@ -14,6 +14,7 @@ import {
   chmodSync,
   statSync,
 } from "node:fs";
+import { rm } from "node:fs/promises";
 import { tmpdir, homedir, platform, arch, release, version } from "node:os";
 import { resolve, join, dirname } from "node:path";
 import { createHash } from "node:crypto";
@@ -829,6 +830,14 @@ print(number.uint32Value)
               expectedRevision: snapshot.revision,
             });
           } else if (value.scene === "git-favorite-recovery-ready") {
+            for (const phase of ["checkpoint", "restore-fixture"]) {
+              const attempts = value.checks.favoriteFixtureAttempts.filter(
+                (item) => item.phase === phase,
+              );
+              assert(attempts.length > 0 && attempts.length <= 3);
+              assert(attempts.at(-1).saved);
+              assert(attempts.every((item) => item.unchangedOnBusy));
+            }
             favoriteOriginal = readFileSync(favoriteFile);
             assert.equal(
               createHash("sha256").update(favoriteOriginal).digest("hex"),
@@ -1293,10 +1302,23 @@ print(number.uint32Value)
   // Keep failure fixtures only in the isolated temporary profile for diagnosis.
   // 失败测试数据仅保留在隔离临时配置中供诊断。
   if (successful && !cleanupErrors.length) {
+    const started = Date.now();
     try {
-      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+      // Let process and filesystem callbacks drain while Windows releases owned profile handles.
+      // 等待 Windows 释放测试配置句柄时，继续处理进程和文件系统回调。
+      await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
+      assert(!existsSync(root), "The isolated temporary profile still exists after removal");
     } catch (error) {
       cleanupErrors.push(String(error));
+    } finally {
+      writeFileSync(
+        join(output, "temporary-profile-cleanup.json"),
+        JSON.stringify(
+          { removed: !existsSync(root), elapsedMs: Date.now() - started, errors: cleanupErrors },
+          null,
+          2,
+        ),
+      );
     }
   }
   successful &&= cleanupErrors.length === 0;

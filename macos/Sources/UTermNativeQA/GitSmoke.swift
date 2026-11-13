@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import WebKit
 import UTermBridge
 
@@ -47,6 +48,29 @@ enum GitSmoke {
         await model.reload()
         let favoriteSource = "[\r\n \"refs/heads/to\\u0070ic\"\r\n]"
         _ = try await bridge.call("git.favorites.import", params: .object(["directory": .string(root.path), "legacy": .string(favoriteSource)]))
+        await model.branchPicker.refresh()
+        guard let branchContext = model.branchPicker.context, model.branchPicker.current == "main" else { throw BridgeFailure(code: "GIT_TOOLBAR", message: "Toolbar did not read the selected repository") }
+        await model.branchPicker.execute("git.switchBranch", arguments: ["branch": .string("topic")], captured: branchContext, expected: .string("main"))
+        guard try git(["branch", "--show-current"]) == "topic", model.branchPicker.current == "topic", let topicContext = model.branchPicker.context else { throw BridgeFailure(code: "GIT_TOOLBAR", message: "Toolbar branch switch failed") }
+        try await TerminalSmoke.wait("Branch picker is ready after snapshot events") { model.branchPicker.enabled && model.branchPicker.context == topicContext }
+        let staleSucceeded = await model.branchPicker.execute("git.switchBranch", arguments: ["branch": .string("main")], captured: topicContext, expected: .string("main"))
+        guard !staleSucceeded, try git(["branch", "--show-current"]) == "topic", !model.branchPicker.error.isEmpty else { throw BridgeFailure(code: "GIT_TOOLBAR_STALE", message: "Stale branch action was not rejected") }
+        let failureMessage = model.branchPicker.error
+        await model.branchPicker.refresh(); await model.reload()
+        guard model.branchPicker.error == failureMessage, model.error == failureMessage else { throw BridgeFailure(code: "GIT_ERROR_RETENTION", message: "Read-only refresh erased an operation failure") }
+        model.error = ""
+        await model.branchPicker.execute("git.switchBranch", arguments: ["branch": .string("main")], captured: topicContext, expected: .string("topic"))
+        guard try git(["branch", "--show-current"]) == "main" else { throw BridgeFailure(code: "GIT_TOOLBAR", message: "Toolbar branch restore failed") }
+        var toolbarWindow: NSWindow?
+        try await TerminalSmoke.wait("Actual toolbar branch control reflects selected branch") {
+            for window in NSApp.windows {
+                guard let root = window.contentView, let button = TerminalSmoke.descendants(root).first(where: { $0.identifier?.rawValue == "native-branch-picker" }) as? NSButton else { continue }
+                if button.isEnabled && button.title.contains("main") { toolbarWindow = window; return true }
+            }
+            return false
+        }
+        if let toolbarWindow { try await TerminalSmoke.capture(window: toolbarWindow, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent("native-toolbar-branch-picker-en-dark.png")) }
+        report["gitToolbarProof"] = ["read": true, "switch": true, "staleExpectedRejected": true, "errorRetainedAfterReadRefresh": true, "restored": true, "realAppKitControl": true, "input": "model operation through guarded App callback; popup pointer/keyboard interaction not executed", "capture": "native-toolbar-branch-picker-en-dark.png"]
         let content = try await open(root)
         defer { content.forceClose() }
         var captures: [String] = []
@@ -176,6 +200,20 @@ enum GitSmoke {
                 menu.performActionForItem(at: index)
                 try await TerminalSmoke.wait("Show real native Worktree deletion confirmation") { parent.attachedSheet != nil && model.worktreeDeletionPresented }
                 guard let sheet = parent.attachedSheet else { throw BridgeFailure(code: "GIT_MENU", message: "Missing deletion sheet") }
+                var previousBounds: [Double] = [], stableSince = ProcessInfo.processInfo.systemUptime
+                try await TerminalSmoke.wait("The actual Worktree confirmation is painted by WindowServer") {
+                    guard sheet.isVisible, sheet.windowNumber > 0,
+                          let entries = CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(sheet.windowNumber)) as? [[String: Any]],
+                          let entry = entries.first(where: { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == sheet.windowNumber }),
+                          (entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == ProcessInfo.processInfo.processIdentifier,
+                          entry[kCGWindowIsOnscreen as String] as? Bool == true,
+                          let bounds = entry[kCGWindowBounds as String] as? [String: NSNumber] else { return false }
+                    let current = ["X", "Y", "Width", "Height"].compactMap { bounds[$0]?.doubleValue }
+                    guard current.count == 4, current.allSatisfy(\.isFinite), current[2] > 0, current[3] > 0 else { return false }
+                    if current != previousBounds { previousBounds = current; stableSince = ProcessInfo.processInfo.systemUptime; return false }
+                    return ProcessInfo.processInfo.systemUptime - stableSince >= 0.15
+                }
+                report["nativeWorktreeConfirmationPaintedBeforeCapture"] = true
                 return sheet
             }
             func press(_ sheet: NSWindow, _ title: String) throws {
@@ -191,7 +229,12 @@ enum GitSmoke {
             report["nativeDeleteCancelRetainedWorktree"] = try Data(contentsOf: retained) == dirty
             let rejected = try await deletionSheet()
             try press(rejected, "Delete Worktree")
-            try await TerminalSmoke.wait("Refuse dirty Worktree deletion in shared Core") { parent.attachedSheet == nil && !model.worktreeDeletionPresented && !model.busy && !model.error.isEmpty }
+            do {
+                try await TerminalSmoke.wait("Refuse dirty Worktree deletion in shared Core") { parent.attachedSheet == nil && !model.worktreeDeletionPresented && !model.busy && !model.error.isEmpty }
+            } catch {
+                report["worktreeDeleteFailureDiagnostics"] = ["sheetVisible": parent.attachedSheet != nil, "deletionPresented": model.worktreeDeletionPresented, "workspaceBusy": model.busy, "visibleError": model.error, "dirtyBytesRetained": (try? Data(contentsOf: retained)) == dirty, "directoryRetained": FileManager.default.fileExists(atPath: tree.path)]
+                throw error
+            }
             report["dirtyWorktreeDeletionRefused"] = try Data(contentsOf: retained) == dirty
             captures.append("native-git-worktree-delete-error.png")
             try await TerminalSmoke.capture(window: parent, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(captures.last!))

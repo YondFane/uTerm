@@ -4,6 +4,66 @@ import UTermBridge
 
 @MainActor
 enum SSHSmoke {
+    private static func readSessionState(_ ssh: SSHModel) async throws -> CoreViewSnapshot {
+        for attempt in 1...3 {
+            do { return try await ssh.bridge.viewSnapshot() }
+            catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" && attempt < 3 { try await Task.sleep(for: .milliseconds(100)) }
+        }
+        throw BridgeFailure(code: "SSH_QA_READ", message: "Could not read isolated SSH session state")
+    }
+    private static func createTerminal(_ ssh: SSHModel, workspace: WorkspaceModel, phase: String, report: inout [String: Any]) async throws -> String? {
+        await workspace.flushWorkspaceOperations()
+        let before = try await readSessionState(ssh), draft = ssh.fingerprint
+        let sessionIDs = Set(before.sessions.map(\.sessionID))
+        let hostBefore = try await ssh.bridge.call("host.status")
+        let hostedIDs = Set(hostBefore["sessions"].array.compactMap { $0["spec"]["id"].string })
+        for attempt in 1...3 {
+            let created = await ssh.newTerminal()
+            var unchanged = true, additions: [String] = []
+            let busy = ssh.error.hasPrefix("WRITER_BUSY:") && !ssh.error.contains("\n")
+            if created == nil, busy {
+                let after = try await readSessionState(ssh)
+                let hostAfter = try await ssh.bridge.call("host.status")
+                let currentIDs = Set(after.sessions.map(\.sessionID))
+                let currentHosted = Set(hostAfter["sessions"].array.compactMap { $0["spec"]["id"].string })
+                additions = currentIDs.subtracting(sessionIDs).sorted()
+                unchanged = after.snapshot.revision == before.snapshot.revision && currentIDs == sessionIDs && currentHosted == hostedIDs && ssh.fingerprint == draft
+            }
+            var attempts = report["explicitSSHSessionCreateAttempts"] as? [[String: Any]] ?? []
+            attempts.append(["phase": phase, "attempt": attempt, "created": created != nil, "writerBusy": busy, "runtimeUnchangedOnBusy": !busy || unchanged, "newCanonicalSessionIDs": additions])
+            report["explicitSSHSessionCreateAttempts"] = attempts
+            if let created { return ssh.error.isEmpty ? created : nil }
+            guard busy, unchanged, attempt < 3 else { return nil }
+            // Never repeat a create after canonical or hosted session state has changed.
+            // 规范存储或宿主会话状态变化后，绝不重复新建操作。
+            try await Task.sleep(for: .milliseconds(100))
+            await workspace.flushWorkspaceOperations()
+        }
+        return nil
+    }
+    private static func saveProfile(_ ssh: SSHModel, workspace: WorkspaceModel, phase: String, report: inout [String: Any]) async throws -> Bool {
+        let draft = ssh.fingerprint, originalProfile = ssh.profile
+        for attempt in 1...3 {
+            await workspace.flushWorkspaceOperations()
+            let saved = await ssh.save()
+            let writerBusy = ssh.error.hasPrefix("WRITER_BUSY:")
+            var targetUnchanged = false
+            if !saved, writerBusy, !ssh.error.contains("\n") {
+                let current = try await ssh.bridge.snapshot()
+                let profile = current.document.workspace["groups"].array.flatMap { $0["sshConnections"].array }.first { $0["id"].string == ssh.connectionID } ?? .null
+                targetUnchanged = profile == originalProfile
+            }
+            var attempts = report["explicitSSHProfileSaveAttempts"] as? [[String: Any]] ?? []
+            attempts.append(["phase": phase, "attempt": attempt, "saved": saved, "writerBusy": writerBusy, "failedDraftRetained": saved || ssh.fingerprint == draft, "canonicalTargetRetainedOnBusy": !writerBusy || targetUnchanged])
+            report["explicitSSHProfileSaveAttempts"] = attempts
+            if saved { return ssh.error.isEmpty }
+            guard writerBusy, targetUnchanged, ssh.fingerprint == draft, attempt < 3 else { return false }
+            // The QA driver repeats only an unchanged canonical target/draft; credential cleanup errors stop it.
+            // QA 驱动仅在规范目标与草稿未变时重复操作，凭据清理错误会停止重试。
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        return false
+    }
     private static func waitForRemotePrompt(_ terminal: TerminalSession) async throws {
         // PTY ownership precedes authentication; avoid sending a command into the password handshake.
         // PTY 输入所有权早于认证完成，避免将命令发送到密码握手阶段。
@@ -25,11 +85,23 @@ enum SSHSmoke {
         menu.performActionForItem(at: index)
         try await TerminalSmoke.wait("Open actual native SSH menu") { lookup()?.model.snapshot != nil }
         guard let controller = lookup(), let window = controller.window else { throw BridgeFailure(code: "SSH_QA", message: "SSH window missing") }
+        try await TerminalSmoke.wait("SSH menu mounts its retained panel in the main workspace") { model.panels.panels.contains { $0.controller === controller && $0.view.window?.isVisible == true && $0.view.window !== window } }
+        guard let panel = model.panels.panels.first(where: { $0.controller === controller }), let workspaceWindow = panel.view.window else { throw BridgeFailure(code: "SSH_QA", message: "SSH menu did not mount its actual workspace view") }
         let ssh = controller.model
         ssh.name = "SSH QA 中文"; ssh.host = fixture["alias"].string ?? ""; ssh.mode = "alias"; ssh.port = ""; ssh.authentication = "key"; ssh.identity = fixture["identity"].string ?? ""; ssh.rootPath = fixture["remote"].string ?? ""
-        guard await ssh.save(), !ssh.dirty else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
+        guard try await saveProfile(ssh, workspace: model, phase: "initial", report: &report), !ssh.dirty else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
         let profileID = ssh.selectedID
-        report["nativeSSHMenuAndProfileSaved"] = window.isVisible && !profileID.isEmpty
+        await model.reload()
+        guard model.groups.flatMap({ $0["sshConnections"].array }).contains(where: { $0["id"].string == profileID && $0["name"].string == "SSH QA 中文" }) else { throw BridgeFailure(code: "SSH_QA", message: "SSH menu profile was not saved in shared state") }
+        let menuCapture = "native-ssh-menu-workspace.png"
+        try await TerminalSmoke.capture(window: workspaceWindow, path: evidence.appendingPathComponent(menuCapture))
+        report["nativeSSHMenuAndProfileSaved"] = true
+        report["nativeSSHMenuWorkspaceCapture"] = menuCapture
+        try await ProjectRunSmoke.restoreStandalone(model: model, panel: panel)
+        guard let visible = window.screen?.visibleFrame, visible.contains(window.frame) else { throw BridgeFailure(code: "SSH_QA_WINDOW_BOUNDS", message: "Standalone SSH window extends outside the usable desktop: " + NSStringFromRect(window.frame)) }
+        let clearance = min(window.frame.minY - visible.minY, visible.maxY - window.frame.maxY)
+        guard clearance >= 63.5 else { throw BridgeFailure(code: "SSH_QA_WINDOW_BOUNDS", message: "Standalone SSH window lacks its vertical desktop clearance") }
+        report["standaloneSSHWindowPlacement"] = ["frame": NSStringFromRect(window.frame), "visibleScreen": NSStringFromRect(visible), "insideVisibleScreen": true, "verticalClearance": clearance, "minimumVerticalClearance": 64]
         let previousRevision = ssh.snapshot?.revision
         _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(previousRevision ?? ""), "patch": .object(["fontSize": .number(15)])]))
         ssh.name = "RETAINED_DRAFT"
@@ -93,8 +165,9 @@ enum SSHSmoke {
         await ssh.stopForward(status)
         try await TerminalSmoke.wait("Stop owned SSH tunnel") { !ssh.tunnels.contains(where: { $0["id"] == rule["id"] }) }
         report["nativeForwardingStaleStopRejected"] = true
-        await ssh.newTerminal()
-        guard ssh.error.isEmpty, let first = model.selectedTerminal else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
+        guard let firstID = try await createTerminal(ssh, workspace: model, phase: "first", report: &report), ssh.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
+        try await TerminalSmoke.wait("Select the exact first SSH terminal") { model.selectedID == firstID && model.terminals[firstID] != nil }
+        guard let first = model.terminals[firstID] else { throw BridgeFailure(code: "SSH_QA", message: "The created SSH session was not attached") }
         try await waitForRemotePrompt(first)
         let command = "printf 'UTERM_%s\\n' 'SSH_NATIVE_中文'\r"
         first.view.insertText(command, replacementRange: NSRange(location: NSNotFound, length: 0))
@@ -112,9 +185,13 @@ enum SSHSmoke {
         guard hostBefore["pid"] == hostAfter["pid"] else { throw BridgeFailure(code: "SSH_QA", message: "Reconnect replaced the SSH host") }
         report["remoteDetachReplayAndHostRetained"] = true
         var reopened = try await open()
-        await reopened.model.newTerminal()
-        guard reopened.model.error.isEmpty, let second = model.selectedTerminal, second.id != first.id else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
-        try await TerminalSmoke.wait("Second real SSH terminal") { second.generation != nil }
+        await reopened.model.reload(select: profileID)
+        guard let secondID = try await createTerminal(reopened.model, workspace: model, phase: "after-reconnect", report: &report), reopened.model.error.isEmpty else {
+            report["secondSSHSessionDiagnostics"] = ["profile": reopened.model.selectedID, "workspace": reopened.model.workspaceID, "dirty": reopened.model.dirty, "busy": reopened.model.busy, "prepared": reopened.model.prepared, "hasSnapshot": reopened.model.snapshot != nil, "selectedSession": model.selectedID ?? ""]
+            throw BridgeFailure(code: "SSH_QA_SECOND_SESSION", message: reopened.model.error.isEmpty ? "The saved connection did not create a second session" : reopened.model.error)
+        }
+        try await TerminalSmoke.wait("Select and attach the exact second real SSH session after reconnect") { model.selectedID == secondID && model.terminals[secondID]?.generation != nil }
+        guard let second = model.terminals[secondID], second.id != first.id else { throw BridgeFailure(code: "SSH_QA_SECOND_SESSION", message: "The second SSH session did not retain its distinct identity") }
         await model.selectSession(first.id); await model.closeSession()
         let remaining = try await current.call("host.status")
         guard !remaining["sessions"].array.contains(where: { $0["spec"]["id"].string == first.id }), remaining["sessions"].array.contains(where: { $0["spec"]["id"].string == second.id && $0["running"].bool == true }) else { throw BridgeFailure(code: "SSH_QA", message: "Closing SSH session affected its sibling") }
@@ -133,7 +210,7 @@ enum SSHSmoke {
         if fixture["passwordServiceLogin"].bool == true {
             await reopened.model.select(nil)
             reopened.model.name = "Password login QA"; reopened.model.host = fixture["passwordAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = fixture["password"].string ?? ""; reopened.model.remember = true; reopened.model.rootPath = fixture["passwordRemote"].string ?? ""
-            guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+            guard try await saveProfile(reopened.model, workspace: model, phase: "password", report: &report) else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
             var reference = reopened.model.profile["credential_id"]
             do {
                 await reopened.model.connectFiles()
@@ -142,8 +219,9 @@ enum SSHSmoke {
                 await reopened.model.disconnectFiles()
                 report["passwordServiceLogin"] = true
                 let passwordProfile = reopened.model.selectedID
-                await reopened.model.newTerminal()
-                guard reopened.model.error.isEmpty, let terminal = model.selectedTerminal else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                guard let passwordID = try await createTerminal(reopened.model, workspace: model, phase: "password", report: &report), reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                try await TerminalSmoke.wait("Select the exact password-authenticated SSH terminal") { model.selectedID == passwordID && model.terminals[passwordID] != nil }
+                guard let terminal = model.terminals[passwordID] else { throw BridgeFailure(code: "SSH_QA", message: "The password-authenticated SSH session was not attached") }
                 try await waitForRemotePrompt(terminal)
                 report["remotePromptObservedBeforePasswordCommand"] = true
                 terminal.view.insertText("printf 'UTERM_%s\\n' 'SSH_PASSWORD_NATIVE'\r", replacementRange: NSRange(location: NSNotFound, length: 0))
@@ -157,7 +235,7 @@ enum SSHSmoke {
                 for remembered in [false, true] {
                     let previous = try reopened.model.target()
                     reopened.model.remember = remembered
-                    guard await reopened.model.save(), reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                    guard try await saveProfile(reopened.model, workspace: model, phase: remembered ? "remember-password" : "temporary-password", report: &report), reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
                     reference = reopened.model.profile["credential_id"]
                     do {
                         _ = try await reopened.model.perform(["kind": .string("auth.configure"), "connection": previous, "password": .null, "remember": previous["remember_password"]])
@@ -184,7 +262,19 @@ enum SSHSmoke {
         await reopened.model.select(nil)
         guard reopened.model.lastTransfer == nil else { throw BridgeFailure(code: "SSH_QA", message: "New connection inherited another profile's transfer status") }
         reopened.model.name = "Host trust QA"; reopened.model.host = fixture["unknownAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = fixture["password"].string ?? "isolated-qa-password"; reopened.model.rootPath = fixture["passwordRemote"].string ?? ""
-        guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+        // A refused canonical write has no side effects; simulate an explicit user retry only for WRITER_BUSY.
+        // 规范写入被拒绝时尚未产生副作用；仅在 WRITER_BUSY 下模拟用户明确重试。
+        var trustProfileSaved = false
+        var trustProfileAttempts = 0
+        for attempt in 0..<3 {
+            trustProfileAttempts += 1
+            if await reopened.model.save() { trustProfileSaved = true; break }
+            guard reopened.model.error.hasPrefix("WRITER_BUSY:"), attempt < 2 else { break }
+            await model.flushWorkspaceOperations()
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        guard trustProfileSaved else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+        report["hostTrustFixtureWriterBusyRetry"] = ["attempts": trustProfileAttempts, "maximumAttempts": 3, "conflictsRetried": false, "scenario": "Explicit fixture resubmission only after a canonical WRITER_BUSY refusal"]
         let connecting = Task { @MainActor in await reopened.model.connectFiles() }
         do {
             try await TerminalSmoke.wait("Native host trust sheet through actual askpass") {

@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 55
     defaults:
       run:
         shell: bash
@@ -64,16 +64,128 @@ jobs:
             java -version
             javac -version
           } 2>&1 | tee macos/.build/evidence/toolchain.txt
+      - name: Prepare real-window capture display
+        run: |
+          swift scripts/macos-qa-display.swift | tee macos/.build/evidence/display.json
+          swift scripts/macos-qa-display.swift --verify-only | tee macos/.build/evidence/display-verified.json
+      - name: Probe capture infrastructure before application compilation
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          mkdir -p macos/.build/evidence/capture-probe
+          {
+            swiftc -parse-as-library macos/Sources/UTermBridge/WindowCaptureAlpha.swift macos/Sources/UTermBridge/WindowCaptureSystemPointer.swift scripts/macos-qa-capture-probe.swift -o "$RUNNER_TEMP/uterm-capture-probe"
+            UTERM_QA_TESTED_SHA="$(git rev-parse HEAD)" "$RUNNER_TEMP/uterm-capture-probe" "$PWD/macos/.build/evidence/capture-probe"
+          } 2>&1 | tee macos/.build/evidence/capture-probe/compile-and-run.log
+      - name: Preserve capture infrastructure diagnostics
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-capture-probe-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: macos/.build/evidence/capture-probe/
+          if-no-files-found: warn
       - name: Build isolated native application
         id: native_build
         run: bash scripts/macos-native-build.sh 2>&1 | tee macos/.build/evidence/native-build.log
       - name: Shared file-tree refresh and deletion regression
         run: |
           node --experimental-strip-types --test tests/file-refresh-order.test.mjs tests/file-refresh.test.mjs tests/file-delete.test.mjs 2>&1 | tee macos/.build/evidence/file-refresh-tests.log
-      - name: Prepare real-window capture display
+      - name: Real native Java configuration, output and task lifetime
+        id: java-runs
+        continue-on-error: true
+        run: bash scripts/macos-java-smoke.sh
+      - name: Real native Python configuration, output and task lifetime
+        id: python-runs
+        continue-on-error: true
+        run: bash scripts/macos-python-smoke.sh
+      - name: Preserve early launch-list interaction evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-runlists-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            macos/.build/evidence/java-live.json
+            macos/.build/evidence/python-live.json
+            macos/.build/evidence/java-*.log
+            macos/.build/evidence/python-*.log
+            macos/.build/evidence/native-java*.png
+            macos/.build/evidence/native-python*.png
+            macos/.build/evidence/*.visibility.json
+            macos/.build/evidence/*.desktop-*.png
+            macos/.build/evidence/toolchain.txt
+            macos/.build/evidence/display*.json
+      - name: Real native settings, conflicts, shortcut capture, reset and screenshots
+        id: settings-preferences
+        continue-on-error: true
+        run: bash scripts/macos-settings-smoke.sh
+      - name: Preserve early settings interaction evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-settings-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            macos/.build/evidence/settings-native.json
+            macos/.build/evidence/settings-native-*.log
+            macos/.build/evidence/native-settings*.png
+            macos/.build/evidence/native-settings*.json
+            macos/.build/evidence/toolchain.txt
+            macos/.build/evidence/display*.json
+      - name: Real native SSH, SFTP, transfer and host-trust workflows
+        id: ssh-workbench
+        continue-on-error: true
+        run: bash scripts/macos-ssh-smoke.sh
+      - name: Real native database profile, PostgreSQL, window lifetime and screenshots
+        id: database-workbench
+        continue-on-error: true
         run: |
-          swift scripts/macos-qa-display.swift | tee macos/.build/evidence/display.json
-          swift scripts/macos-qa-display.swift --verify-only | tee macos/.build/evidence/display-verified.json
+          python3 -B tests/test_database_qa_download.py 2>&1 | tee macos/.build/evidence/database-download-tests.log
+          bash scripts/macos-database-smoke.sh
+      - name: Real native Redis, binary identity, protected write and window lifetime
+        id: redis-workbench
+        continue-on-error: true
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        run: bash scripts/macos-redis-smoke.sh
+      - name: Preserve early service interaction evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-services-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            macos/.build/evidence/ssh-live.json
+            macos/.build/evidence/database-live.json
+            macos/.build/evidence/redis-live.json
+            macos/.build/evidence/ssh-*.log
+            macos/.build/evidence/database-*.log
+            macos/.build/evidence/redis-*.log
+            macos/.build/evidence/native-ssh*.png
+            macos/.build/evidence/native-database*.png
+            macos/.build/evidence/native-redis*.png
+            macos/.build/evidence/*.visibility.json
+            macos/.build/evidence/*.desktop-*.png
+            macos/.build/evidence/toolchain.txt
+            macos/.build/evidence/display*.json
+      - name: Real native Git, Worktree and open-editor protection
+        id: git-workbench
+        continue-on-error: true
+        run: bash scripts/macos-git-smoke.sh
+      - name: Preserve early Git interaction evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-git-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            macos/.build/evidence/git-live.json
+            macos/.build/evidence/git-*.log
+            macos/.build/evidence/native-git*.png
+            macos/.build/evidence/native-toolbar-branch-picker*.png
+            macos/.build/evidence/*.visibility.json
+            macos/.build/evidence/*.desktop-*.png
+            macos/.build/evidence/toolchain.txt
+            macos/.build/evidence/display*.json
       - name: Shared core, FFI and Swift bridge tests
         env:
           UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/macos/.build/evidence/terminal-load-core.json
@@ -112,10 +224,6 @@ jobs:
         run: |
           python3 -B tests/test_macos_disk_image.py 2>&1 | tee macos/.build/evidence/disk-image-tests.log
           bash scripts/macos-candidate-package.sh 2>&1 | tee macos/.build/evidence/candidate-package-command.log
-      - name: Real native settings, conflicts, shortcut capture, reset and screenshots
-        id: settings-preferences
-        continue-on-error: true
-        run: bash scripts/macos-settings-smoke.sh
       - name: Real Sparkle SDK with loopback signed archives and simulated user choices
         id: sdk-updates
         continue-on-error: true
@@ -138,29 +246,18 @@ jobs:
         run: bash scripts/macos-content-smoke.sh
       - name: Real native editor save, conflict and forced-exit recovery
         run: bash scripts/macos-editor-smoke.sh
-      - name: Real native Java configuration, output and task lifetime
-        run: bash scripts/macos-java-smoke.sh
-      - name: Real native Python configuration, output and task lifetime
-        run: bash scripts/macos-python-smoke.sh
-      - name: Real native SSH, SFTP, transfer and host-trust workflows
-        run: bash scripts/macos-ssh-smoke.sh
-      - name: Real native database profile, PostgreSQL, window lifetime and screenshots
-        run: |
-          python3 -B tests/test_database_qa_download.py 2>&1 | tee macos/.build/evidence/database-download-tests.log
-          bash scripts/macos-database-smoke.sh
-      - name: Real native Redis, binary identity, protected write and window lifetime
-        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
-        run: bash scripts/macos-redis-smoke.sh
+      - name: Real main-workspace tool and run-panel integration
+        id: workspace-panels
+        continue-on-error: true
+        run: bash scripts/macos-panels-smoke.sh
       - name: Real native Agent settings, installed Hooks and simulated OS notification lifecycle
         run: bash scripts/macos-agent-smoke.sh
-      - name: Real native Git, Worktree and open-editor protection
-        run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke
         run: bash scripts/macos-control-smoke.sh
       - name: Preserve independent candidate and controls failures
-        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure') }}
+        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.workspace-panels.outcome == 'failure' || steps.ssh-workbench.outcome == 'failure' || steps.redis-workbench.outcome == 'failure' || steps.database-workbench.outcome == 'failure' || steps.git-workbench.outcome == 'failure' || steps.java-runs.outcome == 'failure' || steps.python-runs.outcome == 'failure') }}
         run: |
-          echo "Candidate, settings, SDK, inspector or GitHub checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
+          echo "Candidate, settings, SDK, inspector, workspace panels, Java, Python, GitHub, SSH, Redis or Git checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
           exit 1
       - name: Audit source-bound native interaction matrix
         if: ${{ always() && steps.native_build.outcome == 'success' }}

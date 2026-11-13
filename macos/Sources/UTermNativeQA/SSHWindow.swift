@@ -261,14 +261,21 @@ final class SSHModel: ObservableObject {
         do { _ = try await bridge.call("ssh.operation.cancel", params: .object(["id": .string(active.id), "generation": .string(active.generation)])) }
         catch { self.error = error.localizedDescription }
     }
-    func newTerminal() async {
-        guard !dirty, !selectedID.isEmpty, let snapshot else { return }
+    @discardableResult
+    func newTerminal() async -> String? {
+        guard !busy, !prepared else { error = localized("Wait for the SSH operation to finish, then retry.", "请等待 SSH 操作完成后重试。"); return nil }
+        guard !dirty, !selectedID.isEmpty else { error = localized("Save the connection before opening a terminal.", "请保存连接后再打开终端。"); return nil }
+        guard let snapshot else { error = localized("Reload the saved SSH connection, then retry.", "请重新读取已保存的 SSH 连接后重试。"); return nil }
+        let id = UUID().uuidString
+        var created = false
         await execute {
             do {
-                _ = try await self.bridge.call("ssh.session.create", params: .object(["id": .string(UUID().uuidString), "name": .string(self.name.isEmpty ? self.host : self.name), "sshConnectionId": .string(self.selectedID), "workspaceId": .string(self.workspaceID), "expectedRevision": .string(snapshot.revision)]))
+                _ = try await self.bridge.call("ssh.session.create", params: .object(["id": .string(id), "name": .string(self.name.isEmpty ? self.host : self.name), "sshConnectionId": .string(self.selectedID), "workspaceId": .string(self.workspaceID), "expectedRevision": .string(snapshot.revision)]))
+                created = true
             } catch { await self.workspace?.reload(); throw error }
             await self.workspace?.reload(); await self.reload(select: self.selectedID)
         }
+        return created && error.isEmpty ? id : nil
     }
     func remove() async {
         guard !selectedID.isEmpty, let snapshot else { return }
@@ -440,8 +447,9 @@ struct SSHView: View {
 }
 
 @MainActor
-final class SSHWindow: NSWindowController, NSWindowDelegate {
+final class SSHWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePanelContent {
     let model: SSHModel
+    private(set) var workspacePanelView: NSView?
     var didClose: (() -> Void)?
     private var closing = false
     init(model: SSHModel) {
@@ -449,7 +457,15 @@ final class SSHWindow: NSWindowController, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 980, height: 820), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         super.init(window: window)
         window.title = localized("SSH connections", "SSH 连接"); window.minSize = NSSize(width: 760, height: 520); window.delegate = self
-        window.contentView = NSHostingView(rootView: SSHView(model: model)); model.ownerWindow = window
+        workspacePanelView = NSHostingView(rootView: SSHView(model: model))
+        window.contentView = workspacePanelView; model.ownerWindow = window
+        if let screen = window.screen ?? NSScreen.main {
+            // Dock shadows extend above the usable rectangle; keep clearance with scrollable content.
+            // Dock 阴影会伸入可用矩形上方；保留间隔，窗口内容仍可滚动。
+            let visible = screen.visibleFrame.insetBy(dx: 8, dy: 64)
+            let size = NSSize(width: min(window.frame.width, visible.width), height: min(window.frame.height, visible.height))
+            window.setFrame(NSRect(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2, width: size.width, height: size.height), display: false)
+        } else { window.center() }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     func windowShouldClose(_ sender: NSWindow) -> Bool {

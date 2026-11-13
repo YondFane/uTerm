@@ -231,7 +231,7 @@ async function start() {
             ) : context.kind === "github" ? (
               <NativeGitHub directory={context.directory} />
             ) : context.kind === "git" ? (
-              <NativeGit directory={context.directory} />
+              <NativeGit directory={context.directory} embedded={context.embedded} />
             ) : (
               <Content context={context} />
             )}

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 import UTermBridge
 
 @MainActor
@@ -343,7 +344,13 @@ enum TerminalSmoke {
 
     static func capture(window: NSWindow, path: URL) async throws {
         window.displayIfNeeded()
+        let display = CGMainDisplayID()
+        guard CGDisplayHideCursor(display) == .success else { throw BridgeFailure(code: "SMOKE_CAPTURE_CURSOR", message: "Could not hide the test pointer for the original window capture") }
+        var cursorHidden = true
+        defer { if cursorHidden { _ = CGDisplayShowCursor(display) } }
+        try await Task.sleep(for: .milliseconds(100))
         let identifier = window.windowNumber
+        let before = try await captureObstructions(window: identifier, path: path, phase: "before", pointerHidden: cursorHidden)
         try await Task.detached {
             let capture = Process()
             capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -357,6 +364,68 @@ enum TerminalSmoke {
                 throw BridgeFailure(code: "SMOKE_CAPTURE", message: "WindowServer capture failed: " + message)
             }
         }.value
+        let after = try await captureObstructions(window: identifier, path: path, phase: "after", pointerHidden: cursorHidden)
+        let restored = CGDisplayShowCursor(display) == .success
+        cursorHidden = !restored
+        let visible = before.obstructions.isEmpty && after.obstructions.isEmpty && restored
+        let visibility: [String: Any] = ["passed": visible, "windowNumber": identifier, "pointerHiddenDuringCapture": true, "pointerRestored": restored, "before": before.obstructions, "after": after.obstructions,
+                                       "desktopSurfacesBefore": before.desktop, "desktopSurfacesAfter": after.desktop,
+                                       "systemPointersBefore": before.pointers, "systemPointersAfter": after.pointers]
+        let data = try JSONSerialization.data(withJSONObject: visibility, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: path.appendingPathExtension("visibility.json"), options: .atomic)
+        guard restored else { throw BridgeFailure(code: "SMOKE_CAPTURE_CURSOR", message: "Could not restore the test pointer; capture acceptance failed") }
+        guard visible else { throw BridgeFailure(code: "SMOKE_CAPTURE_OCCLUDED", message: "Another application's window covers the captured QA window; inspect its visibility report and original PNG") }
+    }
+
+    private static func captureObstructions(window identifier: Int, path: URL, phase: String, pointerHidden: Bool) async throws -> (obstructions: [[String: Any]], desktop: [[String: Any]], pointers: [[String: Any]]) {
+        guard let target = (CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(identifier)) as? [[String: Any]])?.first,
+              let bounds = target[kCGWindowBounds as String] as? [String: Any],
+              let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenAboveWindow, .excludeDesktopElements], CGWindowID(identifier)) as? [[String: Any]] else {
+            throw BridgeFailure(code: "SMOKE_CAPTURE_VISIBILITY", message: "Could not inspect WindowServer visibility for the QA window")
+        }
+        // Keep the original image, but reject acceptance when another application covers it.
+        // 保留原图，但其他应用遮挡时拒绝将其作为验收证据。
+        var obstructions: [[String: Any]] = [], desktop: [[String: Any]] = [], pointers: [[String: Any]] = []
+        for entry in windows {
+            guard let pid = entry[kCGWindowOwnerPID as String] as? Int, pid != Int(ProcessInfo.processInfo.processIdentifier),
+                  (entry[kCGWindowAlpha as String] as? Double ?? 0) > 0,
+                  let bounds = entry[kCGWindowBounds as String] as? [String: Any],
+                  let rectangle = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+                  !frame.intersection(rectangle).isNull, !frame.intersection(rectangle).isEmpty else { continue }
+            var record: [String: Any] = ["owner": entry[kCGWindowOwnerName as String] as? String ?? "", "pid": pid,
+                    "windowNumber": entry[kCGWindowNumber as String] as? Int ?? 0,
+                    "layer": entry[kCGWindowLayer as String] as? Int ?? 0, "bounds": bounds]
+            if let processID = Int32(exactly: pid), let executable = WindowCaptureSystemPointer.executable(pid: processID), let layer = record["layer"] as? Int,
+               WindowCaptureSystemPointer.isHiddenPointer(hiddenByQA: pointerHidden, executable: executable, layer: layer, width: rectangle.width, height: rectangle.height) {
+                record["executable"] = executable
+                record["hiddenByQA"] = pointerHidden; pointers.append(record)
+                continue
+            }
+            if record["layer"] as? Int == 20, rectangle == CGDisplayBounds(CGMainDisplayID()),
+               let processID = Int32(exactly: pid), NSRunningApplication(processIdentifier: processID)?.bundleIdentifier == "com.apple.dock",
+               let number = record["windowNumber"] as? Int {
+                // WindowServer can give a transparent Dock surface full-screen bounds; inspect its pixels.
+                // WindowServer 可能为透明 Dock 图层报告全屏边界，因此检查其实际像素。
+                let imagePath = path.deletingPathExtension().appendingPathExtension("desktop-\(phase)-\(number).png")
+                do {
+                    try await Task.detached {
+                        let capture = Process(); capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+                        capture.arguments = ["-x", "-o", "-l", String(number), imagePath.path]
+                        capture.standardError = FileHandle.nullDevice
+                        try capture.run(); capture.waitUntilExit()
+                        guard capture.terminationStatus == 0 else { throw BridgeFailure(code: "SMOKE_CAPTURE_ALPHA", message: "Desktop-surface capture failed") }
+                    }.value
+                    guard let source = CGImageSourceCreateWithURL(imagePath as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw BridgeFailure(code: "SMOKE_CAPTURE_ALPHA", message: "Desktop-surface image is missing") }
+                    let pixels = try WindowCaptureAlpha.nontransparentPixels(image: image, windowFrame: rectangle, targetFrame: frame)
+                    record["capture"] = imagePath.lastPathComponent; record["nontransparentPixelsInTarget"] = pixels
+                    desktop.append(record)
+                    if pixels == 0 { continue }
+                } catch { record["alphaInspectionFailure"] = error.localizedDescription; desktop.append(record) }
+            }
+            obstructions.append(record)
+        }
+        return (obstructions, desktop, pointers)
     }
 
     static func sizeCaptureWindow(_ window: NSWindow, width: Int, height: Int) async throws -> [[String: Any]] {

@@ -314,6 +314,11 @@ enum RedisSmoke {
         try await wait(content, "document.querySelector('.redis-toolbar input[aria-label=\"Allow editing\"]')?.checked===false && !!document.querySelector('.redis-key')")
         report["nativeRedisTemporaryPasswordSurvivesReconnect"] = true
         try await click(content, title: "Disconnect")
+        let sidebarCapture = "native-redis-sidebar-profile-en-dark.png"
+        try await NativeChromeSmoke.selectConnection(model: model, id: id, name: config["name"]?.string ?? "Redis", category: "redis", capture: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(sidebarCapture), report: &report)
+        try await wait(content, "document.querySelector('.native-database-profile-name[aria-pressed=true]') !== null")
+        report["redisSidebarSelectionProof"] = ["actualAppKitRow": true, "selectedTarget": true, "capture": sidebarCapture]
+        captures.append(sidebarCapture)
         report["nativeRedisCaptures"] = captures
         report["nativeRedisManualPickerAcceptance"] = false
         report["nativeRedisManualInteractionAcceptance"] = false

@@ -6,6 +6,7 @@ import {
   terminalPerformanceSnapshot,
   delayTerminalPerformanceConsumer,
   pauseTerminalPerformanceConsumer,
+  windowsPerformancePromptReady,
 } from "../lib/terminal-performance-qa";
 
 const fixture = JSON.parse(fixtureJSON) as {
@@ -194,6 +195,17 @@ export async function runPerformance(
         }),
       );
   };
+  let windowsParentPromptChecks = 0;
+  const ready = async () => {
+    if (context.platform !== "windows") return;
+    // A child can emit its marker before exiting; wait for cmd before sending more input.
+    // 子进程可能在退出前输出标记；发送下一条输入前须等待 cmd 恢复。
+    await until(
+      () => windowsPerformancePromptReady(read(), context.project),
+      "parent cmd prompt after the previous child exits",
+    );
+    windowsParentPromptChecks++;
+  };
   const samples = [];
   const payload = "x".repeat(fixture.payloadColumns);
   const bulk = (label: string) =>
@@ -203,6 +215,7 @@ export async function runPerformance(
   for (let cycle = 0; cycle < fixture.cycles; cycle++) {
     await phase("terminal", cycle);
     const label = String(cycle).padStart(2, "0");
+    await ready();
     const start = performance.now();
     send(
       context.platform === "windows"
@@ -215,6 +228,7 @@ export async function runPerformance(
     }, "input/output acknowledgement");
     const latency = read()!.lastAckMilliseconds - start;
     assert(latency >= 0, "Input marker matched a stale acknowledgement");
+    await ready();
     const beforeBytes = read()!.bytes;
     const bulkStart = performance.now();
     send(bulk(label));
@@ -242,6 +256,7 @@ export async function runPerformance(
     });
   }
   await phase("slow-consumer");
+  await ready();
   delayTerminalPerformanceConsumer(id, fixture.slowConsumerMilliseconds);
   pauseTerminalPerformanceConsumer(id, true);
   const slowStart = performance.now();
@@ -291,17 +306,20 @@ export async function runPerformance(
     delayTerminalPerformanceConsumer(id, 0);
   }
   await phase("tui");
-  const ansi = (posix: string, windows: string) =>
+  const ansi = async (posix: string, windows: string) => {
+    await ready();
     send(
       context.platform === "windows"
         ? `powershell.exe -NoLogo -NoProfile -NonInteractive -Command "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $e=[char]27; ${windows}"`
         : `printf '${posix}'`,
     );
-  ansi("\\033[?1049h", "[Console]::Write($e+'[?1049h')");
+  };
+  await ansi("\\033[?1049h", "[Console]::Write($e+'[?1049h')");
   await until(() => read()?.alternateScreen, "actual alternate screen entry");
   const tuiFrameMilliseconds = [];
   for (let cycle = 0; cycle < fixture.tuiFrames; cycle++) {
     const label = String(cycle).padStart(2, "0");
+    await ready();
     const start = performance.now();
     send(
       context.platform === "windows"
@@ -323,7 +341,7 @@ export async function runPerformance(
     syntheticDeterministicTUI: true,
     physicalInputLatency: false,
   });
-  ansi("\\033[?1049l", "[Console]::Write($e+'[?1049l')");
+  await ansi("\\033[?1049l", "[Console]::Write($e+'[?1049l')");
   await until(() => read() && !read()!.alternateScreen, "actual normal screen restoration");
   await phase("file-setup");
   const file = "performance.txt";
@@ -412,6 +430,7 @@ export async function runPerformance(
   } finally {
     await invoke("database_disconnect", { handle: database.handle, discard: true });
   }
+  await ready();
   send(context.platform === "windows" ? "echo REPLAY_^FINAL" : "printf 'REPLAY_%s\\n' FINAL");
   await until(
     () => read()?.text.includes("REPLAY_FINAL") && read()!.frames === read()!.acknowledgedFrames,
@@ -457,6 +476,7 @@ export async function runPerformance(
     fileSaveReadMilliseconds: fileSamples,
     replayMilliseconds,
     tuiFrameMilliseconds,
+    windowsParentPromptChecks,
     slowConsumer,
     databaseReadMilliseconds,
     soakSecondsMeasured,

@@ -19,6 +19,8 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from macos_qa_http import LoopbackHTTPServer
+
 TOOLKIT_URL = "https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz"
 TOOLKIT_SHA256 = "1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27"
 
@@ -133,7 +135,7 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
             else:
                 self.send_error(404)
 
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server = LoopbackHTTPServer(Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     try:
         app = root / "Private Applications" / source.name

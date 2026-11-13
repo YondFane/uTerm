@@ -22,6 +22,7 @@ import { databaseNames } from "../lib/database";
 import { runAgents } from "./agents";
 import { performanceSettings, runPerformance } from "./performance";
 import { runUpdates } from "./updates";
+import { writeFavoriteFixture, type FavoriteFixtureAttempt } from "./git-favorite-fixture";
 import type {
   CoreEditorDraftEntry,
   CoreFileDocument,
@@ -132,6 +133,7 @@ const sshQA = JSON.parse(sshFixtureJSON) as {
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 let observerBusyReads = 0;
 let favoritePreviewReloads = 0;
+const favoriteFixtureAttempts: (FavoriteFixtureAttempt & { phase: string })[] = [];
 async function observeCore(method: string, params?: Parameters<typeof coreRequest>[1]) {
   assert(
     [
@@ -204,7 +206,12 @@ async function scene(name: string, checks: unknown) {
   await pause(500);
   await invoke("qa_scene", {
     name,
-    value: { ...(checks as Record<string, unknown>), observerBusyReads, favoritePreviewReloads },
+    value: {
+      ...(checks as Record<string, unknown>),
+      observerBusyReads,
+      favoritePreviewReloads,
+      favoriteFixtureAttempts,
+    },
   });
 }
 export async function reportEditorRecoveryFailure(reason: unknown) {
@@ -1666,6 +1673,18 @@ async function runGit(context: Context) {
   input("Worktree directory", worktree);
   await pause(100);
   await click("New worktree");
+  // Observe the actual completion UI before taking the store lock for a durable read.
+  // 获取存储锁读取持久数据前，先观察界面中的实际完成状态。
+  await until(() => {
+    const tree = document.querySelector(".git-branch-tree");
+    const error = tree?.querySelector('.git-tree-error[role="alert"]')?.textContent;
+    assert(!error, `Worktree creation failed: ${error}`);
+    return [...(tree?.querySelectorAll('[role="status"]') ?? [])].some(
+      (status) =>
+        status.textContent?.trim() ===
+        translate("en", "操作已完成：{p0}", { p0: "qa-tauri-worktree" }),
+    );
+  }, "actual Worktree creation completion before durable observation");
   await until(async () => {
     const shared = (await observeCore("snapshot.read")) as unknown as {
       document: {
@@ -1680,6 +1699,7 @@ async function runGit(context: Context) {
   await scene("git-worktree", {
     branch: "qa-tauri-worktree",
     sharedWorkspaceRegistered: true,
+    observedAfterActualCompletion: true,
     temporaryDirectory: worktree,
   });
   await runWorktreeDeletion();
@@ -1869,16 +1889,24 @@ async function runFavoriteRecovery(context: Context) {
   const favorites = (await observeCore("git.favorites.read", {
     directory: context.project,
   })) as unknown as CoreGitFavorites;
-  const checkpoint = (await coreRequest("git.favorites.write", {
-    directory: context.project,
-    expectedRevision: favorites.revision,
-    references: [],
-  })) as unknown as CoreGitFavorites;
-  await coreRequest("git.favorites.write", {
-    directory: context.project,
-    expectedRevision: checkpoint.revision,
-    references: favorites.references,
-  });
+  async function checkpointWrite(baseline: CoreGitFavorites, references: string[], phase: string) {
+    return writeFavoriteFixture(
+      baseline,
+      async () =>
+        (await coreRequest("git.favorites.write", {
+          directory: context.project,
+          expectedRevision: baseline.revision,
+          references,
+        })) as unknown as CoreGitFavorites,
+      async () =>
+        (await observeCore("git.favorites.read", {
+          directory: context.project,
+        })) as unknown as CoreGitFavorites,
+      (attempt) => favoriteFixtureAttempts.push({ ...attempt, phase }),
+    );
+  }
+  const checkpoint = await checkpointWrite(favorites, [], "checkpoint");
+  await checkpointWrite(checkpoint, favorites.references, "restore-fixture");
   const initial = (await observeCore(
     "git.favorites.recovery.list",
   )) as unknown as CoreGitFavoriteRecoveryCatalog;

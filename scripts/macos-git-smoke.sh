@@ -38,8 +38,14 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert code == 0, code
     report = json.loads(path.read_text())
     assert 'failure' not in report, report
+    toolbar = report['gitToolbarProof']
+    for key in ['read', 'switch', 'staleExpectedRejected', 'errorRetainedAfterReadRefresh', 'restored', 'realAppKitControl']:
+        assert toolbar[key] is True, key
+    assert (evidence / toolbar['capture']).stat().st_size > 1000
+
     assert report['coreReady'] and not report['productionDataAccess'], report
     assert report['bundleIdentifier'] == 'sh.uterm.desktop.qa.native', report
+    assert report['nativeWorktreeConfirmationPaintedBeforeCapture'] is True
     for key in ['realDiffAndHistory', 'copiedDiffThroughNativePasteboard', 'wrongRootRejected',
                 'oldDocumentRejected', 'fileWindowCannotInvokeGit', 'branchFormSavedOpenEditorBeforeWrite',
                 'dirtyWorktreeDeletionRefused', 'worktreeBridgeCreateAndCleanDelete',

@@ -31,6 +31,16 @@ enum InputControlSmoke {
         }
         throw BridgeFailure(code: "CONTROL_QA_WRITE", message: "A passive write or resize unexpectedly succeeded")
     }
+    private static func foreground(_ window: NSWindow) async throws {
+        // Ordering a window alone does not activate its process when the peer app is in front.
+        // 对端应用位于前台时，仅调整窗口顺序不会激活当前进程。
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        try await wait("Bring the actual QA process and target window to the foreground") {
+            NSApp.isActive && window.isKeyWindow
+        }
+        try await Task.sleep(for: .milliseconds(150))
+    }
     static func run(model: WorkspaceModel, window: NSWindow?, report: inout [String: Any]) async throws {
         guard model.ready, let bridge = model.bridge, let window,
               let role = WorkspaceModel.argument("--input-control-role"), ["owner", "viewer"].contains(role),
@@ -64,6 +74,7 @@ enum InputControlSmoke {
         report["driver"] = "Two actual native application processes; native NSButton.performClick target/action"
         report["manualKeyboardIMEAcceptance"] = false
         report["productionDataAccess"] = false
+        var foregroundChecks = 0
         if role == "owner" {
             guard terminal.inputControl?.owned == true else { throw BridgeFailure(code: "CONTROL_QA_INITIAL", message: "The first attachment did not acquire control") }
             terminal.enqueue(Data("printf 'OWNER_%s 中文\\n' READY\r".utf8))
@@ -75,7 +86,7 @@ enum InputControlSmoke {
             try await denied { _ = try await bridge.call("terminal.action", params: .object(["attachment": .string(terminal.attachment), "action": .string("resize"), "cols": .number(3), "rows": .number(4)])) }
             let size = (terminal.view.getTerminal().cols, terminal.view.getTerminal().rows)
             window.setContentSize(NSSize(width: 640, height: 640))
-            window.makeKeyAndOrderFront(nil)
+            try await foreground(window); foregroundChecks += 1
             try await Task.sleep(for: .milliseconds(400))
             guard terminal.inputControl?.owned == false, terminal.view.getTerminal().cols == size.0, terminal.view.getTerminal().rows == size.1 else {
                 throw BridgeFailure(code: "CONTROL_QA_SIZE", message: "Passive window focus or resize changed control or host grid")
@@ -96,6 +107,7 @@ enum InputControlSmoke {
                     throw BridgeFailure(code: "CONTROL_QA_SIDE_EFFECT", message: "Rejected input created " + name)
                 }
             }
+            try await foreground(window); foregroundChecks += 1
             try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent("native-input-owner-returned.png"))
             report["passiveInputAndResizeRejected"] = true
             report["passiveWindowDidNotResizeOrStealControl"] = true
@@ -117,8 +129,11 @@ enum InputControlSmoke {
             terminal.enqueue(Data("printf PASSIVE > passive-viewer.txt\r".utf8))
             try await denied { try await bridge.write(attachment: terminal.attachment, bytes: Data("printf PASSIVE > passive-viewer.txt\r".utf8)) }
             window.setContentSize(NSSize(width: 1000, height: 700))
-            window.makeKeyAndOrderFront(nil)
+            try await foreground(window); foregroundChecks += 1
             try await Task.sleep(for: .milliseconds(300))
+            guard terminal.inputControl?.owned == false else {
+                throw BridgeFailure(code: "CONTROL_QA_FOCUS", message: "Activating the passive viewer stole input control")
+            }
             try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent("native-input-viewer-readonly.png"))
             try pressTakeControl(in: window)
             try await wait("Take input through the actual native button") { terminal.inputControl?.owned == true }
@@ -126,6 +141,7 @@ enum InputControlSmoke {
             try await wait("Render the new owner's output") { terminal.text.contains("VIEWER_READY 中文") }
             try signal("viewer-taken")
             try await wait("Old owner completes its rejected-write checks") { exists("owner-checked") }
+            try await foreground(window); foregroundChecks += 1
             try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent("native-input-viewer-owned.png"))
             report["initialReadonlyReplay"] = true
             report["passiveInputRejected"] = true
@@ -139,6 +155,7 @@ enum InputControlSmoke {
         }
         report["renderedFrames"] = terminal.qaRenderedFrames
         report["acknowledgedFrames"] = terminal.qaAcknowledgedFrames
+        report["captureWindowForegroundChecks"] = foregroundChecks
         report["passed"] = true
     }
 }
