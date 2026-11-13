@@ -1372,6 +1372,19 @@ side effects and parsed text do not establish GPU display acceptance.
 [Source-bound reports/artifacts](https://github.com/YondFane/uTerm/issues/32#issuecomment-6631153924)
 retain this gap. Manual keyboard, IME and system-clipboard acceptance remain unexecuted.
 
+Concurrent Tauri QA now holds the original owner's ready acknowledgement while the readonly peer
+starts and completes its renderer captures. It releases the owner assertion and actual viewer
+takeover together only after matching session ID, generation and host PID. The existing 30-second
+UI assertions, passive-input rejection and ordinary-exit/reacquisition checks remain unchanged.
+`input-control-handoff.json` records release timing, identities and completion. At source
+`3e609640ba640a9ae665adb80ca4dcfc0c063f03` / tested merge
+`266c379eb9c5b66070db1921a3f7592a7ea858d2`, Mac owner-ready and viewer-readonly reports were 32
+seconds apart; the owner timed out before the peer completed its capture acknowledgement. The
+[failure report and original windows14030727283](https://github.com/YondFane/uTerm/actions/runs/43408460674/artifacts/14030727283)
+are retained. Linux passes 14 handoff/input/lifecycle regressions, including delayed peer startup,
+cross-session/generation/host rejection, duplicate and replayed scenes. Actual current-source Mac
+execution is still required.
+
 Tauri ownership QA retains baseline GPU captures before explicitly losing the actual WebGL context
 through `WEBGL_lose_context`, then requires xterm's existing DOM fallback to display the same shell
 marker. Both app processes retain the same session/generation through recovery, takeover and output.
