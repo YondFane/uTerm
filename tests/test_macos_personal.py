@@ -151,7 +151,7 @@ class PersonalPackageTests(unittest.TestCase):
                  for scene in fixture["quickScenes"]]
         github = [dict(scene, scenario="github-pr-draft", screenshot=f"personal-{phase}-github-pr-draft-{scene['language']}-{scene['appearance']}-{scene['width']}.png",
                        sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system="policy fixture", form=fixture["github"],
-                       actualToolsSwitcher=True, literalInputRetained=True, readableFields=True, workspaceVisibleAroundDialog=True, terminalGenerationRetained=True, savedWorkspaceUnchanged=True,
+                       actualToolsSwitcher=True, actualEnabledToolsSwitcher=True, literalInputRetained=True, readableFields=True, workspaceVisibleAroundDialog=True, terminalGenerationRetained=True, savedWorkspaceUnchanged=True,
                        isolatedSimulatedCLI=True, noGitHubWrites=True, actualCancelPreservedState=True, modalWidth=min(640,scene["width"]*.92), modalHeight=500,
                        modalLeft=(scene["width"]-min(640,scene["width"]*.92))/2, modalTop=(scene["height"]-500)/2) for scene in fixture["githubScenes"]]
         return dict(nativeProjectMenuRevisionAndWorkspaceMove=dict(passed=True, dragSimulation=dict(passed=True, actualNSTableViewCallbacks=True, ownedPasteboard=True, foreignSourceRejected=True, forgedPayloadRejected=True, cancelledDragRejected=True, staleRevisionRejected=True, freshDropAndReverseVerified=True), actualMenuActions=True, stalePinRejected=True, staleMoveRejected=True, peerSettingRetained=True, terminalGenerationsAndViewsRetained=True, splitLayoutRetainedInReopenedSnapshot=True, movedAndReturned=True, sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system="policy fixture", screenshot=f"personal-{phase}-project-workspace-move.png"), nativeSidebarSessionClose=dict(passed=True, actualKeyboardFocusVisible=True, actualSpaceClosedBackgroundSession=True, selectedGenerationRetained=True, targetSessionID="background", selectedSessionID="foreground", screenshot=f"personal-{phase}-sidebar-close-background.png", sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720), githubPRScenes=github, quickSSHScenes=quick, contentScenes=pdf, pdfHighlightsNativeDrawDeleteReopenAndScopeVerified=True, pdfMarkWrongRootAndPathRejected=True, pdfHighlightsRetainedAfterReplacement=phase == "replacement", nativeSidebarSectionOrderAndReadOnlyCollapse=True, backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
@@ -169,7 +169,7 @@ class PersonalPackageTests(unittest.TestCase):
         report = self.workspace_evidence("initial")
         package.validate_github_scenes(report, "a"*40, "b"*40, "initial")
         import copy
-        for key,value in [("sourceHeadSHA","c"*40),("modalWidth",128),("noGitHubWrites",False),("readableFields",False),("form",{})]:
+        for key,value in [("actualEnabledToolsSwitcher",False),("actualEnabledToolsSwitcher",None),("sourceHeadSHA","c"*40),("modalWidth",128),("noGitHubWrites",False),("readableFields",False),("form",{})]:
             wrong=copy.deepcopy(report);wrong["githubPRScenes"][0][key]=value
             with self.subTest(key=key), self.assertRaises(AssertionError): package.validate_github_scenes(wrong,"a"*40,"b"*40,"initial")
         for rows in [[],report["githubPRScenes"][1:],[report["githubPRScenes"][0]]*2]:

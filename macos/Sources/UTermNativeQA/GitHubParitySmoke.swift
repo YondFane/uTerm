@@ -16,9 +16,23 @@ enum GitHubParitySmoke {
                   let width = Int(exactly: widthNumber), let height = Int(exactly: heightNumber) else { throw BridgeFailure(code: "GITHUB_PARITY_SCENE", message: "Invalid GitHub comparison scene") }
             await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
             _ = try await TerminalSmoke.sizeCaptureWindow(window, width: width, height: height)
+            try await TerminalSmoke.wait("Attach the current shared tools before GitHub navigation") { model.inspector.content?.webView.window === window }
             guard let tools = model.inspector.content else { throw BridgeFailure(code: "GITHUB_PARITY_TOOLS", message: "Missing live tools switcher") }
-            _ = try await tools.webView.evaluateJavaScript("document.querySelector('.inspector-switcher button[aria-label=GitHub]').click()")
-            try await TerminalSmoke.wait("Open actual GitHub tools from the shared header") { model.inspector.content?.workbenchHost?.kind == "github" && model.inspector.content?.webView.window === window }
+            do {
+                // DOM click silently ignores controls inside a disabled fieldset; wait for the real action.
+                // DOM click 会静默忽略禁用字段组内的控件，须先等待实际操作入口可用。
+                try await ContentSmoke.wait(tools, "(()=>{const b=document.querySelector('.inspector-switcher button[aria-label=GitHub]');return !!b && !b.matches(':disabled')})()")
+                guard model.inspector.content === tools, tools.webView.window === window else { throw BridgeFailure(code: "GITHUB_PARITY_TOOLS", message: "Tools changed before the actual GitHub action") }
+                _ = try await tools.webView.evaluateJavaScript("document.querySelector('.inspector-switcher button[aria-label=GitHub]').click()")
+                try await TerminalSmoke.wait("Open actual GitHub tools from the shared header") { model.inspector.content?.workbenchHost?.kind == "github" && model.inspector.content?.webView.window === window }
+            } catch {
+                let dom = try? await tools.webView.evaluateJavaScript("(()=>{const b=document.querySelector('.inspector-switcher button[aria-label=GitHub]');return {buttonPresent:!!b,buttonDisabled:b?b.matches(':disabled'):null,fieldsetDisabled:document.querySelector('fieldset')?.disabled??null,language:document.documentElement.lang,alerts:[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent)}})()")
+                report["githubToolsOpenDiagnostics"] = ["phase": phase, "language": language, "width": width, "mode": model.inspector.mode.rawValue,
+                    "kind": model.inspector.content?.workbenchHost?.kind ?? "", "sameContent": model.inspector.content === tools,
+                    "capturedContentAttached": tools.webView.window === window, "modelBusy": model.busy, "workspaceModalPresented": model.workspaceModalPresented,
+                    "DOM": dom ?? "Unavailable"] as [String: Any]
+                throw error
+            }
             guard let github = model.inspector.content else { throw BridgeFailure(code: "GITHUB_PARITY_TOOLS", message: "Missing GitHub tools") }
             try await ContentSmoke.wait(github, "document.documentElement.lang==='" + language + "' && document.querySelector('.compare-picker select')?.value==='fixture-owner/fixture-repo'")
             try await EditorSmoke.click(github, title: language == "en" ? "Pull Requests" : "合并请求")
@@ -47,7 +61,7 @@ enum GitHubParitySmoke {
             var row: [String: Any] = ["language": language, "appearance": appearance, "width": width, "height": height, "screenshot": name,
                 "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "", "platform": "macOS", "architecture": report["architecture"] ?? "", "system": report["system"] ?? "",
                 "scenario": "github-pr-draft", "form": try JSONSerialization.jsonObject(with: JSONEncoder().encode(form)),
-                "actualToolsSwitcher": true, "literalInputRetained": true, "readableFields": true, "workspaceVisibleAroundDialog": true, "terminalGenerationRetained": true, "savedWorkspaceUnchanged": true,
+                "actualToolsSwitcher": true, "actualEnabledToolsSwitcher": true, "literalInputRetained": true, "readableFields": true, "workspaceVisibleAroundDialog": true, "terminalGenerationRetained": true, "savedWorkspaceUnchanged": true,
                 "isolatedSimulatedCLI": true, "noGitHubWrites": true]
             for (key, value) in geometry { row["modal" + key.prefix(1).uppercased() + String(key.dropFirst())] = value }
             try await EditorSmoke.click(modal, title: language == "en" ? "Cancel" : "取消")
