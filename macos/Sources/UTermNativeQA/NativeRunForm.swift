@@ -128,18 +128,37 @@ struct NativeRunConfiguration<Content: View>: View {
     }
     var body: some View {
         ScrollView {
-            content.frame(maxWidth: .infinity, alignment: .leading)
+            content.frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(GeometryReader { geometry in Color.clear.preference(key: RunConfigurationHeight.self, value: geometry.size.height) })
+                .background(RunConfigurationHeight { value in if contentHeight != value { contentHeight = value } })
         }
         .frame(height: min(maximumHeight, max(0, contentHeight)))
-        .onPreferenceChange(RunConfigurationHeight.self) { value in Task { @MainActor in contentHeight = value } }
     }
 }
 
-private struct RunConfigurationHeight: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+@MainActor
+private struct RunConfigurationHeight: NSViewRepresentable {
+    let measured: (CGFloat) -> Void
+    func makeNSView(context: Context) -> Reader { Reader() }
+    func updateNSView(_ view: Reader, context: Context) { view.measured = measured; view.refresh() }
+    static func dismantleNSView(_ view: Reader, coordinator: ()) { view.measured = nil }
+    @MainActor final class Reader: NSView {
+        var measured: ((CGFloat) -> Void)?
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); refresh() }
+        override func setFrameSize(_ size: NSSize) { super.setFrameSize(size); refresh() }
+        override func layout() { super.layout(); refresh() }
+        func refresh() {
+            // Detached hosting views must not replace the retained form height with a zero measurement.
+            // 已分离的宿主视图不能用零值覆盖保留的表单高度。
+            let value = bounds.height
+            guard window != nil, value.isFinite, value > 0 else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.window != nil, self.bounds.height == value else { return }
+                self.measured?(value)
+            }
+        }
+    }
 }
 
 @MainActor

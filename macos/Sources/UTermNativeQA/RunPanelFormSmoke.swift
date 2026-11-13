@@ -86,7 +86,18 @@ enum RunPanelFormSmoke {
                 : abs(frames[2].minX - frames[0].minX) < 1 && frames[2].minY >= max(frames[0].maxY, frames[1].maxY)
         }
         _ = try await button("configuration-toggle")
-        try await TerminalSmoke.wait("Apply the actual wide or narrow run form layout") { responsiveFieldsMatch() }
+        do {
+            try await TerminalSmoke.wait("Apply the actual wide or narrow run form layout") { responsiveFieldsMatch() }
+        } catch {
+            var diagnostic: [String: Any] = [:]
+            diagnostic["kind"] = kind; diagnostic["viewportWidth"] = Double(root.bounds.width)
+            diagnostic["panelWidth"] = Double(panel.view.bounds.width); diagnostic["panelHeight"] = Double(panel.view.bounds.height)
+            diagnostic["columnCount"] = columns; diagnostic["interpreterFullRow"] = fullInterpreter
+            diagnostic["configurationToggleAttached"] = view("configuration-toggle")?.window === window
+            diagnostic["fieldFrames"] = measuredFields().map { ["left": Double($0.minX), "top": Double($0.minY), "width": Double($0.width), "height": Double($0.height)] }
+            report["runPanelFormLayoutDiagnostics"] = diagnostic
+            throw error
+        }
         var frames: [[String: Any]] = []
         for (field, rect) in zip(fields, measuredFields()) {
             frames.append(["id": field, "left": Double(rect.minX), "top": Double(rect.minY), "width": Double(rect.width), "height": Double(rect.height)])

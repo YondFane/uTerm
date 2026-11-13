@@ -319,6 +319,17 @@ Expanded panels use an 80px window-relative top inset, counting the 44px titleba
 windows use 44px. Native run headers follow the ordinary Mac header's measured 46px height. The
 native branch control uses the ordinary Mac control's measured 23px height.
 
+The fitted configuration scroll area keeps its last valid content height while its native hosting
+view is detached. On remount it measures attached intrinsic content, so hiding the Java panel behind
+Manage tools does not collapse the configuration to zero. Both architectures at head `5b768fb` /
+tested merge `896f6d8` compile and pass bridge tests, then fail actual form-layout acceptance with
+an empty configuration area. The
+[ARM artifact14012559826](https://github.com/YondFane/uTerm/actions/runs/43368364086/artifacts/14012559826)
+and
+[Intel artifact14013367625](https://github.com/YondFane/uTerm/actions/runs/43368364086/artifacts/14013367625)
+retain the reports and real failure images. The field-layout assertion remains required; new
+failures record actual frames and attachment state. Current-source Mac rendering remains pending.
+
 **Run-form validation**
 
 Both real-client collectors operate advanced-form controls in Java/Python, English/dark wide and
