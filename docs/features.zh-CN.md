@@ -164,6 +164,11 @@ Java 与 Python 顶栏按钮显示实际运行状态，右键或 Shift-F10 打�
 ARM64 源码 `d0c5ebb`、实际测试 merge `b93af668`
 的窗口已在可用桌面内，但垂直 8 点间隔中仍有 35,467 个 Dock 阴影像素；[产物 13974925661](https://github.com/YondFane/uTerm/actions/runs/43282517996/artifacts/13974925661)保留该失败。已查看的完整 Dock 原图从第 837 行开始出现非零 alpha，早于约第 890 行的可见底栏，而窗口延伸至第 880 行。Linux 像素分析及 Swift 语法解析支持增加间隔；新的 Mac 窗口、滚动与遮挡检查仍待执行。
 
+原生 CI 的早期 Git 证据上传失败时仍继续独立运行检查，最终完整产物上传与交互矩阵仍为必要门禁。最终原生产物包含运行次数，重试时保留既有证据。Intel 源码
+`6857087`、实际测试 merge `0b677e5` 在五次 GitHub
+CreateArtifact 上传尝试中均超时，后续运行检查被跳过，矩阵不完整；[失败产物14011958933](https://github.com/YondFane/uTerm/actions/runs/43365628863/artifacts/14011958933)保留此结果。缺失检查尚未验收，仍须当前源码 Mac
+CI 执行并上传。
+
 隔离的 `workspace-panels-native.json`
 场景采集十二张实际主窗口：1100px 英文深色、640px 中文浅色；点击终端／面板／关闭控件，检查视图与文档保留，以及终端身份／generation。每张记录源码、实际窗口宽度及平台信息。运行面板在设置变化时重绘本地化标签；临时混合项目同时包含有效的最小 POM 与 Python 入口。此集成场景使用离线连接样例；既有 PostgreSQL、Redis、SSH 及运行测试继续覆盖服务与生命周期。样例创建配置仅在
 `WRITER_BUSY`
