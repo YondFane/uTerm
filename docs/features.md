@@ -2890,6 +2890,19 @@ application writes do not gain automatic retries. The current
 records successful profile fixtures and panel checks, followed by busy cleanup of an SSH fixture.
 The new cleanup policy still requires its own Mac run.
 
+Quick SSH QA now waits for the workspace operation to finish before closing each exact fixture
+session, then verifies the canonical session was removed and the saved profile was retained or the
+temporary profile pruned. It records readiness, close stages and errors even on failure; profile
+removal still refuses active sessions. Intel source `81a7438aaaa5b78d23496a87acbb8e2f5f574065`,
+tested merge `79e010ee54d1eaa3312a4ff6f8f7d1d7a91bde5a`, passed the other independent reports but
+failed this cleanup with `SSH_CONNECTION_BUSY`; the inspector and interaction matrix were not
+accepted. The [complete failure report and originals14027282789](https://github.com/YondFane/uTerm/actions/runs/43385656739/artifacts/14027282789)
+are retained. The previous report did not record whether close was invoked while busy; its caller
+waited for published profile data while the close method may refuse a busy workspace. The new
+readiness and postcondition checks still require an actual Mac run on their own source. Linux
+passes Swift 6.1.2 parsing, shell/embedded Python syntax, three existing Core SSH tests, three
+shared-form/frontend regressions, formatting and documentation checks; these do not execute AppKit.
+
 SSH host filtering retains the mounted native search cell while inserting/removing result rows. An
 empty query explicitly restores all hosts and external query changes synchronize the editor. At head
 `1a9754a0f86acaf9178dbe65dd30e91957469627`, merge `e59b91c76512f176a5fe904a38c46311a3a31931`, both
