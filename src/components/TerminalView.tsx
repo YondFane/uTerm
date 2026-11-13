@@ -326,6 +326,16 @@ export function TerminalView({
                 ? Math.min(buffer.length, buffer.baseY + buffer.cursorY + 1)
                 : buffer.length;
               const first = tailOnly ? Math.max(0, end - 8) : 0;
+              const cursorRow = buffer.baseY + buffer.cursorY;
+              let cursorStart = cursorRow;
+              while (cursorStart > 0 && buffer.getLine(cursorStart)?.isWrapped) cursorStart--;
+              const cursorLine = Array.from(
+                { length: cursorRow - cursorStart + 1 },
+                (_, offset) =>
+                  buffer
+                    .getLine(cursorStart + offset)
+                    ?.translateToString(cursorStart + offset === cursorRow) ?? "",
+              ).join("");
               const lines = Array.from(
                 { length: end - first },
                 (_, row) => buffer.getLine(first + row)?.translateToString(true) ?? "",
@@ -359,6 +369,7 @@ export function TerminalView({
                 writable: !term.options.disableStdin,
                 alternateScreen: term.buffer.active.type === "alternate",
                 ...(viewport ? { viewport } : {}),
+                cursorLine,
               };
             },
             reconnect,

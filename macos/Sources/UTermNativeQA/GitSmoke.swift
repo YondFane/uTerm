@@ -157,7 +157,12 @@ enum GitSmoke {
             editor.forceClose()
 
             let tree = temporary.appendingPathComponent("git-worktree 中文")
-            guard try await ContentSmoke.request(content, method: "create_worktree", params: ["directory": root.path, "reference": "refs/heads/main", "oid": head, "branch": "native-worktree", "path": tree.path]) == "SUCCESS" else { throw BridgeFailure(code: "GIT_WORKTREE", message: "Cannot create isolated Worktree through native bridge") }
+            let creationCode = try await ContentSmoke.request(content, method: "create_worktree", params: ["directory": root.path, "reference": "refs/heads/main", "oid": head, "branch": "native-worktree", "path": tree.path])
+            report["nativeWorktreeCreationReplyCode"] = creationCode
+            if creationCode != "SUCCESS" {
+                report["nativeWorktreeCreationFailure"] = ["replyCode": creationCode, "targetExists": FileManager.default.fileExists(atPath: tree.path), "branchExists": !(try git(["branch", "--list", "native-worktree"])).isEmpty]
+                throw BridgeFailure(code: "GIT_WORKTREE", message: "Cannot create isolated Worktree through native bridge: " + creationCode)
+            }
             guard let project = model.projects.first(where: { $0["id"].string == "native-git-qa" }),
                   let treeID = project["worktrees"].array.first(where: { $0["branch"].string == "native-worktree" })?["id"].string,
                   let view = parent.contentView,

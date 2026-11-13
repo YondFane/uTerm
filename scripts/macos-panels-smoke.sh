@@ -51,6 +51,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
         assert drag.get(key) is True, key
     assert project['sourceHeadSHA'] == data['sourceHeadSHA'] and project['testedMergeSHA'] == data['sourceSHA']
     assert (evidence / project['screenshot']).stat().st_size > 1000
+    attempts = data['profileFixtureWriteAttempts']
+    assert set(attempts) == {'database', 'redis'}
+    assert all(type(value) is int and 1 <= value <= 3 for value in attempts.values())
+    assert type(data['profileFixtureReadRetries']) is int and data['profileFixtureReadRetries'] >= 0
     assert data['cleanup']
     expected = {(kind, language, appearance, width) for kind in ['java', 'python', 'ssh', 'database', 'redis', 'git']
                 for language, appearance, width in [('en', 'dark', 1100), ('zh-Hans', 'light', 640)]}

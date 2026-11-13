@@ -6,6 +6,42 @@ enum WorkspacePanelsSmoke {
     static func run(model: WorkspaceModel, window: NSWindow, report: inout [String: Any]) async throws {
         guard model.ready, let bridge = model.bridge, let reportPath = WorkspaceModel.argument("--panels-smoke-report"), WorkspaceModel.argument("--qa-data-root") != nil else { throw BridgeFailure(code: "PANELS_FIXTURE", message: "Missing isolated workspace-panel QA context") }
         let evidence = URL(fileURLWithPath: reportPath).deletingLastPathComponent()
+        var profileWriteAttempts: [String: Int] = [:]
+        var profileReadRetries = 0
+        defer { report["profileFixtureWriteAttempts"] = profileWriteAttempts; report["profileFixtureReadRetries"] = profileReadRetries }
+        func profileSnapshot() async throws -> CoreSnapshot {
+            for attempt in 1...3 {
+                do { return try await bridge.snapshot() }
+                catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" {
+                    guard attempt < 3 else { throw failure }
+                    profileReadRetries += 1
+                    try await Task.sleep(for: .milliseconds(100))
+                }
+            }
+            throw BridgeFailure(code: "WRITER_BUSY", message: "Workspace profile fixture read remained busy")
+        }
+        func createProfile(_ kind: String, config: [String: JSONValue]) async throws {
+            let scope = model.inspectorContextKey, workspaceID = model.groupID
+            let baseline = try await profileSnapshot()
+            let params: [String: JSONValue] = ["workspaceId": .string(workspaceID), "config": .object(config)]
+            for attempt in 1...3 {
+                guard model.ready, !model.busy, model.inspectorContextKey == scope else { throw BridgeFailure(code: "PANELS_PROFILE", message: "Profile fixture context changed") }
+                profileWriteAttempts[kind] = attempt
+                model.error = ""
+                if await model.mutate(kind + ".profile.save", params, revision: baseline.revision) { return }
+                let failure = model.error
+                guard failure.hasPrefix("WRITER_BUSY:"), attempt < 3 else { throw BridgeFailure(code: "PANELS_PROFILE", message: failure) }
+                let after = try await profileSnapshot()
+                // Repeat only this unchanged QA fixture; never rebase a failed application write.
+                // 仅重新执行未改变的 QA 样例，不为失败的应用写入更换修订基点。
+                guard after.revision == baseline.revision, after.document.workspace == baseline.document.workspace,
+                      after.document.settings == baseline.document.settings, model.inspectorContextKey == scope else {
+                    throw BridgeFailure(code: "PANELS_PROFILE", message: "Canonical data changed after the busy profile fixture; refusing retry")
+                }
+                NSLog("Workspace panels QA unchanged %@ profile fixture retry %ld", kind, attempt)
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
         let root = try WorkspaceModel.dataRoot().deletingLastPathComponent().appendingPathComponent("workspace-panels 中文")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try Data("print('workspace panel')\n".utf8).write(to: root.appendingPathComponent("main.py"))
@@ -115,7 +151,7 @@ enum WorkspacePanelsSmoke {
             var config: [String: JSONValue] = ["id": .string(id), "name": .string(kind + " offline QA"), "host": .string("127.0.0.1"), "port": .number(kind == "database" ? 5432 : 6379), "username": .string("qa"), "tls": .bool(false), "ca_file": .string(""), "credential_id": .null]
             if kind == "database" { config["kind"] = .string("postgresql"); config["database"] = .string("qa") }
             else { config["db"] = .number(0); config["server_name"] = .string(""); config["ssh_host"] = .string("") }
-            guard await model.mutate(kind + ".profile.save", ["workspaceId": .string(model.groupID), "config": .object(config)]) else { throw BridgeFailure(code: "PANELS_PROFILE", message: model.error) }
+            try await createProfile(kind, config: config)
             if kind == "database" { model.openDatabaseProfileRequested?(model.groupID, id) } else { model.openRedisProfileRequested?(model.groupID, id) }
             try await TerminalSmoke.wait("Connection document is embedded in the main workspace") { model.documents.active(in: model.inspectorContextKey)?.content.workbenchHost?.kind == kind && model.documents.active(in: model.inspectorContextKey)?.content.webView.window === window }
             guard let document = model.documents.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing workbench document") }

@@ -1,3 +1,4 @@
+import { displayLocalPath } from "./file-target.ts";
 export interface TerminalViewportSnapshot {
   proposedColumns: number;
   proposedRows: number;
@@ -26,6 +27,21 @@ export interface TerminalPerformanceSnapshot {
   largestFrameBytes: number;
   alternateScreen: boolean;
   viewport?: TerminalViewportSnapshot;
+  cursorLine: string;
+}
+
+export function windowsPerformancePromptReady(
+  snapshot:
+    | Pick<TerminalPerformanceSnapshot, "cursorLine" | "writable" | "frames" | "acknowledgedFrames">
+    | undefined,
+  directory: string,
+): boolean {
+  return (
+    !!snapshot &&
+    snapshot.writable &&
+    snapshot.frames === snapshot.acknowledgedFrames &&
+    snapshot.cursorLine.toLowerCase() === (displayLocalPath(directory) + ">").toLowerCase()
+  );
 }
 
 const probes = new Map<

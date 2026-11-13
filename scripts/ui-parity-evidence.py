@@ -339,7 +339,7 @@ def find_native_run(repository, head, artifact_name):
             headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(req, timeout=30) as reply:
             return json.load(reply)
-    for _ in range(120):
+    for _ in range(240):
         runs = request(f"/actions/runs?head_sha={head}&per_page=100")["workflow_runs"]
         candidates = [run for run in runs if run["name"] == "macOS personal packages" and run["head_sha"] == head and run.get("event") in ["pull_request", "workflow_dispatch"]]
         if candidates:
@@ -350,7 +350,7 @@ def find_native_run(repository, head, artifact_name):
                 return
             assert run["status"] != "completed", f"Native run {run['html_url']} completed without the required artifact"
         time.sleep(15)
-    raise RuntimeError("Native artifacts were not available within the 30-minute evidence wait")
+    raise RuntimeError("Native artifacts were not available within the 60-minute evidence wait")
 
 
 if __name__ == "__main__":
